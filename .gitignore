@@ -6,10 +6,12 @@ node_modules/
 # Expo
 .expo/
 dist/
+build/
 web-build/
 expo-env.d.ts
 
 # Native
+.gradle/
 .kotlin/
 *.orig.*
 *.jks
@@ -26,9 +28,13 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# logs
+*.log
+
 # macOS
 .DS_Store
 *.pem
+Thumbs.db
 
 # local env files
 .env
@@ -42,3 +48,6 @@ example
 # generated native folders
 /ios
 /android
+
+# editor
+.vscode/
