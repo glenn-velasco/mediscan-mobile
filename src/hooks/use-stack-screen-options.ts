@@ -1,0 +1,18 @@
+import { useTheme } from '@/hooks/use-theme';
+
+/**
+ * Shared Stack `screenOptions` for every authenticated-area layout (app, account, allergies,
+ * profile) — one place for header colors/typography and `contentStyle`, so a screen that hides
+ * its header (`headerShown: false`) doesn't reveal React Navigation's default white background.
+ */
+export function useStackScreenOptions() {
+  const theme = useTheme();
+
+  return {
+    headerStyle: { backgroundColor: theme.background },
+    headerTintColor: theme.foreground,
+    headerShadowVisible: false,
+    headerTitleStyle: { fontWeight: '600' as const, fontSize: 18 },
+    contentStyle: { backgroundColor: theme.background },
+  };
+}

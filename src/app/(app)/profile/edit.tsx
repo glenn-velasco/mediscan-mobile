@@ -1,0 +1,173 @@
+import { useState } from 'react';
+import { Switch, View } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+
+import { ThemedText } from '@/components/themed-text';
+import { AppLayout } from '@/components/layouts/app-layout';
+import { TextField } from '@/components/form/text-field';
+import { DateField } from '@/components/form/date-field';
+import { SelectField } from '@/components/form/select-field';
+import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
+import { FormError } from '@/components/form/form-error';
+import { PrimaryButton } from '@/components/primary-button';
+import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
+import { useUpdateMedicalInformation } from '@/features/medical-information/useUpdateMedicalInformation';
+import { useAuth } from '@/auth/useAuth';
+import { useApiError } from '@/api/use-api-error';
+import { getFieldErrors } from '@/api/errors';
+import { GENDER_OPTIONS, type Gender } from '@/constants/gender';
+import { BLOOD_TYPE_OPTIONS, type BloodType } from '@/constants/blood-type';
+import { SUFFIX_OPTIONS, type Suffix } from '@/constants/suffix';
+import { medicalInformationSchema } from '@/lib/validation/medical-information-schema';
+import type { MedicalInformationPayload } from '@/api/types';
+
+type FormState = {
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  suffix: Suffix | undefined;
+  date_of_birth: string;
+  gender: Gender | undefined;
+  blood_type: BloodType | undefined;
+  religion: string;
+  address: string;
+  no_blood_transfusion: boolean;
+};
+
+export default function EditProfileScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { data: existing } = useMedicalInformation();
+  const { mutateAsync: save, isPending } = useUpdateMedicalInformation();
+  const { message, setError, clearErrors } = useApiError();
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Email is intentionally not editable here — it's account identity and carries a server-side
+  // uniqueness constraint that can't be validated offline, so it's handled by settings/email.tsx
+  // (which requires a live connection) instead of this offline-queued profile form.
+  const email = existing?.email ?? user?.email ?? '';
+
+  const [form, setForm] = useState<FormState>({
+    first_name: existing?.first_name ?? '',
+    middle_name: existing?.middle_name ?? '',
+    last_name: existing?.last_name ?? '',
+    suffix: existing?.suffix ?? undefined,
+    date_of_birth: existing?.date_of_birth ?? '',
+    gender: existing?.gender ?? undefined,
+    blood_type: existing?.blood_type ?? undefined,
+    religion: existing?.religion ?? '',
+    address: existing?.address ?? '',
+    no_blood_transfusion: !!existing?.no_blood_transfusion,
+  });
+  const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({
+    countryCode: existing?.phone_country_code ?? 'PH',
+    phone: existing?.phone ?? '',
+  });
+
+  const parseFieldErrors = (issues: readonly any[]) => {
+    const errors: Record<string, string> = {};
+    for (const issue of issues) {
+      const key = issue.path[0] as string;
+      if (key && !errors[key]) errors[key] = issue.message;
+    }
+    return errors;
+  };
+
+  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const onSubmit = async () => {
+    clearErrors();
+    setFieldErrors({});
+
+    const result = medicalInformationSchema.safeParse({
+      ...form,
+      phone_country_code: phoneValue.countryCode,
+      phone: phoneValue.phone,
+    });
+    if (!result.success) {
+      setFieldErrors(parseFieldErrors(result.error.issues));
+      return;
+    }
+
+    try {
+      const payload: MedicalInformationPayload = { email, ...result.data };
+      await save(payload);
+      router.back();
+    } catch (err) {
+      setError(err);
+      setFieldErrors((prev) => ({ ...prev, ...getFieldErrors(err) }));
+    }
+  };
+
+  return (
+    <AppLayout>
+      <ThemedText type="overline" className="mb-2">
+        Identity
+      </ThemedText>
+      <TextField label="First name" value={form.first_name} onChangeText={(v) => setField('first_name', v)} error={fieldErrors.first_name} />
+      <TextField label="Middle name" value={form.middle_name} onChangeText={(v) => setField('middle_name', v)} />
+      <TextField label="Last name" value={form.last_name} onChangeText={(v) => setField('last_name', v)} error={fieldErrors.last_name} />
+      <SelectField
+        placeholder="Suffix"
+        options={SUFFIX_OPTIONS}
+        value={form.suffix}
+        onChange={(v) => setField('suffix', v)}
+        allowClear
+      />
+      <DateField
+        label="Date of birth"
+        value={form.date_of_birth}
+        onChange={(v) => setField('date_of_birth', v)}
+        maximumDate={new Date()}
+        error={fieldErrors.date_of_birth}
+      />
+      <SelectField
+        placeholder="Gender"
+        options={GENDER_OPTIONS}
+        value={form.gender}
+        onChange={(v) => setField('gender', v)}
+        error={fieldErrors.gender}
+      />
+      <View className="my-5 border-t border-border" />
+
+      <ThemedText type="overline" className="mb-2 mt-5">
+        Contact
+      </ThemedText>
+      <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phone_country_code} />
+      <TextField label="Address" value={form.address} onChangeText={(v) => setField('address', v)} multiline error={fieldErrors.address} />
+      <View className="my-5 border-t border-border" />
+
+      <ThemedText type="overline" className="mb-2 mt-5">
+        Medical details
+      </ThemedText>
+      <SelectField
+        placeholder="Blood type"
+        options={BLOOD_TYPE_OPTIONS}
+        value={form.blood_type}
+        onChange={(v) => setField('blood_type', v)}
+        error={fieldErrors.blood_type}
+      />
+      <TextField label="Religion" value={form.religion} onChangeText={(v) => setField('religion', v)} />
+      <View className="flex-row items-center justify-between">
+        <ThemedText>No blood transfusion</ThemedText>
+        <Switch value={form.no_blood_transfusion} onValueChange={(v) => setField('no_blood_transfusion', v)} />
+      </View>
+      <View className="my-5 border-t border-border" />
+
+      <View className="mb-4 flex-row items-center justify-between">
+        <ThemedText type="small" color="mutedForeground">
+          Email: {email}
+        </ThemedText>
+        <Link href="/account/email">
+          <ThemedText type="linkPrimary">Change</ThemedText>
+        </Link>
+      </View>
+
+      <FormError message={message} />
+
+      <PrimaryButton label="Save" loading={isPending} onPress={onSubmit} className="mb-16" />
+    </AppLayout>
+  );
+}

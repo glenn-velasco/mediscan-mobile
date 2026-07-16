@@ -1,0 +1,201 @@
+import { buildEmergencySummary } from '@/lib/build-emergency-summary';
+import type { AllergyRow, EmergencyContactRow, MedicalInformationRow } from '@/db/schema';
+
+const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
+
+function medicalInformation(overrides: Partial<MedicalInformationRow> = {}): MedicalInformationRow {
+  return {
+    id: 1,
+    server_id: 10,
+    email: 'glenn@example.com',
+    sync_status: 'synced',
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    server_updated_at: null,
+    full_name: 'Glenn Gain Velasco',
+    first_name: 'Glenn',
+    middle_name: 'Gain',
+    last_name: 'Velasco',
+    suffix: null,
+    date_of_birth: '1998-04-02',
+    gender: 'male',
+    phone_country_code: '63',
+    phone: '9674352324',
+    blood_type: 'A+',
+    religion: null,
+    address: '12 Mabini St, Cebu',
+    no_blood_transfusion: 0,
+    ...overrides,
+  } as MedicalInformationRow;
+}
+
+function allergy(overrides: Partial<AllergyRow> = {}): AllergyRow {
+  return {
+    local_uuid: 'allergy-1',
+    server_id: 1,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    allergen: 'Peanuts',
+    reaction: null,
+    severity: 'severe',
+    ...overrides,
+  } as AllergyRow;
+}
+
+function contact(overrides: Partial<EmergencyContactRow> = {}): EmergencyContactRow {
+  return {
+    local_uuid: 'contact-1',
+    server_id: 1,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    name: 'Maria Velasco',
+    relationship: 'Mother',
+    phone_country_code: '63',
+    phone: '9171234567',
+    is_primary: 1,
+    ...overrides,
+  } as EmergencyContactRow;
+}
+
+describe('buildEmergencySummary', () => {
+  it('leads with the header, patient id and an ISO generation timestamp', () => {
+    const summary = buildEmergencySummary(42, GENERATED_AT, medicalInformation(), [], []);
+
+    expect(summary.split('\n').slice(0, 3)).toEqual([
+      'MEDISCAN EMERGENCY INFO',
+      'Patient ID: 42',
+      'Generated: 2026-07-15T09:30:00.000Z',
+    ]);
+  });
+
+  it('includes the identity and contact details a responder needs', () => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], []);
+
+    expect(summary).toContain('Name: Glenn Gain Velasco');
+    expect(summary).toContain('DOB: 1998-04-02');
+    expect(summary).toContain('Gender: male');
+    expect(summary).toContain('Phone: 9674352324');
+    expect(summary).toContain('Address: 12 Mabini St, Cebu');
+  });
+
+  it('renders the no-blood-transfusion flag as Yes/No rather than a raw 0/1', () => {
+    const declines = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation({ no_blood_transfusion: 1 }),
+      [],
+      [],
+    );
+    const accepts = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation({ no_blood_transfusion: 0 }),
+      [],
+      [],
+    );
+
+    expect(declines).toContain('No blood transfusion: Yes');
+    expect(accepts).toContain('No blood transfusion: No');
+  });
+
+  it('falls back to Unknown / em-dash instead of printing empty values', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation({
+        full_name: '',
+        date_of_birth: null,
+        gender: null,
+        phone: null,
+        address: null,
+      }),
+      [],
+      [],
+    );
+
+    expect(summary).toContain('Name: Unknown');
+    expect(summary).toContain('DOB: —');
+    expect(summary).toContain('Gender: —');
+    expect(summary).toContain('Phone: —');
+    expect(summary).toContain('Address: —');
+  });
+
+  /**
+   * `useQrWidget` passes the allergies query's `data` straight through, which is `undefined`
+   * until the query resolves — so the undefined branch is a real runtime state, not a nicety.
+   */
+  it.each([
+    ['an empty list', [] as AllergyRow[]],
+    ['an unresolved query (undefined)', undefined],
+  ])('reports no allergies recorded for %s', (_label, allergies) => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), allergies, []);
+
+    expect(summary).toContain('Allergies: none recorded');
+    expect(summary).not.toContain('Allergies:\n');
+  });
+
+  it('lists each allergy with its severity, appending the reaction only when present', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation(),
+      [
+        allergy({ allergen: 'Peanuts', severity: 'life-threatening', reaction: 'Anaphylaxis' }),
+        allergy({ local_uuid: 'allergy-2', allergen: 'Pollen', severity: 'mild', reaction: null }),
+      ],
+      [],
+    );
+
+    expect(summary).toContain('Allergies:');
+    expect(summary).toContain('- Peanuts (life-threatening, Anaphylaxis)');
+    expect(summary).toContain('- Pollen (mild)');
+  });
+
+  it('omits the emergency contacts section entirely when there are none', () => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], []);
+
+    expect(summary).not.toContain('Emergency contacts:');
+  });
+
+  it('formats a contact with its relationship and country-prefixed phone', () => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [contact()]);
+
+    expect(summary).toContain('Emergency contacts:');
+    expect(summary).toContain('- Maria Velasco (Mother) — +63 9171234567');
+  });
+
+  it('degrades a contact gracefully when relationship, country code or phone are missing', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation(),
+      [],
+      [
+        contact({ relationship: null, phone_country_code: null, phone: '9171234567' }),
+        contact({ local_uuid: 'contact-2', name: 'Jose', relationship: null, phone: null }),
+      ],
+    );
+
+    expect(summary).toContain('- Maria Velasco — 9171234567');
+    expect(summary).toContain('- Jose');
+  });
+
+  /**
+   * The payload is the plaintext behind the QR, so what it does *not* carry matters as much as
+   * what it does. Religion is stored on the profile but deliberately stays out of the QR.
+   */
+  it('does not leak profile fields that are not part of the QR contract', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation({ religion: 'Catholic', blood_type: 'A+' }),
+      [],
+      [],
+    );
+
+    expect(summary).not.toContain('Catholic');
+    expect(summary).not.toContain('Religion');
+    expect(summary).not.toContain('glenn@example.com');
+  });
+});

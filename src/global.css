@@ -1,0 +1,179 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@import "nativewind/theme";
+
+:root {
+  --font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* ─── Light mode ─── */
+  --background: #f5f3f0;
+  --foreground: #1a1d21;
+
+  --card: #ffffff;
+  --card-foreground: #1a1d21;
+
+  --popover: #ffffff;
+  --popover-foreground: #1a1d21;
+
+  /* Primary: warm teal — trust without sterility */
+  --primary: #0d7377;
+  --primary-foreground: #ffffff;
+
+  /* Secondary: cool neutral — clean, balanced */
+  --secondary: #eceff2;
+  --secondary-foreground: #2d3136;
+
+  /* Muted: sage mist — organic, calming */
+  --muted: #e8ede9;
+  --muted-foreground: #424952;
+
+  /* Accent: soft teal tint — highlights */
+  --accent: #d4ebe6;
+  --accent-foreground: #0a4f45;
+
+  /* Destructive: coral vital — urgent but approachable */
+  --destructive: #e8725c;
+  --destructive-foreground: #ffffff;
+
+  --border: #d8ddd9;
+  --input: #d8ddd9;
+  --ring: #0d7377;
+
+  --chart-1: #0d7377;
+  --chart-2: #148f8a;
+  --chart-3: #2d8b4e;
+  --chart-4: #d4a03c;
+  --chart-5: #e8725c;
+
+  /* ─── Semantic roles for medical severity ─── */
+  /* Success: emerald stable — healthy, positive */
+  --success: #2d8b4e;
+  --success-foreground: #ffffff;
+
+  /* Warning: amber alert — attention, caution */
+  --warning: #d4a03c;
+  --warning-foreground: #3d2e00;
+
+  /* Critical: coral vital — life-threatening, immediate action */
+  --critical: #e8725c;
+  --critical-foreground: #ffffff;
+
+  --radius: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0e11;
+    --foreground: #e8eaed;
+
+    --card: #141619;
+    --card-foreground: #e8eaed;
+
+    --popover: #141619;
+    --popover-foreground: #e8eaed;
+
+    /* Primary: lighter teal for dark backgrounds */
+    --primary: #1ea89a;
+    --primary-foreground: #ffffff;
+
+    --secondary: #1d2022;
+    --secondary-foreground: #d4d8dd;
+
+    --muted: #1a1e1b;
+    --muted-foreground: #9ea4ad;
+
+    /* Accent: brighter teal tint for dark */
+    --accent: #0a4f45;
+    --accent-foreground: #b8e0d8;
+
+    --destructive: #f08a76;
+    --destructive-foreground: #ffffff;
+
+    --border: #2a2e2b;
+    --input: #2a2e2b;
+    --ring: #1ea89a;
+
+    --chart-1: #1ea89a;
+    --chart-2: #148f8a;
+    --chart-3: #3a9e5e;
+    --chart-4: #e0b44e;
+    --chart-5: #f08a76;
+
+    --success: #3a9e5e;
+    --success-foreground: #ffffff;
+
+    --warning: #e0b44e;
+    --warning-foreground: #2d1f00;
+
+    --critical: #f08a76;
+    --critical-foreground: #ffffff;
+  }
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-critical: var(--critical);
+  --color-critical-foreground: var(--critical-foreground);
+
+  --font-sans: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :focus-visible {
+      @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
