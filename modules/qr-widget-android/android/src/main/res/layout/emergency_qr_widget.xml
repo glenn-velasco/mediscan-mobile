@@ -1,0 +1,8 @@
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/qr_image"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:contentDescription="@string/qr_widget_desc"
+  android:padding="8dp"
+  android:scaleType="fitCenter"
+  android:background="#FFFFFF" />

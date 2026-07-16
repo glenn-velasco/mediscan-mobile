@@ -1,0 +1,6 @@
+<resources>
+  <string name="qr_widget_desc">Emergency QR Code</string>
+  <string name="qr_fullscreen_empty">Open MediScan to generate your emergency QR code.</string>
+  <string name="qr_show_action">Show QR</string>
+  <string name="qr_modal_hint">Scan for emergency medical info</string>
+</resources>
