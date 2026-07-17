@@ -85,12 +85,6 @@ export default function AccountScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
           </Pressable>
         </Link>
-        <Link href="/professional" asChild>
-          <Pressable className="flex-row items-center justify-between px-4 py-3.5 active:bg-accent">
-            <ThemedText>Professional mode</ThemedText>
-            <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
-          </Pressable>
-        </Link>
       </Card>
 
       <Card className="mb-4 gap-1">
