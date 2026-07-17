@@ -23,6 +23,7 @@ describe('professional-attestation.repo', () => {
       payload: { type: 'allergy_verification', allergen: 'Penicillin', severity: 'severe' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
 
     const [row] = await professionalAttestationRepo.getAll();
@@ -51,6 +52,7 @@ describe('professional-attestation.repo', () => {
       payload: { allergen: 'Peanuts' },
       matchedAllergyLocalUuid: 'allergy-a',
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
     await professionalAttestationRepo.insert({
       localId: 'att-2',
@@ -59,6 +61,7 @@ describe('professional-attestation.repo', () => {
       payload: { allergen: 'Shellfish' },
       matchedAllergyLocalUuid: 'allergy-b',
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
     await professionalAttestationRepo.insert({
       localId: 'att-3',
@@ -67,6 +70,7 @@ describe('professional-attestation.repo', () => {
       payload: { allergen: 'Ambiguous' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
 
     const forA = await professionalAttestationRepo.getForAllergy('allergy-a');
@@ -81,6 +85,7 @@ describe('professional-attestation.repo', () => {
       payload: { allergen: 'Latex' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
 
     await professionalAttestationRepo.setMatchedAllergy('att-1', 'allergy-x');
@@ -98,6 +103,7 @@ describe('professional-attestation.repo', () => {
       payload: { condition: 'Hypertension' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: 'diagnosis-a',
+      matchedMedicationLocalUuid: null,
     });
     await professionalAttestationRepo.insert({
       localId: 'att-2',
@@ -106,6 +112,7 @@ describe('professional-attestation.repo', () => {
       payload: { condition: 'Flu' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: 'diagnosis-b',
+      matchedMedicationLocalUuid: null,
     });
 
     const forA = await professionalAttestationRepo.getForDiagnosis('diagnosis-a');
@@ -120,6 +127,7 @@ describe('professional-attestation.repo', () => {
       payload: { condition: 'Asthma' },
       matchedAllergyLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
     });
 
     await professionalAttestationRepo.setMatchedDiagnosis('att-1', 'diagnosis-x');
@@ -127,5 +135,47 @@ describe('professional-attestation.repo', () => {
     const [row] = await professionalAttestationRepo.getAll();
     expect(row.matched_diagnosis_local_uuid).toBe('diagnosis-x');
     expect(row.payload).toEqual({ condition: 'Asthma' });
+  });
+
+  it('getForMedication only returns attestations matched to that medication', async () => {
+    await professionalAttestationRepo.insert({
+      localId: 'att-1',
+      sourceEnvelopeLocalId: 'env-1',
+      envelopeType: 'medication_verification',
+      payload: { name: 'Aspirin' },
+      matchedAllergyLocalUuid: null,
+      matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: 'medication-a',
+    });
+    await professionalAttestationRepo.insert({
+      localId: 'att-2',
+      sourceEnvelopeLocalId: 'env-2',
+      envelopeType: 'medication_verification',
+      payload: { name: 'Ibuprofen' },
+      matchedAllergyLocalUuid: null,
+      matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: 'medication-b',
+    });
+
+    const forA = await professionalAttestationRepo.getForMedication('medication-a');
+    expect(forA.map((a) => a.local_id)).toEqual(['att-1']);
+  });
+
+  it('setMatchedMedication confirms a medication_verification attestation without touching its payload', async () => {
+    await professionalAttestationRepo.insert({
+      localId: 'att-1',
+      sourceEnvelopeLocalId: 'env-1',
+      envelopeType: 'medication_verification',
+      payload: { name: 'Metformin' },
+      matchedAllergyLocalUuid: null,
+      matchedDiagnosisLocalUuid: null,
+      matchedMedicationLocalUuid: null,
+    });
+
+    await professionalAttestationRepo.setMatchedMedication('att-1', 'medication-x');
+
+    const [row] = await professionalAttestationRepo.getAll();
+    expect(row.matched_medication_local_uuid).toBe('medication-x');
+    expect(row.payload).toEqual({ name: 'Metformin' });
   });
 });

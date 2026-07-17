@@ -2,27 +2,34 @@ import * as pendingSyncEnvelopeRepo from '@/db/repositories/pending-sync-envelop
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
+import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
 import { processEnvelope } from '@/services/merge.service';
-import type { PendingSyncEnvelopeRow , AllergyRow, DiagnosisRow } from '@/db/schema';
+import type { PendingSyncEnvelopeRow , AllergyRow, DiagnosisRow, MedicationRow } from '@/db/schema';
 
 jest.mock('@/db/repositories/pending-sync-envelope.repo');
 jest.mock('@/db/repositories/professional-attestation.repo');
 jest.mock('@/db/repositories/allergies.repo');
 jest.mock('@/db/repositories/diagnoses.repo');
+jest.mock('@/db/repositories/medications.repo');
 jest.mock('@/db/repositories/medical-information.repo');
 // Explicit factories: these modules import react-native-libsodium / api/client (which requires
 // EXPO_PUBLIC_API_URL) at module scope, so a plain jest.mock() automock would still need to load
 // the real module first and blow up in a Node test environment. Stub the shape directly instead.
 jest.mock('@/services/sealed-box.service', () => ({ unseal: jest.fn(), seal: jest.fn(), generateKeypair: jest.fn() }));
 jest.mock('@/services/device-key.service', () => ({ getPrivateKeypair: jest.fn() }));
+// merge.service imports queryClient (from '@/lib/query-client') for post-merge cache invalidation;
+// that module pulls in @react-native-async-storage/async-storage at module scope, whose native
+// module isn't available under jest-expo's Node environment. Stub the shape directly instead.
+jest.mock('@/lib/query-client', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 
 const mockUnseal = unseal as jest.Mock;
 const mockGetPrivateKeypair = getPrivateKeypair as jest.Mock;
 const mockGetAllAllergies = allergiesRepo.getAll as jest.Mock;
 const mockGetAllDiagnoses = diagnosesRepo.getAll as jest.Mock;
+const mockGetAllMedications = medicationsRepo.getAll as jest.Mock;
 const mockInsertAttestation = professionalAttestationRepo.insert as jest.Mock;
 const mockApplyProfessionalUpdate = medicalInformationRepo.applyProfessionalUpdate as jest.Mock;
 
@@ -74,11 +81,28 @@ function makeDiagnosis(overrides: Partial<DiagnosisRow> = {}): DiagnosisRow {
   };
 }
 
+function makeMedication(overrides: Partial<MedicationRow> = {}): MedicationRow {
+  return {
+    local_uuid: 'medication-1',
+    user_id: 0,
+    server_id: null,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-01-01T00:00:00.000Z',
+    name: 'Aspirin',
+    dosage: '100mg',
+    frequency: 'Once daily',
+    notes: null,
+    ...overrides,
+  } as MedicationRow;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetPrivateKeypair.mockResolvedValue({ publicKey: new Uint8Array(), privateKey: new Uint8Array() });
   mockGetAllAllergies.mockResolvedValue([]);
   mockGetAllDiagnoses.mockResolvedValue([]);
+  mockGetAllMedications.mockResolvedValue([]);
 });
 
 describe('processEnvelope', () => {
@@ -155,10 +179,11 @@ describe('processEnvelope', () => {
     const result = await processEnvelope(makeEnvelope());
 
     expect(result).toBe('merged');
+    expect(allergiesRepo.createLocal).not.toHaveBeenCalled();
     expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: null }));
   });
 
-  it('stores a no-match allergy_verification unmatched rather than guessing', async () => {
+  it('creates a new allergy from the verification when there is no name match', async () => {
     mockUnseal.mockResolvedValue({
       type: 'allergy_verification',
       version: 1,
@@ -169,10 +194,16 @@ describe('processEnvelope', () => {
       verified_at: '2026-01-01T00:00:00.000Z',
     });
     mockGetAllAllergies.mockResolvedValue([makeAllergy({ local_uuid: 'allergy-1', allergen: 'Penicillin' })]);
+    (allergiesRepo.createLocal as jest.Mock).mockResolvedValue('allergy-new');
 
     await processEnvelope(makeEnvelope());
 
-    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: null }));
+    expect(allergiesRepo.createLocal).toHaveBeenCalledWith({
+      allergen: 'Something Unrecorded',
+      reaction: undefined,
+      severity: 'mild',
+    });
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: 'allergy-new' }));
   });
 
   it('never attempts an allergy match for non-allergy envelope types', async () => {
@@ -250,10 +281,11 @@ describe('processEnvelope', () => {
     const result = await processEnvelope(makeEnvelope({ envelope_type: 'diagnosis_verification' }));
 
     expect(result).toBe('merged');
+    expect(diagnosesRepo.createLocal).not.toHaveBeenCalled();
     expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedDiagnosisLocalUuid: null }));
   });
 
-  it('stores a no-match diagnosis_verification unmatched rather than guessing', async () => {
+  it('creates a new diagnosis from the verification when there is no condition match', async () => {
     mockUnseal.mockResolvedValue({
       type: 'diagnosis_verification',
       version: 1,
@@ -264,9 +296,207 @@ describe('processEnvelope', () => {
       verified_at: '2026-01-01T00:00:00.000Z',
     });
     mockGetAllDiagnoses.mockResolvedValue([makeDiagnosis({ local_uuid: 'diagnosis-1', condition: 'Hypertension' })]);
+    (diagnosesRepo.createLocal as jest.Mock).mockResolvedValue('diagnosis-new');
 
     await processEnvelope(makeEnvelope({ envelope_type: 'diagnosis_verification' }));
 
-    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedDiagnosisLocalUuid: null }));
+    expect(diagnosesRepo.createLocal).toHaveBeenCalledWith({
+      condition: 'Something Unrecorded',
+      date_of_diagnosis: undefined,
+      severity: 'acute',
+    });
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedDiagnosisLocalUuid: 'diagnosis-new' }));
+  });
+
+  it('merges and auto-matches a medication_verification envelope with exactly one case-insensitive name match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'medication_verification',
+      version: 1,
+      name: 'aspirin',
+      dosage: '200mg',
+      frequency: 'Twice daily',
+      notes: null,
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllMedications.mockResolvedValue([makeMedication({ local_uuid: 'medication-1', name: 'Aspirin' })]);
+    const envelope = makeEnvelope({ envelope_type: 'medication_verification' });
+
+    const result = await processEnvelope(envelope);
+
+    expect(result).toBe('merged');
+    expect(medicationsRepo.updateLocal).toHaveBeenCalledWith('medication-1', {
+      dosage: '200mg',
+      frequency: 'Twice daily',
+      notes: undefined,
+    });
+    expect(mockInsertAttestation).toHaveBeenCalledWith(
+      expect.objectContaining({ matchedMedicationLocalUuid: 'medication-1', sourceEnvelopeLocalId: 'env-1' }),
+    );
+    expect(pendingSyncEnvelopeRepo.markMerged).toHaveBeenCalledWith('env-1');
+  });
+
+  it('stores an ambiguous medication match (two medications with the same name) unmatched rather than guessing', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'medication_verification',
+      version: 1,
+      name: 'Aspirin',
+      dosage: '100mg',
+      frequency: 'Once daily',
+      notes: null,
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllMedications.mockResolvedValue([
+      makeMedication({ local_uuid: 'medication-1', name: 'Aspirin' }),
+      makeMedication({ local_uuid: 'medication-2', name: 'Aspirin' }),
+    ]);
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'medication_verification' }));
+
+    expect(result).toBe('merged');
+    expect(medicationsRepo.updateLocal).not.toHaveBeenCalled();
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: null }));
+  });
+
+  it('creates a new medication when there is no name match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'medication_verification',
+      version: 1,
+      name: 'Ibuprofen',
+      dosage: '200mg',
+      frequency: 'As needed',
+      notes: 'For pain',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllMedications.mockResolvedValue([makeMedication({ local_uuid: 'medication-1', name: 'Aspirin' })]);
+    (medicationsRepo.createLocal as jest.Mock).mockResolvedValue('medication-new');
+
+    await processEnvelope(makeEnvelope({ envelope_type: 'medication_verification' }));
+
+    expect(medicationsRepo.createLocal).toHaveBeenCalledWith({
+      name: 'Ibuprofen',
+      dosage: '200mg',
+      frequency: 'As needed',
+      notes: 'For pain',
+    });
+    expect(mockInsertAttestation).toHaveBeenCalledWith(
+      expect.objectContaining({ matchedMedicationLocalUuid: 'medication-new' }),
+    );
+  });
+
+  it('never attempts a medication match for non-medication envelope types', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'general_note',
+      version: 1,
+      note: 'hello',
+      author: { user_id: 1, name: 'Dr. Reyes' },
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    await processEnvelope(makeEnvelope({ envelope_type: 'general_note' }));
+
+    expect(mockGetAllMedications).not.toHaveBeenCalled();
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: null }));
+  });
+
+  describe('__unverify__ / __delete__ note conventions', () => {
+    it('__unverify__ on a matched allergy links the attestation without touching the record', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'allergy_verification',
+        version: 1,
+        allergen: 'Penicillin',
+        reaction: null,
+        severity: 'severe',
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__unverify__',
+      });
+      mockGetAllAllergies.mockResolvedValue([{ local_uuid: 'allergy-1', allergen: 'Penicillin' } as AllergyRow]);
+
+      await processEnvelope(makeEnvelope());
+
+      expect(allergiesRepo.updateLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: 'allergy-1' }));
+    });
+
+    it('__unverify__ with no matched allergy returns null and creates nothing', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'allergy_verification',
+        version: 1,
+        allergen: 'Unrecorded',
+        reaction: null,
+        severity: 'mild',
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__unverify__',
+      });
+
+      await processEnvelope(makeEnvelope());
+
+      expect(allergiesRepo.createLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: null }));
+    });
+
+    it('__unverify__ on a matched medication links the attestation without touching the record', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__unverify__',
+      });
+      mockGetAllMedications.mockResolvedValue([makeMedication({ local_uuid: 'medication-1' })]);
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'medication_verification' }));
+
+      expect(medicationsRepo.updateLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: 'medication-1' }));
+    });
+
+    it('__delete__ on a matched medication deletes the record and links the attestation to it', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__delete__',
+      });
+      mockGetAllMedications.mockResolvedValue([makeMedication({ local_uuid: 'medication-1' })]);
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'medication_verification' }));
+
+      expect(medicationsRepo.deleteLocal).toHaveBeenCalledWith('medication-1');
+      expect(medicationsRepo.createLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: 'medication-1' }));
+    });
+
+    it('__delete__ with no matched medication deletes nothing and returns null', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'medication_verification',
+        version: 1,
+        name: 'Unrecorded',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__delete__',
+      });
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'medication_verification' }));
+
+      expect(medicationsRepo.deleteLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: null }));
+    });
   });
 });

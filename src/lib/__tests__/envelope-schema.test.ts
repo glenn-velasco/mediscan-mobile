@@ -123,6 +123,78 @@ describe('parseEnvelopePlaintext', () => {
     });
   });
 
+  describe('medication_verification', () => {
+    it('accepts a well-formed medication_verification envelope', () => {
+      const plaintext = {
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('medication_verification', plaintext)).toEqual(plaintext);
+    });
+
+    it('accepts medication_verification with notes and an optional note', () => {
+      const plaintext = {
+        type: 'medication_verification',
+        version: 1,
+        name: 'Metformin',
+        dosage: '500mg',
+        frequency: 'Twice daily',
+        notes: 'Take with meals',
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: 'Confirmed via prescription',
+      };
+      expect(parseEnvelopePlaintext('medication_verification', plaintext)).toEqual(plaintext);
+    });
+
+    it('rejects medication_verification missing a required string field', () => {
+      const plaintext = {
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        // frequency missing
+        notes: null,
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('medication_verification', plaintext)).toBeNull();
+    });
+
+    it('rejects medication_verification missing verified_by', () => {
+      const plaintext = {
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('medication_verification', plaintext)).toBeNull();
+    });
+
+    it('rejects a type mismatch (filed under the wrong envelope_type)', () => {
+      const plaintext = {
+        type: 'medication_verification',
+        version: 1,
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Once daily',
+        notes: null,
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('allergy_verification', plaintext)).toBeNull();
+    });
+  });
+
   it('accepts a well-formed transfusion_witness envelope', () => {
     const plaintext = {
       type: 'transfusion_witness',

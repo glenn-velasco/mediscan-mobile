@@ -1,6 +1,6 @@
 import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
-import type { DiagnosisRow, EmergencyContactRow } from '@/db/schema';
+import type { DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
 
 /**
  * Builds the plaintext emergency summary encoded in the QR. This stays plain, testable text —
@@ -16,6 +16,7 @@ export function buildEmergencySummary(
   allergies: ReturnType<typeof useAllergies>['data'],
   emergencyContacts: EmergencyContactRow[],
   diagnoses?: DiagnosisRow[],
+  medications?: MedicationRow[],
 ): string {
   const lines = [
     'MEDISCAN EMERGENCY INFO',
@@ -47,6 +48,15 @@ export function buildEmergencySummary(
     }
   } else {
     lines.push('Diagnoses: none recorded');
+  }
+
+  if (medications && medications.length > 0) {
+    lines.push('Medications:');
+    for (const m of medications) {
+      lines.push(`- ${m.name}, ${m.dosage}${m.frequency ? `, ${m.frequency}` : ''}`);
+    }
+  } else {
+    lines.push('Medications: none recorded');
   }
 
   if (emergencyContacts.length > 0) {

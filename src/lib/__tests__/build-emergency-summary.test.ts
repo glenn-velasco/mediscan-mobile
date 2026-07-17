@@ -1,5 +1,5 @@
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
-import type { AllergyRow, EmergencyContactRow, MedicalInformationRow } from '@/db/schema';
+import type { AllergyRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
 
 const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
 
@@ -56,6 +56,22 @@ function contact(overrides: Partial<EmergencyContactRow> = {}): EmergencyContact
     is_primary: 1,
     ...overrides,
   } as EmergencyContactRow;
+}
+
+function medication(overrides: Partial<MedicationRow> = {}): MedicationRow {
+  return {
+    local_uuid: 'medication-1',
+    user_id: 0,
+    server_id: 1,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    name: 'Aspirin',
+    dosage: '100mg',
+    frequency: 'Once daily',
+    notes: null,
+    ...overrides,
+  } as MedicationRow;
 }
 
 describe('buildEmergencySummary', () => {
@@ -150,6 +166,36 @@ describe('buildEmergencySummary', () => {
     expect(summary).toContain('Allergies:');
     expect(summary).toContain('- Peanuts (life-threatening, Anaphylaxis)');
     expect(summary).toContain('- Pollen (mild)');
+  });
+
+  it.each([
+    ['an empty list', [] as MedicationRow[]],
+    ['an unresolved query (undefined)', undefined],
+  ])('reports no medications recorded for %s', (_label, medications) => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], undefined, medications);
+
+    expect(summary).toContain('Medications: none recorded');
+    expect(summary).not.toContain('Medications:\n');
+  });
+
+  it('lists each medication with its dosage, appending the frequency only when present', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation(),
+      [],
+      [],
+      undefined,
+      [
+        medication({ name: 'Aspirin', dosage: '100mg', frequency: 'Once daily' }),
+        medication({ local_uuid: 'medication-2', name: 'Ibuprofen', dosage: '200mg', frequency: '' }),
+      ],
+    );
+
+    expect(summary).toContain('Medications:');
+    expect(summary).toContain('- Aspirin, 100mg, Once daily');
+    expect(summary).toContain('- Ibuprofen, 200mg');
+    expect(summary).not.toContain('- Ibuprofen, 200mg,');
   });
 
   it('omits the emergency contacts section entirely when there are none', () => {

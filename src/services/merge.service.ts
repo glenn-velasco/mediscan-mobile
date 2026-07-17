@@ -4,16 +4,14 @@ import * as pendingSyncEnvelopeRepo from '@/db/repositories/pending-sync-envelop
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
+import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
 import { parseEnvelopePlaintext } from '@/lib/envelope-schema';
 import { queryClient } from '@/lib/query-client';
-import { allergiesQueryKey } from '@/features/allergies/useAllergies';
-import { diagnosesQueryKey } from '@/features/diagnoses/useDiagnoses';
-import { medicalInformationQueryKey } from '@/features/medical-information/useMedicalInformation';
-import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
-import type { AllergyVerificationEnvelope, DiagnosisVerificationEnvelope } from '@/lib/envelope-schema';
+import { allergiesQueryKey, diagnosesQueryKey, medicationsQueryKey, medicalInformationQueryKey, attestationsQueryKey } from '@/lib/query-keys';
+import type { AllergyVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope } from '@/lib/envelope-schema';
 import type { PendingSyncEnvelopeRow } from '@/db/schema';
 import type { EnvelopeType } from '@/api/types';
 
@@ -21,9 +19,13 @@ export type ProcessEnvelopeResult = 'merged' | 'decrypt_failed' | 'expired';
 
 async function createOrUpdateOrDeleteAllergy(allergy: AllergyVerificationEnvelope): Promise<string | null> {
   const existingAllergies = await allergiesRepo.getAll();
-  const match = existingAllergies.find(
+  const matches = existingAllergies.filter(
     (a) => a.allergen.trim().toLowerCase() === allergy.allergen.trim().toLowerCase(),
   );
+  // Ambiguous (>1 same-name records) is treated the same as no match: leave unmatched rather than
+  // guessing which record the professional meant, and never create a duplicate in that case either.
+  if (matches.length > 1) return null;
+  const match = matches[0];
 
   if (allergy.note === '__delete__') {
     if (match) {
@@ -31,6 +33,13 @@ async function createOrUpdateOrDeleteAllergy(allergy: AllergyVerificationEnvelop
       return match.local_uuid;
     }
     return null;
+  }
+
+  /* A professional revoking their own earlier verification — just needs to be linked to the
+     matched record so the dashboard's verified-count can drop them from the latest-per-professional
+     tally; the record's fields are left untouched. */
+  if (allergy.note === '__unverify__') {
+    return match ? match.local_uuid : null;
   }
 
   if (match) {
@@ -50,9 +59,11 @@ async function createOrUpdateOrDeleteAllergy(allergy: AllergyVerificationEnvelop
 
 async function createOrUpdateOrDeleteDiagnosis(diagnosis: DiagnosisVerificationEnvelope): Promise<string | null> {
   const existingDiagnoses = await diagnosesRepo.getAll();
-  const match = existingDiagnoses.find(
+  const matches = existingDiagnoses.filter(
     (d) => d.condition.trim().toLowerCase() === diagnosis.condition.trim().toLowerCase(),
   );
+  if (matches.length > 1) return null;
+  const match = matches[0];
 
   if (diagnosis.note === '__delete__') {
     if (match) {
@@ -60,6 +71,10 @@ async function createOrUpdateOrDeleteDiagnosis(diagnosis: DiagnosisVerificationE
       return match.local_uuid;
     }
     return null;
+  }
+
+  if (diagnosis.note === '__unverify__') {
+    return match ? match.local_uuid : null;
   }
 
   if (match) {
@@ -74,6 +89,43 @@ async function createOrUpdateOrDeleteDiagnosis(diagnosis: DiagnosisVerificationE
     condition: diagnosis.condition,
     date_of_diagnosis: diagnosis.date_of_diagnosis ?? undefined,
     severity: diagnosis.severity,
+  });
+}
+
+async function createOrUpdateOrDeleteMedication(medication: MedicationVerificationEnvelope): Promise<string | null> {
+  const existingMedications = await medicationsRepo.getAll();
+  const matches = existingMedications.filter(
+    (m) => m.name.trim().toLowerCase() === medication.name.trim().toLowerCase(),
+  );
+  if (matches.length > 1) return null;
+  const match = matches[0];
+
+  if (medication.note === '__delete__') {
+    if (match) {
+      await medicationsRepo.deleteLocal(match.local_uuid);
+      return match.local_uuid;
+    }
+    return null;
+  }
+
+  if (medication.note === '__unverify__') {
+    return match ? match.local_uuid : null;
+  }
+
+  if (match) {
+    await medicationsRepo.updateLocal(match.local_uuid, {
+      dosage: medication.dosage,
+      frequency: medication.frequency,
+      notes: medication.notes ?? undefined,
+    });
+    return match.local_uuid;
+  }
+
+  return await medicationsRepo.createLocal({
+    name: medication.name,
+    dosage: medication.dosage,
+    frequency: medication.frequency,
+    notes: medication.notes ?? undefined,
   });
 }
 
@@ -109,6 +161,9 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
   const matchedDiagnosisLocalUuid = parsed.type === 'diagnosis_verification'
     ? await createOrUpdateOrDeleteDiagnosis(parsed)
     : null;
+  const matchedMedicationLocalUuid = parsed.type === 'medication_verification'
+    ? await createOrUpdateOrDeleteMedication(parsed)
+    : null;
 
   await professionalAttestationRepo.insert({
     localId: Crypto.randomUUID(),
@@ -117,6 +172,7 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
     payload: parsed,
     matchedAllergyLocalUuid,
     matchedDiagnosisLocalUuid,
+    matchedMedicationLocalUuid,
   });
 
   if (parsed.type === 'medical_information_update') {
@@ -128,6 +184,7 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: allergiesQueryKey }),
     queryClient.invalidateQueries({ queryKey: diagnosesQueryKey }),
+    queryClient.invalidateQueries({ queryKey: medicationsQueryKey }),
     queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey }),
     queryClient.invalidateQueries({ queryKey: attestationsQueryKey }),
   ]);

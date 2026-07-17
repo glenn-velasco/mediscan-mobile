@@ -36,6 +36,18 @@ export type DiagnosisVerificationEnvelope = {
   note?: string;
 };
 
+export type MedicationVerificationEnvelope = {
+  type: 'medication_verification';
+  version: 1;
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes: string | null;
+  verified_by: { user_id: number; name: string };
+  verified_at: string;
+  note?: string;
+};
+
 export type TransfusionWitnessEnvelope = {
   type: 'transfusion_witness';
   version: 1;
@@ -76,7 +88,7 @@ export type MedicalInformationUpdateEnvelope = {
   updated_at: string;
 };
 
-export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope;
+export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope;
 
 const SEVERITIES = new Set(['mild', 'moderate', 'severe', 'life-threatening']);
 const DIAGNOSIS_SEVERITIES = new Set<string>(DIAGNOSIS_SEVERITY_OPTIONS);
@@ -123,6 +135,19 @@ export function parseEnvelopePlaintext(envelopeType: EnvelopeType, plaintext: un
         typeof p.verified_at === 'string'
       ) {
         return p as unknown as DiagnosisVerificationEnvelope;
+      }
+      return null;
+
+    case 'medication_verification':
+      if (
+        typeof p.name === 'string' &&
+        typeof p.dosage === 'string' &&
+        typeof p.frequency === 'string' &&
+        (p.notes === null || typeof p.notes === 'string') &&
+        isPerson(p.verified_by) &&
+        typeof p.verified_at === 'string'
+      ) {
+        return p as unknown as MedicationVerificationEnvelope;
       }
       return null;
 
