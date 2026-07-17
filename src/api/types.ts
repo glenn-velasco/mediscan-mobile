@@ -45,6 +45,14 @@ export type Diagnosis = {
   severity: DiagnosisSeverity;
 };
 
+export type Medication = {
+  id: number;
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes: string | null;
+};
+
 export type MedicalInformation = {
   id: number;
   email?: string;
@@ -131,6 +139,13 @@ export type DiagnosisPayload = {
   severity: DiagnosisSeverity;
 };
 
+export type MedicationPayload = {
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes?: string;
+};
+
 export type PaginationMeta = {
   current_page: number;
   last_page: number;
@@ -165,7 +180,7 @@ export type DeviceKeyPayload = {
   label?: string;
 };
 
-export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update';
+export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update';
 
 export type PendingSyncEnvelope = {
   id: number;

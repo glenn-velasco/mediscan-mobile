@@ -121,6 +121,32 @@ export type DiagnosisRow = DiagnosisEncryptedFields & {
   updated_at_local: string;
 };
 
+export type MedicationEncryptedFields = {
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes: string | null;
+};
+
+export type MedicationRawRow = {
+  local_uuid: string;
+  user_id: number;
+  server_id: number | null;
+  encrypted_data: string;
+  sync_status: AllergySyncStatus;
+  deleted_locally: 0 | 1;
+  updated_at_local: string;
+};
+
+export type MedicationRow = MedicationEncryptedFields & {
+  local_uuid: string;
+  user_id: number;
+  server_id: number | null;
+  sync_status: AllergySyncStatus;
+  deleted_locally: 0 | 1;
+  updated_at_local: string;
+};
+
 export type DeviceKeyRow = {
   user_id: number;
   server_device_key_id: number | null;
@@ -165,5 +191,6 @@ export type ProfessionalAttestationRow = {
   encrypted_payload: string;
   matched_allergy_local_uuid: string | null;
   matched_diagnosis_local_uuid: string | null;
+  matched_medication_local_uuid: string | null;
   created_at: string;
 };
