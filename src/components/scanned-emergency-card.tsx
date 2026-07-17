@@ -73,6 +73,33 @@ export function ScannedEmergencyCard({
         </View>
       )}
 
+      {showMedicalDetails && (
+        <View className="gap-2">
+          <ThemedText type="smallBold" color="mutedForeground">
+            Medications
+          </ThemedText>
+          {info.medications.length === 0 ? (
+            <ThemedText color="mutedForeground">None recorded.</ThemedText>
+          ) : (
+            <Card>
+              {info.medications.map((medication, i) => (
+                <View
+                  key={`${medication.name}-${i}`}
+                  className={i < info.medications.length - 1 ? 'border-b border-border py-3' : 'py-3'}
+                >
+                  <ThemedText className="shrink font-semibold">{medication.name}</ThemedText>
+                  {medication.dosage || medication.frequency ? (
+                    <ThemedText type="small" color="mutedForeground">
+                      {[medication.dosage, medication.frequency].filter(Boolean).join(' · ')}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              ))}
+            </Card>
+          )}
+        </View>
+      )}
+
       <PrimaryButton label="Scan another" variant="ghost" onPress={onScanAnother} />
     </View>
   );
