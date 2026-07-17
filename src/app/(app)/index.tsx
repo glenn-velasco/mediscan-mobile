@@ -9,6 +9,7 @@ import { useAuth } from '@/auth/useAuth';
 import { AllergiesBottomSheet, type AllergiesBottomSheetHandle } from '@/components/allergies-bottom-sheet';
 import { Avatar } from '@/components/avatar';
 import { Card } from '@/components/card';
+import { DiagnosesBottomSheet, type DiagnosesBottomSheetHandle } from '@/components/diagnoses-bottom-sheet';
 import { DiagnosisSeverityBadge, DiagnosisSeverityIcon } from '@/components/diagnosis-severity-badge';
 import { EmailVerificationBanner } from '@/components/email-verification-banner';
 import { EmergencyContactsBottomSheet, type EmergencyContactsBottomSheetHandle } from '@/components/emergency-contacts-bottom-sheet';
@@ -42,6 +43,7 @@ export default function HomeScreen() {
   const qrSheetRef = useRef<QrBottomSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
+  const diagnosesSheetRef = useRef<DiagnosesBottomSheetHandle>(null);
   const { user, refreshUser, logout } = useAuth();
   const { data: medicalInformation, isLoading } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
@@ -96,7 +98,11 @@ export default function HomeScreen() {
   }, [medicalInformation, user, queryClient]);
 
   const handleRefresh = useCallback(async () => {
-    await refreshUser();
+    try {
+      await refreshUser();
+    } catch {
+      // ignore — user state stays as-is
+    }
     void pullPendingSync();
     await queryClient.invalidateQueries();
   }, [refreshUser, queryClient]);
@@ -336,19 +342,19 @@ export default function HomeScreen() {
           <View className="mb-1 flex-row items-center justify-between">
             <ThemedText type="overline">Diagnoses</ThemedText>
             <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => router.push('/diagnoses')} hitSlop={8}>
+              <Pressable onPress={() => diagnosesSheetRef.current?.present()} hitSlop={8}>
                 <ThemedText type="small" color="primary" className="font-semibold">
                   View all
                 </ThemedText>
               </Pressable>
-              <Pressable onPress={() => router.push('/diagnoses/new')} hitSlop={12}>
+              <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()} hitSlop={12}>
                 <Ionicons name="add" size={20} color={theme.primary} />
               </Pressable>
             </View>
           </View>
 
           {diagnoses.length === 0 ? (
-            <Pressable onPress={() => router.push('/diagnoses/new')}>
+            <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()}>
               <Card>
                 <View className="flex-row items-center gap-3">
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
@@ -392,6 +398,7 @@ export default function HomeScreen() {
       <QrBottomSheet ref={qrSheetRef} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
+      <DiagnosesBottomSheet ref={diagnosesSheetRef} />
     </View>
   );
 }
