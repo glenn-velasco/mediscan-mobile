@@ -3,7 +3,7 @@ import { Skia, ImageFormat } from '@shopify/react-native-skia';
 import { Paths, Directory } from 'expo-file-system';
 import { widgetsDirectory } from 'expo-widgets';
 
-import { createQrMatrix } from '@/lib/qr-matrix';
+import { buildQrPath, createQrMatrix } from '@/lib/qr-matrix';
 
 const QR_IMAGE_FILENAME = 'emergency_qr.png';
 /**
@@ -33,21 +33,12 @@ export async function generateQrImage(encryptedText: string): Promise<string | n
     blackPaint.setColor(Skia.Color('black'));
 
     const scaledModule = qrArea / matrix.length;
-
-    for (let row = 0; row < matrix.length; row++) {
-      for (let col = 0; col < matrix[row].length; col++) {
-        if (matrix[row][col]) {
-          canvas.drawRect(
-            Skia.XYWHRect(
-              padding + col * scaledModule,
-              padding + row * scaledModule,
-              scaledModule,
-              scaledModule,
-            ),
-            blackPaint,
-          );
-        }
-      }
+    const path = Skia.Path.MakeFromSVGString(buildQrPath(matrix, scaledModule));
+    if (path) {
+      canvas.save();
+      canvas.translate(padding, padding);
+      canvas.drawPath(path, blackPaint);
+      canvas.restore();
     }
 
     const image = surface.makeImageSnapshot();

@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/auth/useAuth';
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
+import { allergiesQueryKey } from '@/lib/query-keys';
 
-export const allergiesQueryKey = ['allergies'] as const;
+export { allergiesQueryKey };
 
 export function useAllergies() {
   const { user } = useAuth();

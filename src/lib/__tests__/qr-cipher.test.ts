@@ -1,9 +1,22 @@
+/**
+ * react-native-libsodium's crypto_secretbox_* functions are JSI bindings only available inside a
+ * real native runtime — under jest-expo's Node environment `global.jsi_crypto_secretbox_easy` is
+ * never installed, so those calls throw regardless of correctness. Swap in libsodium-wrappers (the
+ * same WASM implementation react-native-libsodium itself falls back to on web) directly, bypassing
+ * its dynamic `import()` indirection which needs --experimental-vm-modules under Jest's CJS
+ * transform. Applies only to the round-trip suite below — the prefix-gating suite above never
+ * touches libsodium at all.
+ */
+jest.mock('react-native-libsodium', () => {
+  const sodium = require('libsodium-wrappers');
+  return { __esModule: true, default: sodium, ready: sodium.ready };
+});
+
 import { decryptQrPayload, encryptQrPayload } from '@/lib/qr-cipher';
 
 /**
  * `decryptQrPayload` checks the `MEDISCAN-ENC:v1:` prefix before it ever touches libsodium, so the
- * "is this even one of ours?" gate is testable in Node. Everything past that prefix needs the JSI
- * bindings — see the skipped suite below.
+ * "is this even one of ours?" gate is testable in Node without even needing the WASM stub below.
  */
 describe('decryptQrPayload rejecting foreign QR codes', () => {
   it.each([
@@ -26,15 +39,7 @@ describe('decryptQrPayload rejecting foreign QR codes', () => {
   });
 });
 
-/**
- * react-native-libsodium's crypto_secretbox_* functions are JSI bindings only available inside a
- * real native (or web/WASM) runtime — under jest-expo's Node environment the bindings are never
- * installed, so these calls throw regardless of correctness. This mirrors the same limitation
- * documented in `src/services/__tests__/sealed-box.service.test.ts`. The round-trip and
- * unique-nonce behaviour below were confirmed on-device; un-skip this suite once these run via a
- * real device/dev-client build or an on-device test runner.
- */
-describe.skip('qr-cipher round-trip (requires libsodium JSI)', () => {
+describe('qr-cipher round-trip', () => {
   const plaintext = 'MEDISCAN EMERGENCY INFO\nPatient ID: 1\nName: Glenn Gain Velasco';
 
   it('round-trips the emergency summary through encrypt/decrypt', async () => {

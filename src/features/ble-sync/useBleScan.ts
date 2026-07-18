@@ -3,6 +3,8 @@ import { useCallback, useState } from 'react';
 import * as bleCentralService from '@/services/ble-central.service';
 import { useBleCentralPermission } from '@/hooks/use-ble-permission';
 import type { DiscoveredPeer } from '@/services/ble-central.service';
+import { ensureBluetoothEnabled } from '@/services/ble-manager';
+import { ensureLocationEnabled } from '../../../modules/ble-location/src/ensureLocationEnabled';
 
 export type BleScanState = 'idle' | 'scanning' | 'found' | 'timeout' | 'error';
 
@@ -19,10 +21,24 @@ export function useBleScan() {
       setError(null);
       setPeer(null);
       try {
-        const granted = permission?.granted ?? (await requestPermission());
+        const granted = permission?.granted || (await requestPermission());
         if (!granted) {
           setState('error');
           setError('Bluetooth permission was not granted.');
+          return null;
+        }
+
+        const bluetoothEnabled = await ensureBluetoothEnabled();
+        if (!bluetoothEnabled) {
+          setState('error');
+          setError('Please turn on Bluetooth to scan for nearby devices.');
+          return null;
+        }
+
+        const locationEnabled = await ensureLocationEnabled();
+        if (!locationEnabled) {
+          setState('error');
+          setError('Please turn on Location Services to scan for nearby devices.');
           return null;
         }
 

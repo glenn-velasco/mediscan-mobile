@@ -1,19 +1,13 @@
-import { BleManager, type Device } from 'react-native-ble-plx';
+import type { Device } from 'react-native-ble-plx';
 
 import { BLE_SERVICE_UUID, BLE_CHARACTERISTIC_UUIDS } from '@/lib/ble-gatt-constants';
 import { chunkEnvelope } from '@/lib/ble-chunking';
 import { encodeBleEnvelopePayload } from '@/lib/ble-envelope-wire';
 import { base64ToUtf8, utf8ToBase64 } from '@/lib/base64';
+import { getManager } from '@/services/ble-manager';
 import type { EnvelopeType } from '@/api/types';
 
 const TAG = '[BleCentralService]';
-
-let manager: BleManager | null = null;
-
-function getManager(): BleManager {
-  if (!manager) manager = new BleManager();
-  return manager;
-}
 
 export type DiscoveredPeer = {
   deviceId: string;

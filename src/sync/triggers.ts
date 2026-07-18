@@ -13,27 +13,34 @@ let initialized = false;
 
 /** Same NetInfo/AppState/interval trigger pattern the old mutation-queue processor used, now driving a pending-sync pull instead of an outbox drain. */
 export function useSyncTriggers(): void {
-  const { refreshUser } = useAuth();
+  const { status, refreshUser } = useAuth();
 
   useEffect(() => {
     if (initialized) return;
     initialized = true;
 
+    const safeRefreshUser = () => {
+      if (status !== 'authenticated') return;
+      refreshUser().catch(() => {
+        // Best-effort: likely offline or the token just expired; next trigger will retry.
+      });
+    };
+
     void pullPendingSync();
-    void refreshUser();
+    safeRefreshUser();
     void retryPendingRevoke();
 
     const netInfoUnsubscribe = NetInfo.addEventListener((state) => {
       if (state.isConnected) {
         void pullPendingSync();
-        void refreshUser();
+        safeRefreshUser();
       }
     });
 
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
         void pullPendingSync();
-        void refreshUser();
+        safeRefreshUser();
         void retryPendingRevoke();
         void queryClient.invalidateQueries();
       }
@@ -41,7 +48,7 @@ export function useSyncTriggers(): void {
 
     const interval = setInterval(() => {
       void pullPendingSync();
-      void refreshUser();
+      safeRefreshUser();
     }, PERIODIC_INTERVAL_MS);
 
     return () => {
@@ -50,5 +57,5 @@ export function useSyncTriggers(): void {
       clearInterval(interval);
       initialized = false;
     };
-  }, []);
+  }, [status, refreshUser]);
 }

@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/auth/useAuth';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import { medicalInformationQueryKey } from '@/lib/query-keys';
 
-export const medicalInformationQueryKey = ['medical-information'] as const;
+export { medicalInformationQueryKey };
 
 export function useMedicalInformation() {
   const { user } = useAuth();

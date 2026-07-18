@@ -9,7 +9,7 @@ describe('runMigrations', () => {
     const versions = await db.getAllAsync<{ version: number }>(
       'SELECT version FROM schema_migrations ORDER BY version ASC',
     );
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
     const tables = await db.getAllAsync<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
@@ -19,6 +19,7 @@ describe('runMigrations', () => {
     expect(tableNames).toContain('pending_sync_envelopes');
     expect(tableNames).toContain('professional_attestations');
     expect(tableNames).toContain('diagnoses');
+    expect(tableNames).toContain('medications');
     expect(tableNames).not.toContain('mutation_queue');
   });
 
@@ -28,7 +29,7 @@ describe('runMigrations', () => {
     await runMigrations(db);
 
     const versions = await db.getAllAsync<{ version: number }>('SELECT version FROM schema_migrations');
-    expect(versions).toHaveLength(9);
+    expect(versions).toHaveLength(10);
   });
 
   it('rejects duplicate non-null server_envelope_id but allows multiple NULLs (BLE-received envelopes)', async () => {

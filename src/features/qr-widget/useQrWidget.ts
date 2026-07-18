@@ -6,6 +6,7 @@ import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
+import { useMedications } from '@/features/medications/useMedications';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { generateQrImage } from '@/features/qr-widget/qr-image-generator';
@@ -24,6 +25,7 @@ export function useQrWidget(userId: number) {
   const { data: medicalInformation } = useMedicalInformation();
   const { data: allergies } = useAllergies();
   const { data: diagnoses } = useDiagnoses();
+  const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export function useQrWidget(userId: number) {
       allergies,
       emergencyContacts ?? EMPTY_CONTACTS,
       diagnoses,
+      medications,
     );
 
     encryptQrPayload(plaintext)
@@ -86,7 +89,7 @@ export function useQrWidget(userId: number) {
     return () => {
       cancelled = true;
     };
-  }, [userId, enabled, medicalInformation, allergies, diagnoses, emergencyContacts]);
+  }, [userId, enabled, medicalInformation, allergies, diagnoses, medications, emergencyContacts]);
 
   useEffect(() => {
     const hide = () => {
