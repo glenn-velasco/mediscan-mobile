@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/auth/useAuth';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
-import type { AllergyVerificationEnvelope, DiagnosisVerificationEnvelope, GeneralNoteEnvelope, TransfusionWitnessEnvelope } from '@/lib/envelope-schema';
+import { attestationsQueryKey } from '@/lib/query-keys';
+import type { AllergyVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, GeneralNoteEnvelope, TransfusionWitnessEnvelope } from '@/lib/envelope-schema';
 
-export const attestationsQueryKey = ['professional-attestations'] as const;
+export { attestationsQueryKey };
 
-type AttestationPayload = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope;
+type AttestationPayload = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope;
 
 export function useAttestations() {
   const { user } = useAuth();
@@ -37,6 +38,16 @@ export function useAttestationsForDiagnosis(diagnosisLocalUuid: string | undefin
   });
 }
 
+/** Confirmed attestations for one medication — annotations, never overwrites patient-authored fields. */
+export function useAttestationsForMedication(medicationLocalUuid: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [...attestationsQueryKey, user?.id, 'for-medication', medicationLocalUuid],
+    queryFn: () => professionalAttestationRepo.getForMedication<AttestationPayload>(medicationLocalUuid!),
+    enabled: !!medicationLocalUuid && !!user,
+  });
+}
+
 /** Allergy-verification attestations the merge pipeline couldn't confidently match (ambiguous or no match) — never applied silently, need the patient to pick which allergy it refers to. */
 export function useUnconfirmedAttestations() {
   const { data = [], ...rest } = useAttestations();
@@ -51,6 +62,15 @@ export function useUnconfirmedDiagnosisAttestations() {
   const { data = [], ...rest } = useAttestations();
   const unconfirmed = data.filter(
     (a) => a.envelope_type === 'diagnosis_verification' && a.matched_diagnosis_local_uuid === null,
+  );
+  return { ...rest, data: unconfirmed };
+}
+
+/** Medication-verification attestations the merge pipeline couldn't confidently match (ambiguous or no match) — never applied silently, need the patient to pick which medication it refers to. */
+export function useUnconfirmedMedicationAttestations() {
+  const { data = [], ...rest } = useAttestations();
+  const unconfirmed = data.filter(
+    (a) => a.envelope_type === 'medication_verification' && a.matched_medication_local_uuid === null,
   );
   return { ...rest, data: unconfirmed };
 }
@@ -73,6 +93,18 @@ export function useConfirmDiagnosisAttestationMatch() {
   return useMutation({
     mutationFn: ({ localId, diagnosisLocalUuid }: { localId: string; diagnosisLocalUuid: string }) =>
       professionalAttestationRepo.setMatchedDiagnosis(localId, diagnosisLocalUuid),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
+    },
+  });
+}
+
+export function useConfirmMedicationAttestationMatch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ localId, medicationLocalUuid }: { localId: string; medicationLocalUuid: string }) =>
+      professionalAttestationRepo.setMatchedMedication(localId, medicationLocalUuid),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
     },

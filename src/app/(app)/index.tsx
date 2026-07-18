@@ -16,6 +16,8 @@ import { EmergencyContactsBottomSheet, type EmergencyContactsBottomSheetHandle }
 import { EmptyState } from '@/components/empty-state';
 import { GradientHeader } from '@/components/gradient-header';
 import { AppLayout } from '@/components/layouts/app-layout';
+import { ManageInfoBottomSheet, type ManageInfoBottomSheetHandle } from '@/components/manage-info-bottom-sheet';
+import { MedicationsBottomSheet, type MedicationsBottomSheetHandle } from '@/components/medications-bottom-sheet';
 import { QrBottomSheet, type QrBottomSheetHandle } from '@/components/qr-bottom-sheet';
 import { QrIconButton } from '@/components/qr-icon-button';
 import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
@@ -27,6 +29,7 @@ import type { Suffix } from '@/constants/suffix';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
+import { useMedications } from '@/features/medications/useMedications';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
@@ -44,35 +47,64 @@ export default function HomeScreen() {
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
   const diagnosesSheetRef = useRef<DiagnosesBottomSheetHandle>(null);
+  const medicationsSheetRef = useRef<MedicationsBottomSheetHandle>(null);
+  const manageInfoSheetRef = useRef<ManageInfoBottomSheetHandle>(null);
   const { user, refreshUser, logout } = useAuth();
   const { data: medicalInformation, isLoading } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
   const { data: diagnoses = [] } = useDiagnoses();
+  const { data: medications = [] } = useMedications();
   const { data: attestations = [] } = useAttestations();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
   useQrWidget(user?.id ?? 0);
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
 
-  const diagnosisVerifiedCount = useMemo(() => {
-    const map = new Map<string, number>();
+  /**
+   * Counts distinct professionals currently verifying a record — not raw attestation rows, since one
+   * professional re-scanning and re-confirming shouldn't inflate the badge. `attestations` is already
+   * ordered newest-first (see professional-attestation.repo.ts), so the first row seen per
+   * (matched uuid, professional) pair is that professional's latest action; a `note: '__unverify__'`
+   * sentinel there means they've since turned their "Mark as verified" toggle off, so they're excluded.
+   */
+  const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
+    const seen = new Set<string>();
+    const map = new Map<string, Set<number>>();
     for (const a of attestations) {
-      if (a.envelope_type === 'diagnosis_verification' && a.matched_diagnosis_local_uuid) {
-        map.set(a.matched_diagnosis_local_uuid, (map.get(a.matched_diagnosis_local_uuid) ?? 0) + 1);
-      }
+      const matchedUuid = a[matchedUuidKey];
+      if (a.envelope_type !== envelopeType || !matchedUuid) continue;
+      const payload = a.payload as { verified_by?: { user_id?: number }; note?: string } | null;
+      const userId = payload?.verified_by?.user_id;
+      if (typeof userId !== 'number') continue;
+
+      const seenKey = `${matchedUuid}:${userId}`;
+      if (seen.has(seenKey)) continue;
+      seen.add(seenKey);
+
+      if (payload?.note === '__unverify__') continue;
+      const set = map.get(matchedUuid) ?? new Set<number>();
+      set.add(userId);
+      map.set(matchedUuid, set);
     }
-    return map;
+    const counts = new Map<string, number>();
+    for (const [uuid, set] of map) counts.set(uuid, set.size);
+    return counts;
   }, [attestations]);
 
-  const allergyVerifiedCount = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of attestations) {
-      if (a.envelope_type === 'allergy_verification' && a.matched_allergy_local_uuid) {
-        map.set(a.matched_allergy_local_uuid, (map.get(a.matched_allergy_local_uuid) ?? 0) + 1);
-      }
-    }
-    return map;
-  }, [attestations]);
+  const diagnosisVerifiedCount = useMemo(
+    () => countVerifiedByLatestAction('diagnosis_verification', 'matched_diagnosis_local_uuid'),
+    [countVerifiedByLatestAction],
+  );
+
+  const allergyVerifiedCount = useMemo(
+    () => countVerifiedByLatestAction('allergy_verification', 'matched_allergy_local_uuid'),
+    [countVerifiedByLatestAction],
+  );
+
+  const medicationVerifiedCount = useMemo(
+    () => countVerifiedByLatestAction('medication_verification', 'matched_medication_local_uuid'),
+    [countVerifiedByLatestAction],
+  );
 
   useEffect(() => {
     if (!medicalInformation && user?.medical_information && user) {
@@ -394,11 +426,71 @@ export default function HomeScreen() {
             </Card>
           )}
         </View>
+
+        <View className="gap-2">
+          <View className="mb-1 flex-row items-center justify-between">
+            <ThemedText type="overline">Medications</ThemedText>
+            <View className="flex-row items-center gap-4">
+              <Pressable onPress={() => medicationsSheetRef.current?.present()} hitSlop={8}>
+                <ThemedText type="small" color="primary" className="font-semibold">
+                  View all
+                </ThemedText>
+              </Pressable>
+              <Pressable onPress={() => medicationsSheetRef.current?.presentAdd()} hitSlop={12}>
+                <Ionicons name="add" size={20} color={theme.primary} />
+              </Pressable>
+            </View>
+          </View>
+
+          {medications.length === 0 ? (
+            <Pressable onPress={() => medicationsSheetRef.current?.presentAdd()}>
+              <Card>
+                <View className="flex-row items-center gap-3">
+                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                    <Ionicons name="medical" size={18} color={theme.mutedForeground} />
+                  </View>
+                  <ThemedText type="label" color="mutedForeground">Add your first medication — it takes 10 seconds.</ThemedText>
+                </View>
+              </Card>
+            </Pressable>
+          ) : (
+            <Card className="p-0">
+              {medications.map((medication, i) => (
+                <Pressable
+                  key={medication.local_uuid}
+                  onPress={() => router.push({ pathname: '/medications/[id]', params: { id: medication.local_uuid } })}
+                >
+                  <View
+                    className={cn(
+                      'flex-row items-center gap-3 px-4 py-3.5',
+                      i < medications.length - 1 && 'border-b border-border',
+                    )}
+                  >
+                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
+                      <Ionicons name="medical" size={18} color={theme.primary} />
+                    </View>
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{medication.name}</ThemedText>
+                      {medication.dosage || medication.frequency ? (
+                        <ThemedText type="small" color="mutedForeground">
+                          {[medication.dosage, medication.frequency].filter(Boolean).join(' · ')}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    <VerifiedCountBadge count={medicationVerifiedCount.get(medication.local_uuid) ?? 0} />
+                  </View>
+                </Pressable>
+              ))}
+            </Card>
+          )}
+        </View>
       </AppLayout>
-      <QrBottomSheet ref={qrSheetRef} />
+      <QrBottomSheet ref={qrSheetRef} manageInfoSheetRef={manageInfoSheetRef} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />
+      <MedicationsBottomSheet ref={medicationsSheetRef} />
+      <ManageInfoBottomSheet ref={manageInfoSheetRef} />
     </View>
   );
 }

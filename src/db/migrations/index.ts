@@ -9,8 +9,9 @@ import * as migration006 from '@/db/migrations/006_pending_sync_envelopes';
 import * as migration007 from '@/db/migrations/007_professional_attestations';
 import * as migration008 from '@/db/migrations/008_diagnoses';
 import * as migration009 from '@/db/migrations/009_add_user_id';
+import * as migration010 from '@/db/migrations/010_medications';
 
-const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009];
+const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010];
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`

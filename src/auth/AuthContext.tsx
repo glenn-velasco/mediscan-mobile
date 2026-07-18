@@ -9,7 +9,7 @@ import { setCurrentUserId } from '@/db/context';
 import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { queryClient, queryPersister } from '@/lib/query-client';
-import { medicalInformationQueryKey } from '@/features/medical-information/useMedicalInformation';
+import { medicalInformationQueryKey } from '@/lib/query-keys';
 import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
