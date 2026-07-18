@@ -2,29 +2,34 @@ import '@/global.css';
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import * as SplashScreen from 'expo-splash-screen';
-import { useFonts } from 'expo-font';
-import { useEffect, useState } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { useFonts } from 'expo-font';
+import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/useAuth';
-import { queryClient, queryPersister } from '@/lib/query-client';
-import { useSyncTriggers } from '@/sync/triggers';
-import { ensureDeviceKeyRegistered } from '@/services/device-key.service';
-import { BroadcastProvider } from '@/realtime/BroadcastProvider';
-import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
-import { OnboardingProvider } from '@/onboarding/OnboardingContext';
-import { useOnboarding } from '@/onboarding/useOnboarding';
 import { getDb } from '@/db/client';
+import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
+import { queryClient, queryPersister } from '@/lib/query-client';
+import { OnboardingProvider } from '@/onboarding/OnboardingContext';
+import { PermissionsPrimerProvider } from '@/onboarding/PermissionsPrimerContext';
+import { useOnboarding } from '@/onboarding/useOnboarding';
+import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
+import { usePrimePermissions } from '@/onboarding/usePrimePermissions';
+import { BroadcastProvider } from '@/realtime/BroadcastProvider';
+import { ensureDeviceKeyRegistered } from '@/services/device-key.service';
+import { useSyncTriggers } from '@/sync/triggers';
 
 function RootNavigator() {
   const { status } = useAuth();
   const { seen } = useOnboarding();
+  const { primed } = usePermissionsPrimer();
+  usePrimePermissions(seen === true && primed === false);
   const screenOptions = useStackScreenOptions();
   const [dbReady, setDbReady] = useState(false);
   useSyncTriggers();
@@ -47,7 +52,7 @@ function RootNavigator() {
     );
   }, []);
 
-  const ready = fontsLoaded && status !== 'idle' && seen !== null && dbReady;
+  const ready = fontsLoaded && status !== 'idle' && seen !== null && primed !== null && dbReady;
   const authenticated = status === 'authenticated';
 
   useEffect(() => {
@@ -71,9 +76,9 @@ function RootNavigator() {
         <Stack.Screen name="(app)" />
         <Stack.Screen name="allergies" />
         <Stack.Screen name="diagnoses" />
+        <Stack.Screen name="medications" />
         <Stack.Screen name="emergency-contacts" />
         <Stack.Screen name="account" />
-        <Stack.Screen name="professional" options={{ headerShown: true }} />
         <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={ready && seen === true && !authenticated}>
@@ -96,14 +101,16 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
         <OnboardingProvider>
-          <AuthProvider>
-            <BroadcastProvider>
-              <BottomSheetModalProvider>
-                <StatusBar style="auto" />
-                <RootNavigator />
-              </BottomSheetModalProvider>
-            </BroadcastProvider>
-          </AuthProvider>
+          <PermissionsPrimerProvider>
+            <AuthProvider>
+              <BroadcastProvider>
+                <BottomSheetModalProvider>
+                  <StatusBar style="auto" />
+                  <RootNavigator />
+                </BottomSheetModalProvider>
+              </BroadcastProvider>
+            </AuthProvider>
+          </PermissionsPrimerProvider>
         </OnboardingProvider>
       </PersistQueryClientProvider>
     </GestureHandlerRootView>
