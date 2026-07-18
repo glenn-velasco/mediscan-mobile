@@ -18,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["SYSTEM_ALERT_WINDOW", "VIBRATE", "RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
@@ -73,7 +74,11 @@
           ]
         }
       ],
-      "./plugins/withUserLeaveHintFix.js"
+      "./plugins/withUserLeaveHintFix.js",
+      "./plugins/withSplashWindowBackground.js",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -86,7 +91,7 @@
       }
     },
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/536d2ff6-5e5f-4e00-8afb-35584d94b29f"

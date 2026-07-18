@@ -14,6 +14,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/useAuth';
 import { getDb } from '@/db/client';
+import { useAppUpdates } from '@/hooks/use-app-updates';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { OnboardingProvider } from '@/onboarding/OnboardingContext';
@@ -33,6 +34,7 @@ function RootNavigator() {
   const screenOptions = useStackScreenOptions();
   const [dbReady, setDbReady] = useState(false);
   useSyncTriggers();
+  useAppUpdates();
 
   const [fontsLoaded] = useFonts({
     'PlusJakartaSans-Regular': require('../../assets/fonts/PlusJakartaSans-Regular.ttf'),
