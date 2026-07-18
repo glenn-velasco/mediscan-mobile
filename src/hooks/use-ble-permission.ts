@@ -56,11 +56,21 @@ function useAndroidBlePermission(
   }, [getPermissions]);
 
   useEffect(() => {
-    void checkPermission();
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') void checkPermission();
+    let isMounted = true;
+    // checkPermission is async and calls setState in callback, not synchronously
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void checkPermission().then(() => {
+      if (!isMounted) return;
     });
-    return () => subscription.remove();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void checkPermission();
+      }
+    });
+    return () => {
+      isMounted = false;
+      subscription.remove();
+    };
   }, [checkPermission]);
 
   const requestPermission = useCallback(async () => {

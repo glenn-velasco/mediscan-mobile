@@ -13,11 +13,17 @@ export type BleAdvertisingState = 'idle' | 'starting' | 'advertising' | 'error';
 export function useBleAdvertising() {
   const { user } = useAuth();
   const [permission, requestPermission] = useBlePeripheralPermission();
-  const [state, setState] = useState<BleAdvertisingState>('idle');
+  // Initialize to 'advertising' if already advertising, otherwise 'idle'
+  const [state, setState] = useState<BleAdvertisingState>(() =>
+    blePeripheralService.isAdvertising() ? 'advertising' : 'idle',
+  );
   const [error, setError] = useState<string | null>(null);
   const userRef = useRef(user);
-  userRef.current = user;
   const toggle = useSyncExternalStore(subscribeToggle, getToggleSnapshot);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const start = useCallback(async () => {
     if (!userRef.current) return;
@@ -67,8 +73,10 @@ export function useBleAdvertising() {
   // off outside the app since. Leaves everything untouched when sync is off.
   useEffect(() => {
     if (!blePeripheralService.isAdvertising()) return;
-    setState('advertising');
-    void ensureBluetoothEnabled();
+    // Verify Bluetooth is still enabled; if not, stop advertising silently.
+    ensureBluetoothEnabled().then((enabled) => {
+      if (!enabled) void blePeripheralService.stopAdvertising();
+    });
   }, []);
 
   // Cold start: the peripheral service's in-memory flag is always false on a fresh launch, so
@@ -78,11 +86,13 @@ export function useBleAdvertising() {
   useEffect(() => {
     if (resumedRef.current) return;
     if (!toggle.loaded || !toggle.enabled) return;
-    if (!user) return;
+    if (!userRef.current) return;
     if (blePeripheralService.isAdvertising()) return;
     resumedRef.current = true;
+    // start() is async and manages state updates via callbacks, not synchronously
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void start();
-  }, [toggle.loaded, toggle.enabled, user, start]);
+  }, [toggle.loaded, toggle.enabled, start]);
 
   return { state, error, isAdvertising: state === 'advertising', start, stop };
 }
