@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 
 import { AppLayout } from '@/components/layouts/app-layout';
-import { TextField } from '@/components/form/text-field';
+import { PasswordField } from '@/components/form/password-field';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { ConflictBanner } from '@/components/conflict-banner';
@@ -41,13 +41,12 @@ export default function ChangePasswordScreen() {
         <ConflictBanner message="Changing your password requires an internet connection." className="mb-4" />
       ) : null}
 
-      <TextField label="Current password" value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry />
-      <TextField label="New password" value={password} onChangeText={setPassword} secureTextEntry />
-      <TextField
+      <PasswordField label="Current password" value={currentPassword} onChangeText={setCurrentPassword} />
+      <PasswordField label="New password" value={password} onChangeText={setPassword} />
+      <PasswordField
         label="Confirm new password"
         value={passwordConfirmation}
         onChangeText={setPasswordConfirmation}
-        secureTextEntry
       />
 
       <FormError message={message} />

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { AuthLayout } from '@/components/layouts/auth-layout';
 import { TextField } from '@/components/form/text-field';
+import { PasswordField } from '@/components/form/password-field';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useLogin } from '@/features/auth/useLogin';
@@ -28,14 +29,12 @@ export default function LoginScreen() {
   return (
     <AuthLayout>
       <View className="mb-10 items-center">
-        <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl" style={{ backgroundColor: '#0d7377' }}>
-          <View className="h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-            <View className="h-4 w-4 rounded-full" style={{ backgroundColor: '#ffffff' }} />
-          </View>
-        </View>
-        <ThemedText type="title" className="text-center">
-          MediScan
-        </ThemedText>
+        <Image
+          source={require('@/assets/images/mediscan-logo.png')}
+          resizeMode="contain"
+          style={{ width: 220, height: 91, marginBottom: 12 }}
+          accessibilityLabel="MediScan"
+        />
         <ThemedText type="body" color="mutedForeground" className="mt-2 text-center">
           When you can&apos;t explain, your QR will.
         </ThemedText>
@@ -44,7 +43,7 @@ export default function LoginScreen() {
       <FormError message={message} />
 
       <TextField label="Email" leftIcon="mail-outline" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
-      <TextField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} secureTextEntry error={fieldErrors.password} />
+      <PasswordField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} error={fieldErrors.password} />
 
       <PrimaryButton label="Log in" loading={isPending} onPress={onSubmit} className="mt-2" />
 

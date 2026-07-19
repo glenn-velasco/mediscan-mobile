@@ -4,6 +4,7 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { AuthLayout } from '@/components/layouts/auth-layout';
 import { TextField } from '@/components/form/text-field';
+import { PasswordField } from '@/components/form/password-field';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useResetPassword } from '@/features/auth/useResetPassword';
@@ -42,8 +43,8 @@ export default function ResetPasswordScreen() {
       <ThemedText className="mb-8 text-center text-2xl font-semibold">Choose a new password</ThemedText>
 
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      <TextField label="New password" value={password} onChangeText={setPassword} secureTextEntry />
-      <TextField label="Confirm new password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} secureTextEntry />
+      <PasswordField label="New password" value={password} onChangeText={setPassword} />
+      <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} />
 
       <FormError message={message} />
 
