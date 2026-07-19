@@ -91,7 +91,7 @@ export default function AccountScreen() {
 
       <Card className="mb-4 gap-1">
         <View className="flex-row items-center justify-between">
-          <View>
+          <View className="flex-1 shrink pr-3">
             <ThemedText className="font-semibold">Sync key</ThemedText>
             <ThemedText type="small" color="mutedForeground">
               {deviceKey ? `Registered on this device${deviceKey.label ? ` as "${deviceKey.label}"` : ''}` : 'Not yet registered'}

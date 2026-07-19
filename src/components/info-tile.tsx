@@ -28,7 +28,6 @@ export function InfoTile({
   iconBgKey,
   label,
   value,
-  accent,
   className,
 }: {
   icon: IconName;
@@ -36,17 +35,13 @@ export function InfoTile({
   iconBgKey: IconBgKey;
   label: string;
   value: string;
-  accent?: boolean;
   className?: string;
 }) {
   const theme = useTheme();
   const bgColor = hexToRgba(theme[iconBgKey], 0.12);
 
   return (
-    <Card
-      className={cn('flex-1 gap-2.5', className)}
-      style={accent ? { borderLeftWidth: 3, borderLeftColor: iconColor } : undefined}
-    >
+    <Card className={cn('flex-1 gap-2.5', className)}>
       <View className="flex-row items-center gap-3">
         <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: bgColor }}>
           <Ionicons name={icon} size={18} color={iconColor} />
