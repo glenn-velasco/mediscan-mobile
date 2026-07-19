@@ -132,7 +132,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const refreshUser = useCallback(async () => {
     const { user: fetchedUser } = await apiMe();
     setCurrentUserId(fetchedUser.id);
-    setUser(fetchedUser);
+    setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(fetchedUser) ? prev : fetchedUser));
     await saveUser(fetchedUser);
   }, []);
 

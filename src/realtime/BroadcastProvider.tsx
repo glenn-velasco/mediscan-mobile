@@ -60,7 +60,10 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
       pusherRef.current = null;
       setPresenceMembers([]);
     };
-  }, [status, user, refreshUser]);
+    // Depend on user?.id rather than user: refreshUser() replaces user with a new object
+    // on every periodic sync, and reconnecting on that no-op change caused a connect/disconnect loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, user?.id, refreshUser]);
 
   return <>{children}</>;
 }
