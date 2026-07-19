@@ -40,6 +40,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (cause) {
+    console.error(`[api] ${method} ${path} → network error`, cause);
     throw new NetworkError(cause);
   }
 
@@ -47,6 +48,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   try {
     envelope = await response.json();
   } catch (cause) {
+    console.error(`[api] ${method} ${path} → failed to parse response`, cause);
     throw new NetworkError(cause);
   }
 
@@ -128,13 +130,22 @@ export async function postMultipart<T>(path: string, formData: FormData): Promis
       body: formData,
     });
   } catch (cause) {
+    console.error(`[api] POST ${path} → network error`, cause);
     throw new NetworkError(cause);
   }
 
+  const rawBody = await response.text();
   let envelope: ApiEnvelope<T>;
   try {
-    envelope = await response.json();
+    envelope = JSON.parse(rawBody);
   } catch (cause) {
+    console.error(`[api] POST ${path} → failed to parse response`, {
+      status: response.status,
+      statusText: response.statusText,
+      bodyLength: rawBody.length,
+      bodyPreview: rawBody.slice(0, 500),
+      cause,
+    });
     throw new NetworkError(cause);
   }
 

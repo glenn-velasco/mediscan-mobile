@@ -1,3 +1,5 @@
+import { File } from 'expo-file-system';
+
 import { submitProfessionalApplication as submitProfessionalApplicationRequest } from '@/api/endpoints/professional-applications';
 import type { ProfessionalApplication, ProfessionalApplicationIdType } from '@/api/types';
 
@@ -13,9 +15,11 @@ export type ProfessionalApplicationSubmission = {
 };
 
 function appendFile(formData: FormData, field: string, file: CapturedFile) {
-  // React Native's FormData accepts this {uri, name, type} shape in place of a Blob/File — fetch
-  // reads it directly off the filesystem when the request is sent.
-  formData.append(field, { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+  // SDK 57's fetch (expo/src/winter) replaces RN's classic {uri, name, type} FormData shorthand
+  // with a spec-compliant one that only accepts a real Blob — passing the shorthand object fails
+  // at request-build time with "Unsupported FormDataPart implementation". expo-file-system's
+  // `File` implements Blob (readable via .bytes()), which this fetch layer does support.
+  formData.append(field, new File(file.uri) as unknown as Blob);
 }
 
 export function submitProfessionalApplication(submission: ProfessionalApplicationSubmission): Promise<ProfessionalApplication> {

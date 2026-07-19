@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { View } from 'react-native';
-import { useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
+import { CommonResolutions, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import { Camera as FaceDetectorCamera, type Face } from 'react-native-vision-camera-face-detector';
 
 import { ThemedText } from '@/components/themed-text';
@@ -27,6 +27,24 @@ const FLASH_BACKGROUND: Record<(typeof FLASH_COLORS)[number], string> = {
 
 type CaptureStatus = 'idle' | 'requesting' | 'positioning' | 'blinking' | 'flashing' | 'done' | 'error';
 
+const CAMERA_STYLE = { width: '100%', height: '100%' } as const;
+
+type FaceCameraProps = Pick<
+  ComponentProps<typeof FaceDetectorCamera>,
+  'device' | 'isActive' | 'outputs' | 'onFacesDetected' | 'onStarted' | 'onStopped' | 'onError'
+>;
+
+// react-native-vision-camera-face-detector's useFaceDetectorOutput memoizes on a rest-destructured
+// options object, which JS recreates on every call regardless of whether the values changed — so
+// its memoization never hits, and every re-render of <FaceDetectorCamera> rebuilds the face
+// detector output (and outputs array), which the underlying Camera treats as a session
+// reconfigure, closing it mid-capture. Wrapping it in React.memo with stable props (see the
+// useCallback-wrapped handlers below) stops it from re-invoking on blink-triggered re-renders,
+// so the buggy hook is never called again after mount.
+const MemoizedFaceCamera = memo(function MemoizedFaceCamera(props: FaceCameraProps) {
+  return <FaceDetectorCamera style={CAMERA_STYLE} runClassifications performanceMode="fast" {...props} />;
+});
+
 export type LivenessCaptureResult = {
   selfieFrames: CapturedFile[];
   flashFrames: CapturedFile[];
@@ -49,7 +67,16 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
   const { hasPermission, requestPermission } = useCameraPermission();
   // Photo capture is a Camera output in vision-camera v5 — captured frames come from this
   // output's capturePhotoToFile(), not from an imperative ref call as in earlier versions.
-  const photoOutput = usePhotoOutput({ quality: 0.85 });
+  // targetResolution defaults to UHD_4_3 (3024x4032, ~12MP) if unset — full sensor resolution is
+  // wasted on a face-detection frame and blows past the backend's 3MB-per-frame limit (see
+  // SubmitProfessionalApplicationRequest) once you multiply by the ~10 frames captured per
+  // submission; HD_4_3 is plenty for liveness/face-match while keeping each frame well under that.
+  const photoOutput = usePhotoOutput({ quality: 0.85, targetResolution: CommonResolutions.HD_4_3 });
+  // Stabilize the outputs array reference: an inline `[photoOutput]` literal is a new array on
+  // every render (this component re-renders often — blinkCount, flashIndex, status), and the
+  // Camera treats a new `outputs` array as a signal to reconfigure the session, which briefly
+  // closes it — causing capturePhotoToFile() to intermittently fail with "Camera is closed".
+  const cameraOutputs = useMemo(() => [photoOutput], [photoOutput]);
 
   const [status, setStatus] = useState<CaptureStatus>('idle');
   const [error, setErrorMessage] = useState<string | null>(null);
@@ -65,6 +92,9 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
   const busyRef = useRef(false);
   const stoppedRef = useRef(false);
   const deadlineRef = useRef<number | null>(null);
+  // Set by the Camera's onStarted/onStopped callbacks — gates capture attempts so we don't race
+  // the native session while it's still (re)binding after mount or a reconfigure.
+  const cameraStartedRef = useRef(false);
 
   const fail = useCallback((message: string) => {
     stoppedRef.current = true;
@@ -72,14 +102,45 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
     setStatus('error');
   }, []);
 
+  // Stable identities for the Camera's lifecycle callbacks — inline arrow functions here would be
+  // new on every render (this component re-renders on every blink/status change), and vision-camera
+  // treats new callback props as a signal to reconfigure the session, closing it mid-capture.
+  const handleCameraStarted = useCallback(() => {
+    cameraStartedRef.current = true;
+  }, []);
+  const handleCameraStopped = useCallback(() => {
+    cameraStartedRef.current = false;
+  }, []);
+  const handleCameraError = useCallback(
+    (e: unknown) => {
+      console.error('[LivenessCapture] camera error', e);
+      fail('Camera error — please try again.');
+    },
+    [fail],
+  );
+
   const captureFrame = useCallback(async (name: string): Promise<CapturedFile | null> => {
-    try {
-      const photoFile = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
-      return { uri: `file://${photoFile.filePath}`, name, type: 'image/jpeg' };
-    } catch (e) {
-      console.error('[LivenessCapture] frame capture failed', e);
-      return null;
+    // The underlying CameraX session can report itself "closed"/"not bound" for a brief window
+    // right after any reconfigure (e.g. React re-rendering the Camera with new callback/prop
+    // references) even though isActive never actually changed — a native-library timing quirk,
+    // not something under our control. One short retry absorbs that window instead of failing
+    // the whole capture step over a transient race.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (stoppedRef.current || !cameraStartedRef.current) return null;
+      try {
+        const photoFile = await photoOutput.capturePhotoToFile({ flashMode: 'off', enableShutterSound: false }, {});
+        return { uri: `file://${photoFile.filePath}`, name, type: 'image/jpeg' };
+      } catch (e) {
+        if (attempt === 0) {
+          console.warn('[LivenessCapture] frame capture failed, retrying once', e);
+          await wait(200);
+          continue;
+        }
+        console.error('[LivenessCapture] frame capture failed', e);
+        return null;
+      }
     }
+    return null;
   }, [photoOutput]);
 
   const runFlashSequence = useCallback(async () => {
@@ -111,7 +172,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
 
   const handleFacesDetected = useCallback(
     (faces: Face[]) => {
-      if (busyRef.current || stoppedRef.current) return;
+      if (busyRef.current || stoppedRef.current || !cameraStartedRef.current) return;
       const face = faces[0];
 
       setStatus((current) => {
@@ -188,6 +249,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
     setErrorMessage(null);
     stoppedRef.current = false;
     busyRef.current = false;
+    cameraStartedRef.current = false;
     selfieFramesRef.current = [];
     positioningTicksRef.current = 0;
     completedBlinksRef.current = 0;
@@ -236,18 +298,14 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
             Camera preview will appear here.
           </ThemedText>
         ) : (
-          <FaceDetectorCamera
-            style={{ width: '100%', height: '100%' }}
+          <MemoizedFaceCamera
             device={device}
             isActive={isLive}
-            outputs={[photoOutput]}
-            runClassifications
-            performanceMode="fast"
+            outputs={cameraOutputs}
             onFacesDetected={handleFacesDetected}
-            onError={(e) => {
-              console.error('[LivenessCapture] camera error', e);
-              fail('Camera error — please try again.');
-            }}
+            onStarted={handleCameraStarted}
+            onStopped={handleCameraStopped}
+            onError={handleCameraError}
           />
         )}
 
