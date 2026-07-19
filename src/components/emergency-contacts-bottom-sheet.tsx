@@ -1,6 +1,5 @@
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, useState } from 'react';
-import { View, Pressable, Switch, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Pressable, Switch, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -13,17 +12,28 @@ import {
 import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/primary-button';
-import { useEmergencyContacts, useCreateEmergencyContact } from '@/features/emergency-contacts';
+import {
+  useEmergencyContacts,
+  useCreateEmergencyContact,
+  useUpdateEmergencyContact,
+  useDeleteEmergencyContact,
+} from '@/features/emergency-contacts';
 import { useTheme } from '@/hooks/use-theme';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 import type { EmergencyContactRow } from '@/db/schema';
 
-export type EmergencyContactsBottomSheetHandle = { present: () => void; presentAdd: () => void; dismiss: () => void };
+export type EmergencyContactsBottomSheetHandle = {
+  present: () => void;
+  presentAdd: () => void;
+  presentView: (localUuid: string) => void;
+  dismiss: () => void;
+};
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
-type Mode = 'list' | 'add';
+type Mode = 'list' | 'add' | 'view';
 
 const ContactSheetRow = memo(function ContactSheetRow({
   item,
@@ -59,13 +69,16 @@ const ContactSheetRow = memo(function ContactSheetRow({
 export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSheetHandle>(
   function EmergencyContactsBottomSheet(_props, ref) {
     const sheetRef = useRef<BottomSheetModal>(null);
-    const router = useRouter();
     const theme = useTheme();
     const { data: contacts = [], isLoading } = useEmergencyContacts();
     const { mutateAsync: createContact, isPending } = useCreateEmergencyContact();
+    const { mutateAsync: updateContact, isPending: isSaving } = useUpdateEmergencyContact();
+    const { mutateAsync: deleteContact, isPending: isDeleting } = useDeleteEmergencyContact();
     const [mode, setMode] = useState<Mode>('list');
+    const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
+    const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
-    // Add form state
+    // Add/view form state
     const [name, setName] = useState('');
     const [relationship, setRelationship] = useState('');
     const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({ countryCode: 'PH', phone: '' });
@@ -78,6 +91,21 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
       setIsPrimary(false);
     }, []);
 
+    const loadItem = useCallback(
+      (localUuid: string) => {
+        const item = contacts.find((c) => c.local_uuid === localUuid);
+        if (!item) return false;
+        setName(item.name);
+        setRelationship(item.relationship ?? '');
+        setPhoneValue({ countryCode: item.phone_country_code ?? 'PH', phone: item.phone ?? '' });
+        setIsPrimary(!!item.is_primary);
+        setSelectedUuid(localUuid);
+        setSelectedServerId(item.server_id);
+        return true;
+      },
+      [contacts],
+    );
+
     useImperativeHandle(ref, () => ({
       present: () => {
         setMode('list');
@@ -88,15 +116,22 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
         setMode('add');
         sheetRef.current?.present();
       },
+      presentView: (localUuid: string) => {
+        if (!loadItem(localUuid)) return;
+        setMode('view');
+        sheetRef.current?.present();
+      },
       dismiss: () => sheetRef.current?.dismiss(),
     }));
 
-    const handlePress = useCallback(
-      (localUuid: string) => {
-        sheetRef.current?.dismiss();
-        router.push({ pathname: '/emergency-contacts/[localUuid]', params: { localUuid } } as any);
-      },
-      [router],
+    const handlePress = useGuardedPress(
+      useCallback(
+        (localUuid: string) => {
+          if (!loadItem(localUuid)) return;
+          setMode('view');
+        },
+        [loadItem],
+      ),
     );
 
     const handleAdd = useCallback(() => {
@@ -115,6 +150,37 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
       });
       sheetRef.current?.dismiss();
     }, [name, relationship, phoneValue, isPrimary, createContact]);
+
+    const handleSave = useCallback(async () => {
+      if (!selectedUuid || !name.trim()) return;
+      await updateContact({
+        localUuid: selectedUuid,
+        serverId: selectedServerId,
+        payload: {
+          name,
+          relationship: relationship || undefined,
+          phone_country_code: phoneValue.countryCode || undefined,
+          phone: phoneValue.phone || undefined,
+          is_primary: isPrimary,
+        },
+      });
+      setMode('list');
+    }, [selectedUuid, selectedServerId, name, relationship, phoneValue, isPrimary, updateContact]);
+
+    const handleDelete = useCallback(() => {
+      if (!selectedUuid) return;
+      Alert.alert('Remove contact', `Are you sure you want to remove ${name}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteContact(selectedUuid);
+            setMode('list');
+          },
+        },
+      ]);
+    }, [selectedUuid, name, deleteContact]);
 
     return (
       <BottomSheetModal
@@ -169,7 +235,7 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
         ) : (
           <View className="px-6 pb-10 pt-2">
             <View className="mb-4 flex-row items-center justify-between">
-              <ThemedText type="overline">Add emergency contact</ThemedText>
+              <ThemedText type="overline">{mode === 'view' ? 'Emergency contact' : 'Add emergency contact'}</ThemedText>
               <Pressable onPress={() => setMode('list')} hitSlop={8}>
                 <Ionicons name="arrow-back" size={20} color={theme.mutedForeground} />
               </Pressable>
@@ -232,11 +298,21 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
 
             <PrimaryButton
               label="Save contact"
-              loading={isPending}
+              loading={mode === 'view' ? isSaving : isPending}
               disabled={!name.trim()}
-              onPress={handleSubmit}
-              className="mt-4"
+              onPress={mode === 'view' ? handleSave : handleSubmit}
+              className="mt-2"
             />
+            {mode === 'view' ? (
+              <PrimaryButton
+                label="Remove contact"
+                variant="danger"
+                loading={isDeleting}
+                disabled={isSaving}
+                onPress={handleDelete}
+                className="mt-2"
+              />
+            ) : null}
           </View>
         )}
       </BottomSheetModal>

@@ -1,6 +1,5 @@
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, useState } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -15,16 +14,24 @@ import { PrimaryButton } from '@/components/primary-button';
 import { SeverityBadge } from '@/components/severity-badge';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useCreateAllergy } from '@/features/allergies/useCreateAllergy';
+import { useUpdateAllergy } from '@/features/allergies/useUpdateAllergy';
+import { useDeleteAllergy } from '@/features/allergies/useDeleteAllergy';
 import { useTheme } from '@/hooks/use-theme';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 import type { AllergyRow } from '@/db/schema';
 
-export type AllergiesBottomSheetHandle = { present: () => void; presentAdd: () => void; dismiss: () => void };
+export type AllergiesBottomSheetHandle = {
+  present: () => void;
+  presentAdd: () => void;
+  presentView: (localUuid: string) => void;
+  dismiss: () => void;
+};
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
-type Mode = 'list' | 'add';
+type Mode = 'list' | 'add' | 'view';
 
 const SEVERITIES: AllergyRow['severity'][] = ['mild', 'moderate', 'severe', 'life-threatening'];
 
@@ -48,13 +55,15 @@ const AllergySheetRow = memo(function AllergySheetRow({
 export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
   function AllergiesBottomSheet(_props, ref) {
     const sheetRef = useRef<BottomSheetModal>(null);
-    const router = useRouter();
     const theme = useTheme();
     const { data: allergies = [], isLoading } = useAllergies();
     const { mutateAsync: createAllergy, isPending } = useCreateAllergy();
+    const { mutateAsync: updateAllergy, isPending: isSaving } = useUpdateAllergy();
+    const { mutateAsync: deleteAllergy, isPending: isDeleting } = useDeleteAllergy();
     const [mode, setMode] = useState<Mode>('list');
+    const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
 
-    // Add form state
+    // Add/view form state
     const [allergen, setAllergen] = useState('');
     const [reaction, setReaction] = useState('');
     const [severity, setSeverity] = useState<AllergyRow['severity']>('mild');
@@ -64,6 +73,19 @@ export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
       setReaction('');
       setSeverity('mild');
     }, []);
+
+    const loadItem = useCallback(
+      (localUuid: string) => {
+        const item = allergies.find((a) => a.local_uuid === localUuid);
+        if (!item) return false;
+        setAllergen(item.allergen);
+        setReaction(item.reaction ?? '');
+        setSeverity(item.severity);
+        setSelectedUuid(localUuid);
+        return true;
+      },
+      [allergies],
+    );
 
     useImperativeHandle(ref, () => ({
       present: () => {
@@ -75,15 +97,22 @@ export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
         setMode('add');
         sheetRef.current?.present();
       },
+      presentView: (localUuid: string) => {
+        if (!loadItem(localUuid)) return;
+        setMode('view');
+        sheetRef.current?.present();
+      },
       dismiss: () => sheetRef.current?.dismiss(),
     }));
 
-    const handlePress = useCallback(
-      (localUuid: string) => {
-        sheetRef.current?.dismiss();
-        router.push({ pathname: '/allergies/[id]', params: { id: localUuid } } as any);
-      },
-      [router],
+    const handlePress = useGuardedPress(
+      useCallback(
+        (localUuid: string) => {
+          if (!loadItem(localUuid)) return;
+          setMode('view');
+        },
+        [loadItem],
+      ),
     );
 
     const handleAdd = useCallback(() => {
@@ -96,6 +125,27 @@ export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
       await createAllergy({ allergen, reaction: reaction || undefined, severity });
       sheetRef.current?.dismiss();
     }, [allergen, reaction, severity, createAllergy]);
+
+    const handleSave = useCallback(async () => {
+      if (!selectedUuid || !allergen.trim()) return;
+      await updateAllergy({ localUuid: selectedUuid, payload: { allergen, reaction: reaction || undefined, severity } });
+      setMode('list');
+    }, [selectedUuid, allergen, reaction, severity, updateAllergy]);
+
+    const handleDelete = useCallback(() => {
+      if (!selectedUuid) return;
+      Alert.alert('Delete allergy', `Are you sure you want to delete "${allergen}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAllergy(selectedUuid);
+            setMode('list');
+          },
+        },
+      ]);
+    }, [selectedUuid, allergen, deleteAllergy]);
 
     return (
       <BottomSheetModal
@@ -150,7 +200,7 @@ export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
         ) : (
           <View className="px-6 pb-10 pt-2">
             <View className="mb-4 flex-row items-center justify-between">
-              <ThemedText type="overline">Add allergy</ThemedText>
+              <ThemedText type="overline">{mode === 'view' ? 'Allergy' : 'Add allergy'}</ThemedText>
               <Pressable onPress={() => setMode('list')} hitSlop={8}>
                 <Ionicons name="arrow-back" size={20} color={theme.mutedForeground} />
               </Pressable>
@@ -235,11 +285,21 @@ export const AllergiesBottomSheet = forwardRef<AllergiesBottomSheetHandle>(
 
             <PrimaryButton
               label="Save"
-              loading={isPending}
+              loading={mode === 'view' ? isSaving : isPending}
               disabled={!allergen.trim()}
-              onPress={handleSubmit}
-              className="mt-4"
+              onPress={mode === 'view' ? handleSave : handleSubmit}
+              className="mt-2"
             />
+            {mode === 'view' ? (
+              <PrimaryButton
+                label="Delete allergy"
+                variant="danger"
+                loading={isDeleting}
+                disabled={isSaving}
+                onPress={handleDelete}
+                className="mt-2"
+              />
+            ) : null}
           </View>
         )}
       </BottomSheetModal>

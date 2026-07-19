@@ -1,10 +1,11 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, Switch, TextInput, View } from 'react-native';
+import { Alert, Pressable, Switch, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
   BottomSheetScrollView,
+  BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 
@@ -705,7 +706,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                   {item.editing ? (
                     <View className="gap-2">
                       {item.isNew ? (
-                        <TextInput
+                        <BottomSheetTextInput
                           className="rounded-lg border px-3 py-2 text-base"
                           style={{ borderColor: theme.input, color: theme.foreground }}
                           placeholder="Allergen name"
@@ -715,7 +716,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                         />
                       ) : null}
                       <PickerField label="Severity" options={ALLERGY_SEVERITIES} value={item.severity} onChange={(v) => setAllergy(item.key, { severity: v })} />
-                      <TextInput
+                      <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
                         placeholder="Reaction (optional)"
@@ -786,7 +787,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                   {item.editing ? (
                     <View className="gap-2">
                       {item.isNew ? (
-                        <TextInput
+                        <BottomSheetTextInput
                           className="rounded-lg border px-3 py-2 text-base"
                           style={{ borderColor: theme.input, color: theme.foreground }}
                           placeholder="Condition name"
@@ -796,7 +797,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                         />
                       ) : null}
                       <PickerField label="Severity" options={DIAGNOSIS_SEVERITIES} value={item.severity} onChange={(v) => setDiagnosis(item.key, { severity: v })} />
-                      <TextInput
+                      <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
                         placeholder="Date of diagnosis (optional)"
@@ -867,7 +868,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                   {item.editing ? (
                     <View className="gap-2">
                       {item.isNew ? (
-                        <TextInput
+                        <BottomSheetTextInput
                           className="rounded-lg border px-3 py-2 text-base"
                           style={{ borderColor: theme.input, color: theme.foreground }}
                           placeholder="Medication name"
@@ -876,7 +877,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                           onChangeText={(v) => setMedication(item.key, { name: v })}
                         />
                       ) : null}
-                      <TextInput
+                      <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
                         placeholder="Dosage (e.g. 500mg)"
@@ -884,7 +885,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                         value={item.dosage}
                         onChangeText={(v) => setMedication(item.key, { dosage: v })}
                       />
-                      <TextInput
+                      <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
                         placeholder="Frequency (e.g. Twice daily)"
@@ -892,7 +893,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                         value={item.frequency}
                         onChangeText={(v) => setMedication(item.key, { frequency: v })}
                       />
-                      <TextInput
+                      <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
                         placeholder="Notes (optional)"

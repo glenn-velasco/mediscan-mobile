@@ -1,6 +1,5 @@
 import { forwardRef, memo, useCallback, useImperativeHandle, useRef, useState } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -14,16 +13,24 @@ import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/primary-button';
 import { useMedications } from '@/features/medications/useMedications';
 import { useCreateMedication } from '@/features/medications/useCreateMedication';
+import { useUpdateMedication } from '@/features/medications/useUpdateMedication';
+import { useDeleteMedication } from '@/features/medications/useDeleteMedication';
 import { useTheme } from '@/hooks/use-theme';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 import type { MedicationRow } from '@/db/schema';
 
-export type MedicationsBottomSheetHandle = { present: () => void; presentAdd: () => void; dismiss: () => void };
+export type MedicationsBottomSheetHandle = {
+  present: () => void;
+  presentAdd: () => void;
+  presentView: (localUuid: string) => void;
+  dismiss: () => void;
+};
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
-type Mode = 'list' | 'add';
+type Mode = 'list' | 'add' | 'view';
 
 const MedicationSheetRow = memo(function MedicationSheetRow({
   item,
@@ -51,13 +58,15 @@ const MedicationSheetRow = memo(function MedicationSheetRow({
 export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
   function MedicationsBottomSheet(_props, ref) {
     const sheetRef = useRef<BottomSheetModal>(null);
-    const router = useRouter();
     const theme = useTheme();
     const { data: medications = [], isLoading } = useMedications();
     const { mutateAsync: createMedication, isPending } = useCreateMedication();
+    const { mutateAsync: updateMedication, isPending: isSaving } = useUpdateMedication();
+    const { mutateAsync: deleteMedication, isPending: isDeleting } = useDeleteMedication();
     const [mode, setMode] = useState<Mode>('list');
+    const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
 
-    // Add form state
+    // Add/view form state
     const [name, setName] = useState('');
     const [dosage, setDosage] = useState('');
     const [frequency, setFrequency] = useState('');
@@ -67,6 +76,19 @@ export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
       setDosage('');
       setFrequency('');
     }, []);
+
+    const loadItem = useCallback(
+      (localUuid: string) => {
+        const item = medications.find((m) => m.local_uuid === localUuid);
+        if (!item) return false;
+        setName(item.name);
+        setDosage(item.dosage);
+        setFrequency(item.frequency);
+        setSelectedUuid(localUuid);
+        return true;
+      },
+      [medications],
+    );
 
     useImperativeHandle(ref, () => ({
       present: () => {
@@ -78,15 +100,22 @@ export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
         setMode('add');
         sheetRef.current?.present();
       },
+      presentView: (localUuid: string) => {
+        if (!loadItem(localUuid)) return;
+        setMode('view');
+        sheetRef.current?.present();
+      },
       dismiss: () => sheetRef.current?.dismiss(),
     }));
 
-    const handlePress = useCallback(
-      (localUuid: string) => {
-        sheetRef.current?.dismiss();
-        router.push({ pathname: '/medications/[id]', params: { id: localUuid } } as any);
-      },
-      [router],
+    const handlePress = useGuardedPress(
+      useCallback(
+        (localUuid: string) => {
+          if (!loadItem(localUuid)) return;
+          setMode('view');
+        },
+        [loadItem],
+      ),
     );
 
     const handleAdd = useCallback(() => {
@@ -99,6 +128,27 @@ export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
       await createMedication({ name, dosage, frequency });
       sheetRef.current?.dismiss();
     }, [name, dosage, frequency, createMedication]);
+
+    const handleSave = useCallback(async () => {
+      if (!selectedUuid || !name.trim()) return;
+      await updateMedication({ localUuid: selectedUuid, payload: { name, dosage, frequency } });
+      setMode('list');
+    }, [selectedUuid, name, dosage, frequency, updateMedication]);
+
+    const handleDelete = useCallback(() => {
+      if (!selectedUuid) return;
+      Alert.alert('Delete medication', `Are you sure you want to delete "${name}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteMedication(selectedUuid);
+            setMode('list');
+          },
+        },
+      ]);
+    }, [selectedUuid, name, deleteMedication]);
 
     return (
       <BottomSheetModal
@@ -153,7 +203,7 @@ export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
         ) : (
           <View className="px-6 pb-10 pt-2">
             <View className="mb-4 flex-row items-center justify-between">
-              <ThemedText type="overline">Add medication</ThemedText>
+              <ThemedText type="overline">{mode === 'view' ? 'Medication' : 'Add medication'}</ThemedText>
               <Pressable onPress={() => setMode('list')} hitSlop={8}>
                 <Ionicons name="arrow-back" size={20} color={theme.mutedForeground} />
               </Pressable>
@@ -232,11 +282,21 @@ export const MedicationsBottomSheet = forwardRef<MedicationsBottomSheetHandle>(
 
             <PrimaryButton
               label="Save"
-              loading={isPending}
+              loading={mode === 'view' ? isSaving : isPending}
               disabled={!name.trim()}
-              onPress={handleSubmit}
-              className="mt-4"
+              onPress={mode === 'view' ? handleSave : handleSubmit}
+              className="mt-2"
             />
+            {mode === 'view' ? (
+              <PrimaryButton
+                label="Delete medication"
+                variant="danger"
+                loading={isDeleting}
+                disabled={isSaving}
+                onPress={handleDelete}
+                className="mt-2"
+              />
+            ) : null}
           </View>
         )}
       </BottomSheetModal>
