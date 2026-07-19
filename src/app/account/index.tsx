@@ -73,6 +73,14 @@ export default function AccountScreen() {
             <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
           </Pressable>
         </Link>
+        {!user?.permissions?.includes('verified professional') ? (
+          <Link href="/professional-application/create" asChild>
+            <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
+              <ThemedText>Get verified as a professional</ThemedText>
+              <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+            </Pressable>
+          </Link>
+        ) : null}
         <Link href="/account/email" asChild>
           <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
             <ThemedText>Change email</ThemedText>

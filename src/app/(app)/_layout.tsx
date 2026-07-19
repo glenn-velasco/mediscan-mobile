@@ -9,6 +9,7 @@ export default function AppLayout() {
     <Stack screenOptions={screenOptions}>
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
+      <Stack.Screen name="professional-application" options={{ headerShown: false }} />
     </Stack>
   );
 }

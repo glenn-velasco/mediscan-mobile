@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
+import { professionalApplicationQueryKey } from '@/features/professional-application/useProfessionalApplication';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
@@ -42,6 +43,7 @@ export function createUserChannelHandlers(deps: {
 
     ProfessionalApplicationStatusChanged: async (payload) => {
       console.log(TAG, 'ProfessionalApplicationStatusChanged received', { id: payload.application_id, status: payload.status });
+      await deps.queryClient.invalidateQueries({ queryKey: [...professionalApplicationQueryKey, payload.application_id] });
       try {
         await deps.refreshUser();
       } catch {

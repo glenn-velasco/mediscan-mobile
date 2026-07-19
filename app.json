@@ -43,7 +43,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Mediscan uses the camera to scan another person's emergency QR code."
+          "cameraPermission": "Mediscan uses the camera to scan another person's emergency QR code, photograph your ID, and verify your identity."
         }
       ],
       [

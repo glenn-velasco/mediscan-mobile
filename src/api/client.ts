@@ -109,6 +109,45 @@ export async function requestPaginated<T>(
   return { data: pe.data, meta: pe.meta, links: pe.links };
 }
 
+export async function postMultipart<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const token = getCachedToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    console.warn('[api] No cached token available — request will be unauthenticated');
+  }
+
+  let response: Response;
+  try {
+    // No Content-Type header here — fetch derives the multipart boundary itself from the
+    // FormData body; setting it manually drops the boundary and the server can't parse the parts.
+    response = await fetch(`${Config.apiUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch (cause) {
+    throw new NetworkError(cause);
+  }
+
+  let envelope: ApiEnvelope<T>;
+  try {
+    envelope = await response.json();
+  } catch (cause) {
+    throw new NetworkError(cause);
+  }
+
+  if (!response.ok) {
+    console.warn(`[api] POST ${path} → ${response.status}`, envelope.message);
+    const error = errorFromEnvelope({ ...envelope, status: envelope.status ?? response.status });
+    if (error instanceof UnauthenticatedError) onUnauthenticated?.();
+    throw error;
+  }
+
+  return envelope.data as T;
+}
+
 export const apiClient = {
   get: <T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     request<T>(path, { ...options, method: 'GET' }),

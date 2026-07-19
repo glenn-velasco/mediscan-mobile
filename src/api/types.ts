@@ -198,4 +198,27 @@ export type EnvelopeSubmitPayload = {
   envelope_type: EnvelopeType;
 };
 
+export type ProfessionalApplicationIdType = 'ph_prc';
+
+export type ProfessionalApplicationStatus =
+  | 'processing'
+  | 'pending_review'
+  | 'approved'
+  | 'auto_rejected'
+  | 'denied';
+
+export type ProfessionalApplication = {
+  id: number;
+  id_type: ProfessionalApplicationIdType;
+  issuing_country: string;
+  profession: string | null;
+  full_name_on_id?: string | null;
+  license_number?: string | null;
+  license_expiry?: string | null;
+  status: ProfessionalApplicationStatus;
+  rejection_reason: string | null;
+  role_granted: string | null;
+  created_at: string;
+};
+
 

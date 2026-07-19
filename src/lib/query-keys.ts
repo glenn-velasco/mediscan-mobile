@@ -8,3 +8,4 @@ export const diagnosesQueryKey = ['diagnoses'] as const;
 export const medicationsQueryKey = ['medications'] as const;
 export const medicalInformationQueryKey = ['medical-information'] as const;
 export const attestationsQueryKey = ['professional-attestations'] as const;
+export const professionalApplicationQueryKey = ['professional-application'] as const;
