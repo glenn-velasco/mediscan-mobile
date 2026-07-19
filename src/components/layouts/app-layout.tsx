@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, View, type ViewProps } from 'react-native';
+import { RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
@@ -11,6 +11,8 @@ type AppLayoutProps = ViewProps & {
   onRefresh?: () => Promise<void>;
   /** Caps content width on tablets — centers the content and sets a max-width (default: undefined = full width). */
   maxContentWidth?: number;
+  /** Additional styles for the ScrollView content container (ignored when scrollable=false). */
+  contentContainerStyle?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -18,7 +20,7 @@ type AppLayoutProps = ViewProps & {
  * Defaults to a scrolling container; pass `scrollable={false}` for screens that manage their own
  * scrolling (e.g. a FlatList list screen).
  */
-export function AppLayout({ children, className, scrollable = true, onRefresh, maxContentWidth, ...rest }: AppLayoutProps) {
+export function AppLayout({ children, className, scrollable = true, onRefresh, maxContentWidth, contentContainerStyle, ...rest }: AppLayoutProps) {
   const theme = useTheme();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -32,10 +34,14 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
     }
   }, [onRefresh]);
 
-  const content = (
-    <View style={maxContentWidth ? { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' } : undefined}>
-      {children}
+  const content = maxContentWidth ? (
+    <View className="flex-1 items-center">
+      <View style={{ maxWidth: maxContentWidth, width: '100%' }}>
+        {children}
+      </View>
     </View>
+  ) : (
+    <View className="flex-1">{children}</View>
   );
 
   if (!scrollable) {
@@ -48,8 +54,8 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
 
   return (
     <ScrollView
-      className="bg-background"
-      contentContainerClassName={cn('flex-grow px-5 py-4', className)}
+      className={cn('bg-background', className)}
+      contentContainerStyle={[{ flexGrow: 1, paddingHorizontal: 20, paddingVertical: 16 }, contentContainerStyle]}
       style={{ backgroundColor: theme.background }}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.foreground} colors={[theme.primary]} progressBackgroundColor={theme.background} /> : undefined}
       {...rest}

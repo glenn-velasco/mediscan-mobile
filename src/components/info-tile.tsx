@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
@@ -16,7 +17,12 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function StatTile({
+/**
+ * A single labeled fact (blood type, phone, age…), built on top of Card so every info tile shares
+ * the same rounded-2xl + bordered treatment as the rest of the app instead of its own one-off style
+ * (this used to be a flat `theme.muted`-filled StatTile with no border, out of step with Card).
+ */
+export function InfoTile({
   icon,
   iconColor,
   iconBgKey,
@@ -37,30 +43,23 @@ export function StatTile({
   const bgColor = hexToRgba(theme[iconBgKey], 0.12);
 
   return (
-    <View
-      className={cn('flex-1 gap-2.5 rounded-xl p-4', accent && 'pl-3', className)}
-      style={{
-        backgroundColor: theme.muted,
-        borderLeftWidth: accent ? 3 : 0,
-        borderLeftColor: accent ? iconColor : undefined,
-      }}
+    <Card
+      className={cn('flex-1 gap-2.5', className)}
+      style={accent ? { borderLeftWidth: 3, borderLeftColor: iconColor } : undefined}
     >
       <View className="flex-row items-center gap-3">
-        <View
-          className="h-9 w-9 items-center justify-center rounded-lg"
-          style={{ backgroundColor: bgColor }}
-        >
+        <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: bgColor }}>
           <Ionicons name={icon} size={18} color={iconColor} />
         </View>
         <View className="flex-1 gap-0.5">
           <ThemedText type="small" color="mutedForeground">
             {label}
           </ThemedText>
-          <ThemedText type="body" className="font-semibold">
+          <ThemedText type="body" className="font-semibold" numberOfLines={1}>
             {value}
           </ThemedText>
         </View>
       </View>
-    </View>
+    </Card>
   );
 }

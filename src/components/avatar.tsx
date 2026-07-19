@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { View } from 'react-native';
+import { Image } from 'expo-image';
 
 import { type ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,13 +12,17 @@ export function Avatar({
   size = 48,
   className,
   textColor,
+  imageUrl,
 }: {
   name: string;
   size?: number;
   className?: string;
   textColor?: ThemeColor;
+  imageUrl?: string | null;
 }) {
   const theme = useTheme();
+  const [imageError, setImageError] = useState(false);
+
   const initials =
     name
       .trim()
@@ -25,6 +31,21 @@ export function Avatar({
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join('') || '?';
+
+  if (imageUrl && !imageError) {
+    return (
+      <View
+        className={cn(className)}
+        style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden' }}
+      >
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: size, height: size }}
+          onError={() => setImageError(true)}
+        />
+      </View>
+    );
+  }
 
   return (
     <View

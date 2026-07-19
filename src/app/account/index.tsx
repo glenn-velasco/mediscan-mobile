@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
@@ -67,12 +67,6 @@ export default function AccountScreen() {
       </View>
 
       <Card className="mb-4 p-0">
-        <Link href="/profile/edit" asChild>
-          <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-            <ThemedText>Medical information</ThemedText>
-            <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
-          </Pressable>
-        </Link>
         {!user?.permissions?.includes('verified professional') ? (
           <Link href="/professional-application/create" asChild>
             <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>

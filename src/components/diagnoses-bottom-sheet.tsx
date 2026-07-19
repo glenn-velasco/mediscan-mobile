@@ -107,7 +107,7 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
     return (
       <BottomSheetModal
         ref={sheetRef}
-        snapPoints={['55%']}
+        snapPoints={['50%']}
         enableDynamicSizing={false}
         backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
         handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
