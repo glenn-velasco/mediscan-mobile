@@ -10,6 +10,7 @@ export default function AppLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="professional-application" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications" options={{ headerShown: true, title: 'Notifications' }} />
     </Stack>
   );
 }

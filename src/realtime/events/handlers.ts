@@ -1,12 +1,22 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { addNotification } from '@/features/notifications/notifications.store';
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
 import { professionalApplicationQueryKey } from '@/features/professional-application/useProfessionalApplication';
+import { professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 const TAG = '[EventHandler]';
+
+// Only the terminal outcomes get a bell notification — processing/pending_review are mid-flow
+// states the user is typically still looking at the in-app status screen for.
+const APPLICATION_STATUS_NOTIFICATION: Partial<Record<string, { title: string; body: string }>> = {
+  approved: { title: 'Application approved', body: 'Your professional verification was approved.' },
+  denied: { title: 'Application denied', body: 'Your professional verification was not approved. Tap for details.' },
+  auto_rejected: { title: 'Application rejected', body: 'Your professional verification was rejected during automatic checks. Tap for details.' },
+};
 
 export function createUserChannelHandlers(deps: {
   refreshUser: () => Promise<void>;
@@ -43,6 +53,13 @@ export function createUserChannelHandlers(deps: {
 
     ProfessionalApplicationStatusChanged: async (payload) => {
       console.log(TAG, 'ProfessionalApplicationStatusChanged received', { id: payload.application_id, status: payload.status });
+      // Seeded before the invalidate/refetch below so the status screen has a known-good status
+      // to fall back on even if the subsequent GET 404s (see useProfessionalApplication.ts).
+      deps.queryClient.setQueryData([...professionalApplicationBroadcastStatusQueryKey, payload.application_id], payload.status);
+      const content = APPLICATION_STATUS_NOTIFICATION[payload.status];
+      if (content) {
+        void addNotification({ ...content, href: `/professional-application/${payload.application_id}` });
+      }
       await deps.queryClient.invalidateQueries({ queryKey: [...professionalApplicationQueryKey, payload.application_id] });
       try {
         await deps.refreshUser();
