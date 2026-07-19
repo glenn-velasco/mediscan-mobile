@@ -38,6 +38,7 @@ import { useQrWidget } from '@/features/qr-widget/useQrWidget';
 import { useTheme } from '@/hooks/use-theme';
 import { calculateAge } from '@/lib/calculate-age';
 import { cn } from '@/lib/cn';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 export default function HomeScreen() {
@@ -60,6 +61,7 @@ export default function HomeScreen() {
   const { data: attestations = [] } = useAttestations();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
   useQrWidget(user?.id ?? 0);
+  const guardedPush = useGuardedPress((href: Parameters<typeof router.push>[0]) => router.push(href));
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
   const age = profile ? calculateAge(profile.date_of_birth) : null;
@@ -190,7 +192,7 @@ export default function HomeScreen() {
                 Here's your medical profile at a glance.
               </ThemedText>
             </View>
-            <NotificationBellButton onPress={() => router.push('/notifications')} />
+            <NotificationBellButton onPress={() => guardedPush('/notifications')} />
           </View>
         </GradientHeader>
         <View className="mb-6 mt-5 gap-2">
@@ -240,7 +242,6 @@ export default function HomeScreen() {
                 iconBgKey="destructive"
                 label="Blood type"
                 value={profile.blood_type || '—'}
-                accent
               />
             </View>
             <View className="flex-row gap-2">
@@ -250,7 +251,6 @@ export default function HomeScreen() {
                 iconBgKey="primary"
                 label="Phone"
                 value={profile.phone || '—'}
-                accent
               />
               <InfoTile
                 icon="book"
@@ -258,7 +258,6 @@ export default function HomeScreen() {
                 iconBgKey="warning"
                 label="Religion"
                 value={profile.religion || '—'}
-                accent
               />
             </View>
             <InfoTile
@@ -267,7 +266,6 @@ export default function HomeScreen() {
               iconBgKey="success"
               label="No blood transfusion"
               value={profile.no_blood_transfusion ? 'Yes' : 'No'}
-              accent
             />
             <Card className="flex-row items-center gap-3">
               <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
@@ -305,7 +303,7 @@ export default function HomeScreen() {
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                     <Ionicons name="person-add" size={18} color={theme.mutedForeground} />
                   </View>
-                  <ThemedText type="label" color="mutedForeground">Add your first emergency contact — it takes 10 seconds.</ThemedText>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first emergency contact — it takes 10 seconds.</ThemedText>
                 </View>
               </Card>
             </Pressable>
@@ -314,7 +312,7 @@ export default function HomeScreen() {
               {emergencyContacts.map((contact, i) => (
                 <Pressable
                   key={contact.local_uuid}
-                  onPress={() => router.push({ pathname: '/emergency-contacts/[localUuid]', params: { localUuid: contact.local_uuid } })}
+                  onPress={() => emergencyContactsSheetRef.current?.presentView(contact.local_uuid)}
                 >
                   <View
                     className={cn(
@@ -371,7 +369,7 @@ export default function HomeScreen() {
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                     <Ionicons name="medical" size={18} color={theme.mutedForeground} />
                   </View>
-                  <ThemedText type="label" color="mutedForeground">Add your first allergy — it takes 10 seconds.</ThemedText>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first allergy — it takes 10 seconds.</ThemedText>
                 </View>
               </Card>
             </Pressable>
@@ -380,7 +378,7 @@ export default function HomeScreen() {
               {allergies.map((allergy, i) => (
                 <Pressable
                   key={allergy.local_uuid}
-                  onPress={() => router.push({ pathname: '/allergies/[id]', params: { id: allergy.local_uuid } })}
+                  onPress={() => allergiesSheetRef.current?.presentView(allergy.local_uuid)}
                 >
                   <View
                     className={cn(
@@ -423,7 +421,7 @@ export default function HomeScreen() {
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                     <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
                   </View>
-                  <ThemedText type="label" color="mutedForeground">Add your first diagnosis — it takes 10 seconds.</ThemedText>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first diagnosis — it takes 10 seconds.</ThemedText>
                 </View>
               </Card>
             </Pressable>
@@ -432,7 +430,7 @@ export default function HomeScreen() {
               {diagnoses.map((diagnosis, i) => (
                 <Pressable
                   key={diagnosis.local_uuid}
-                  onPress={() => router.push({ pathname: '/diagnoses/[id]', params: { id: diagnosis.local_uuid } })}
+                  onPress={() => diagnosesSheetRef.current?.presentView(diagnosis.local_uuid)}
                 >
                   <View
                     className={cn(
@@ -480,7 +478,7 @@ export default function HomeScreen() {
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                     <Ionicons name="medical" size={18} color={theme.mutedForeground} />
                   </View>
-                  <ThemedText type="label" color="mutedForeground">Add your first medication — it takes 10 seconds.</ThemedText>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first medication — it takes 10 seconds.</ThemedText>
                 </View>
               </Card>
             </Pressable>
@@ -489,7 +487,7 @@ export default function HomeScreen() {
               {medications.map((medication, i) => (
                 <Pressable
                   key={medication.local_uuid}
-                  onPress={() => router.push({ pathname: '/medications/[id]', params: { id: medication.local_uuid } })}
+                  onPress={() => medicationsSheetRef.current?.presentView(medication.local_uuid)}
                 >
                   <View
                     className={cn(
@@ -524,7 +522,7 @@ export default function HomeScreen() {
           <Pressable hitSlop={12} accessibilityLabel="Home" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
             <Ionicons name="home" size={24} color={theme.primary} />
           </Pressable>
-          <Pressable onPress={() => router.push('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+          <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
             <Ionicons name="settings-outline" size={24} color={theme.foreground} />
           </Pressable>
         </View>

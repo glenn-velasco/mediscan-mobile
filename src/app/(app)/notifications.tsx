@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { EMAIL_VERIFICATION_NOTIFICATION_ID, useNotifications, type AppNotification } from '@/features/notifications/useNotifications';
 import { useTheme } from '@/hooks/use-theme';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 
 function timeAgo(timestamp: number): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -59,10 +60,10 @@ export default function NotificationsScreen() {
     );
   }
 
-  const handlePress = (item: AppNotification) => {
+  const handlePress = useGuardedPress((item: AppNotification) => {
     void markRead(item.id);
     if (item.href) router.push(item.href as never);
-  };
+  });
 
   return (
     <AppLayout scrollable={false}>

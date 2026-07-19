@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/hooks/use-theme';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 
 function AddDiagnosisButton() {
   const router = useRouter();
   const theme = useTheme();
+  const onPress = useGuardedPress(() => router.push('/diagnoses/new'));
   return (
-    <Pressable onPress={() => router.push('/diagnoses/new')} hitSlop={12}>
+    <Pressable onPress={onPress} hitSlop={12}>
       <Ionicons name="add" size={26} color={theme.primary} />
     </Pressable>
   );
