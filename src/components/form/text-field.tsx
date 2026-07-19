@@ -61,6 +61,7 @@ export function TextField({
           <View
             className="absolute bottom-0 left-0 top-0 justify-center pl-3.5"
             pointerEvents="none"
+            style={{ elevation: error || focused ? 2 : 0 }}
           >
             <Ionicons
               name={leftIcon}
@@ -74,6 +75,7 @@ export function TextField({
             onPress={onRightIconPress}
             className="absolute bottom-0 right-0 top-0 justify-center pr-2"
             hitSlop={8}
+            style={{ elevation: error || focused ? 2 : 0 }}
           >
             {rightIcon}
           </Pressable>

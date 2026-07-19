@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -9,6 +10,7 @@ type PasswordFieldProps = {
   value: string;
   onChangeText: (value: string) => void;
   error?: string;
+  leftIcon?: ComponentProps<typeof TextField>['leftIcon'];
 };
 
 export function PasswordField(props: PasswordFieldProps) {
