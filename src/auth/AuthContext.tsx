@@ -37,7 +37,16 @@ async function backfillUserId(userId: number): Promise<void> {
   await db.runAsync('UPDATE professional_attestations SET user_id = ? WHERE user_id = 0', userId);
 }
 
-export function AuthProvider({ children }: PropsWithChildren) {
+type AuthProviderProps = PropsWithChildren<{
+  /**
+   * Skips the apiMe() network call and db backfill on init, using only the cached token/user from
+   * SecureStore/AsyncStorage. Used by the lightweight quick-scan boot path (see src/app/_layout.tsx)
+   * so a cold tile launch doesn't pay for a network round trip before it can render.
+   */
+  skipNetworkRefresh?: boolean;
+}>;
+
+export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [user, setUser] = useState<User | null>(null);
 
@@ -62,6 +71,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setStatus('unauthenticated');
         return;
       }
+
+      if (skipNetworkRefresh) {
+        const cached = await loadUser();
+        if (cached) {
+          setCurrentUserId(cached.id);
+          setUser(cached);
+          setStatus('authenticated');
+        } else {
+          setStatus('unauthenticated');
+        }
+        return;
+      }
+
       try {
         const { user: fetchedUser } = await apiMe();
         setCurrentUserId(fetchedUser.id);
@@ -81,7 +103,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         }
       }
     })();
-  }, [handleUnauthenticated]);
+  }, [handleUnauthenticated, skipNetworkRefresh]);
 
   const login = useCallback(async (payload: Omit<LoginPayload, 'device_name'>) => {
     setStatus('authenticating');
