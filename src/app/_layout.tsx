@@ -93,6 +93,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
         <Stack.Screen name="medications" />
         <Stack.Screen name="emergency-contacts" />
         <Stack.Screen name="account" />
+        <Stack.Screen name="professional-application" />
         <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={ready && seen === true && !authenticated}>
