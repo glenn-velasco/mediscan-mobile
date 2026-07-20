@@ -76,6 +76,8 @@
       ],
       "./plugins/withUserLeaveHintFix.js",
       "./plugins/withSplashWindowBackground.js",
+      "./plugins/withQrScannerTile.js",
+      "expo-local-authentication",
       "expo-image",
       "expo-status-bar",
       "expo-web-browser"
