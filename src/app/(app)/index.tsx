@@ -17,10 +17,8 @@ import { EmptyState } from '@/components/empty-state';
 import { GradientHeader } from '@/components/gradient-header';
 import { InfoTile } from '@/components/info-tile';
 import { AppLayout } from '@/components/layouts/app-layout';
-import { ManageInfoBottomSheet, type ManageInfoBottomSheetHandle } from '@/components/manage-info-bottom-sheet';
 import { MedicationsBottomSheet, type MedicationsBottomSheetHandle } from '@/components/medications-bottom-sheet';
 import { NotificationBellButton } from '@/components/notification-bell-button';
-import { QrBottomSheet, type QrBottomSheetHandle } from '@/components/qr-bottom-sheet';
 import { QrIconButton } from '@/components/qr-icon-button';
 import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -46,13 +44,11 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const qrSheetRef = useRef<QrBottomSheetHandle>(null);
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
   const diagnosesSheetRef = useRef<DiagnosesBottomSheetHandle>(null);
   const medicationsSheetRef = useRef<MedicationsBottomSheetHandle>(null);
-  const manageInfoSheetRef = useRef<ManageInfoBottomSheetHandle>(null);
   const { user, refreshUser, logout } = useAuth();
   const { data: medicalInformation, isLoading } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
@@ -528,7 +524,7 @@ export default function HomeScreen() {
         </View>
         {medicalInformation && (
           <QrIconButton
-            onPress={() => qrSheetRef.current?.present()}
+            onPress={() => guardedPush('/quick-scan')}
             size={60}
             style={{
               position: 'absolute',
@@ -545,12 +541,10 @@ export default function HomeScreen() {
         )}
       </View>
       <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} />
-      <QrBottomSheet ref={qrSheetRef} manageInfoSheetRef={manageInfoSheetRef} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />
       <MedicationsBottomSheet ref={medicationsSheetRef} />
-      <ManageInfoBottomSheet ref={manageInfoSheetRef} />
     </View>
   );
 }
