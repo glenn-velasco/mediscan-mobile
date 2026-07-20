@@ -145,6 +145,46 @@ npx tsc --noEmit      # TypeScript check
 
 Run both before opening a PR.
 
+### Splitting Large Changes into Multiple Commits
+
+When you have a large feature or refactor with multiple logical components, split them into separate commits following this pattern:
+
+#### Principles
+- **One logical change per commit** — don't bundle unrelated changes
+- **Dependency order** — commit dependencies before code that uses them
+- **Atomic commits** — each commit should work independently
+- **Clear messages** — each commit message clearly describes what it does
+
+#### Example: UI Refactoring with Multiple Components
+
+If you're adding a new feature that touches:
+- Data model (schema, migration, types)
+- Business logic (hooks, services)
+- UI components (new screens, dialogs)
+- Integration (update existing screens to use new components)
+
+Split into commits like:
+1. **Data model** — schema and migrations (no behavior change yet)
+2. **Business logic** — hooks and services (no UI change yet)
+3. **UI components** — new screens and dialogs
+4. **Integration** — update existing screens (brings it all together)
+
+This makes review easier and history clearer. If a commit needs to be reverted, the others still work.
+
+#### Staging files for a commit
+
+Stage only the files that belong to one logical change:
+
+```bash
+git add src/db/schema.ts src/db/migrations/010_feature.ts
+git commit -m "feat(db): add feature data model"
+
+git add src/features/useFeature.ts src/services/feature.service.ts
+git commit -m "feat(services): implement feature logic"
+```
+
+Avoid `git add .` — stage files explicitly so you commit exactly what belongs in each logical unit.
+
 ### Running Tests
 
 No test suite is configured yet. If you add one, document the command here.
