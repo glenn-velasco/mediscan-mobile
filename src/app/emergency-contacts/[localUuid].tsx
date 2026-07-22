@@ -6,9 +6,11 @@ import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { TextField } from '@/components/form/text-field';
+import { SelectField } from '@/components/form/select-field';
 import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
 import { PrimaryButton } from '@/components/primary-button';
 import { useEmergencyContacts, useUpdateEmergencyContact, useDeleteEmergencyContact } from '@/features/emergency-contacts';
+import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 
 type Contact = NonNullable<ReturnType<typeof useEmergencyContacts>['data']>[number];
 
@@ -18,7 +20,9 @@ function ContactForm({ localUuid, contact }: { localUuid: string; contact: Conta
   const { mutateAsync: deleteContact, isPending: isDeleting } = useDeleteEmergencyContact();
 
   const [name, setName] = useState(contact.name);
-  const [relationship, setRelationship] = useState(contact.relationship ?? '');
+  const [relationship, setRelationship] = useState<RelationToPatient | undefined>(
+    (contact.relationship as RelationToPatient | null) ?? undefined,
+  );
   const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({
     countryCode: contact.phone_country_code ?? 'PH',
     phone: contact.phone ?? '',
@@ -32,7 +36,7 @@ function ContactForm({ localUuid, contact }: { localUuid: string; contact: Conta
       serverId: contact.server_id,
       payload: {
         name,
-        relationship: relationship || undefined,
+        relationship,
         phone_country_code: phoneValue.countryCode || undefined,
         phone: phoneValue.phone || undefined,
         is_primary: isPrimary,
@@ -58,7 +62,14 @@ function ContactForm({ localUuid, contact }: { localUuid: string; contact: Conta
   return (
     <AppLayout>
       <TextField label="Name *" value={name} onChangeText={setName} />
-      <TextField label="Relationship" value={relationship} onChangeText={setRelationship} />
+      <SelectField
+        placeholder="Relationship"
+        options={RELATION_TO_PATIENT_OPTIONS}
+        value={relationship}
+        onChange={setRelationship}
+        allowClear
+        getLabel={(v) => RelationToPatientLabel[v]}
+      />
       <PhoneInput value={phoneValue} onChange={setPhoneValue} />
 
       <View className="flex-row items-center justify-between mb-4">

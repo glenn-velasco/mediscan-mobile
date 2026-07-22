@@ -25,7 +25,14 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { VerifiedCountBadge } from '@/components/verified-count-badge';
 import type { Suffix } from '@/constants/suffix';
+import { GenderLabel } from '@/constants/gender';
+import { BloodTypeLabel } from '@/constants/blood-type';
+import { ReligionLabel } from '@/constants/religion';
+import { buildFullName } from '@/lib/build-full-name';
+import { formatAddress } from '@/lib/format-address';
+import { formatIsoDate } from '@/lib/format-date';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
@@ -121,8 +128,8 @@ export default function HomeScreen() {
         phone_country_code: user.phone_country_code,
         phone: user.phone_number,
         blood_type: mi.blood_type ?? undefined,
-        religion: mi.religion,
-        address: mi.address,
+        religion: mi.religion ?? undefined,
+        address: mi.address ?? undefined,
         no_blood_transfusion: mi.no_blood_transfusion,
       }).then(() => {
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
@@ -152,7 +159,9 @@ export default function HomeScreen() {
     return (
       <View className="flex-1" style={{ paddingTop: insets.top }}>
           <ThemedView className="flex-1 items-center justify-center gap-4 px-6">
-          <ThemedText className="text-center text-2xl font-semibold">Welcome, {user?.fullname}</ThemedText>
+          <ThemedText className="text-center text-2xl font-semibold">
+            Welcome, {user ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) : ''}
+          </ThemedText>
           <EmptyState
             title="Complete your profile"
             body="Your medical information helps others help you in an emergency."
@@ -220,7 +229,7 @@ export default function HomeScreen() {
                 iconColor={theme.mutedForeground}
                 iconBgKey="muted"
                 label="Date of birth"
-                value={profile.date_of_birth || '—'}
+                value={profile.date_of_birth ? formatIsoDate(profile.date_of_birth) : '—'}
               />
             </View>
             <View className="flex-row gap-2">
@@ -229,14 +238,14 @@ export default function HomeScreen() {
                 iconColor={theme.warning}
                 iconBgKey="warning"
                 label="Gender"
-                value={profile.gender || '—'}
+                value={(profile.gender && GenderLabel[profile.gender]) || '—'}
               />
               <InfoTile
                 icon="water"
                 iconColor={theme.destructive}
                 iconBgKey="destructive"
                 label="Blood type"
-                value={profile.blood_type || '—'}
+                value={(profile.blood_type && BloodTypeLabel[profile.blood_type]) || '—'}
               />
             </View>
             <View className="flex-row gap-2">
@@ -252,7 +261,7 @@ export default function HomeScreen() {
                 iconColor={theme.warning}
                 iconBgKey="warning"
                 label="Religion"
-                value={profile.religion || '—'}
+                value={(profile.religion && ReligionLabel[profile.religion]) || '—'}
               />
             </View>
             <InfoTile
@@ -270,7 +279,9 @@ export default function HomeScreen() {
                 <ThemedText type="small" color="mutedForeground">
                   Address
                 </ThemedText>
-                <ThemedText type="body" className="font-semibold">{profile.address || '—'}</ThemedText>
+                <ThemedText type="body" className="font-semibold">
+                  {formatAddress(typeof profile.address === 'string' ? parseStoredAddress(profile.address) : profile.address) || '—'}
+                </ThemedText>
               </View>
             </Card>
           </View>
@@ -438,7 +449,7 @@ export default function HomeScreen() {
                       <ThemedText className="font-semibold">{diagnosis.condition}</ThemedText>
                       {diagnosis.date_of_diagnosis ? (
                         <ThemedText type="small" color="mutedForeground">
-                          Diagnosed {diagnosis.date_of_diagnosis}
+                          Diagnosed {formatIsoDate(diagnosis.date_of_diagnosis)}
                         </ThemedText>
                       ) : null}
                     </View>

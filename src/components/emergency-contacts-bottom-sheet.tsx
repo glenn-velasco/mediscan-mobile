@@ -10,6 +10,7 @@ import {
 } from '@gorhom/bottom-sheet';
 
 import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
+import { PickerField } from '@/components/form/picker-field';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/primary-button';
 import {
@@ -21,6 +22,7 @@ import {
 import { useTheme } from '@/hooks/use-theme';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import type { EmergencyContactRow } from '@/db/schema';
+import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 
 export type EmergencyContactsBottomSheetHandle = {
   present: () => void;
@@ -51,7 +53,9 @@ const ContactSheetRow = memo(function ContactSheetRow({
           <ThemedText style={{ color: theme.foreground }}>{item.name}</ThemedText>
           {item.relationship ? (
             <ThemedText type="label">
-              {item.relationship}
+              {RELATION_TO_PATIENT_OPTIONS.includes(item.relationship as RelationToPatient)
+                ? RelationToPatientLabel[item.relationship as RelationToPatient]
+                : item.relationship}
             </ThemedText>
           ) : null}
         </View>
@@ -80,13 +84,13 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
 
     // Add/view form state
     const [name, setName] = useState('');
-    const [relationship, setRelationship] = useState('');
+    const [relationship, setRelationship] = useState<RelationToPatient | undefined>(undefined);
     const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({ countryCode: 'PH', phone: '' });
     const [isPrimary, setIsPrimary] = useState(false);
 
     const resetForm = useCallback(() => {
       setName('');
-      setRelationship('');
+      setRelationship(undefined);
       setPhoneValue({ countryCode: 'PH', phone: '' });
       setIsPrimary(false);
     }, []);
@@ -96,7 +100,7 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
         const item = contacts.find((c) => c.local_uuid === localUuid);
         if (!item) return false;
         setName(item.name);
-        setRelationship(item.relationship ?? '');
+        setRelationship((item.relationship as RelationToPatient | null) ?? undefined);
         setPhoneValue({ countryCode: item.phone_country_code ?? 'PH', phone: item.phone ?? '' });
         setIsPrimary(!!item.is_primary);
         setSelectedUuid(localUuid);
@@ -143,7 +147,7 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
       if (!name.trim()) return;
       await createContact({
         name,
-        relationship: relationship || undefined,
+        relationship,
         phone_country_code: phoneValue.countryCode || undefined,
         phone: phoneValue.phone || undefined,
         is_primary: isPrimary,
@@ -158,7 +162,7 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
         serverId: selectedServerId,
         payload: {
           name,
-          relationship: relationship || undefined,
+          relationship,
           phone_country_code: phoneValue.countryCode || undefined,
           phone: phoneValue.phone || undefined,
           is_primary: isPrimary,
@@ -265,28 +269,13 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
                 />
               </View>
 
-              <View>
-                <ThemedText type="label" className="mb-1.5">
-                  Relationship
-                </ThemedText>
-                <BottomSheetTextInput
-                  value={relationship}
-                  onChangeText={setRelationship}
-                  placeholder="e.g. Spouse"
-                  placeholderTextColor={theme.mutedForeground}
-                  style={{
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: theme.input,
-                    backgroundColor: theme.card,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: theme.foreground,
-                    fontFamily: 'Inter-Medium',
-                  }}
-                />
-              </View>
+              <PickerField
+                label="Relationship"
+                options={RELATION_TO_PATIENT_OPTIONS}
+                value={relationship}
+                onChange={setRelationship}
+                getLabel={(v) => RelationToPatientLabel[v]}
+              />
 
               <PhoneInput value={phoneValue} onChange={setPhoneValue} />
 

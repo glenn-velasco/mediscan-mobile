@@ -7,6 +7,7 @@ import { AppLayout } from '@/components/layouts/app-layout';
 import { TextField } from '@/components/form/text-field';
 import { DateField } from '@/components/form/date-field';
 import { SelectField } from '@/components/form/select-field';
+import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
 import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
@@ -15,11 +16,13 @@ import { useUpdateMedicalInformation } from '@/features/medical-information/useU
 import { useAuth } from '@/auth/useAuth';
 import { useApiError } from '@/api/use-api-error';
 import { getFieldErrors } from '@/api/errors';
-import { GENDER_OPTIONS, type Gender } from '@/constants/gender';
-import { BLOOD_TYPE_OPTIONS, type BloodType } from '@/constants/blood-type';
-import { SUFFIX_OPTIONS, type Suffix } from '@/constants/suffix';
+import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
+import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
+import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
+import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
 import { medicalInformationSchema } from '@/lib/validation/medical-information-schema';
-import type { MedicalInformationPayload } from '@/api/types';
+import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
+import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
 
 type FormState = {
   first_name: string;
@@ -29,8 +32,8 @@ type FormState = {
   date_of_birth: string;
   gender: Gender | undefined;
   blood_type: BloodType | undefined;
-  religion: string;
-  address: string;
+  religion: Religion | undefined;
+  address: MedicalInformationAddress;
   no_blood_transfusion: boolean;
 };
 
@@ -55,8 +58,8 @@ export default function EditProfileScreen() {
     date_of_birth: existing?.date_of_birth ?? '',
     gender: existing?.gender ?? undefined,
     blood_type: existing?.blood_type ?? undefined,
-    religion: existing?.religion ?? '',
-    address: existing?.address ?? '',
+    religion: existing?.religion ?? undefined,
+    address: parseStoredAddress(existing?.address ?? null) ?? EMPTY_ADDRESS,
     no_blood_transfusion: !!existing?.no_blood_transfusion,
   });
   const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({
@@ -115,6 +118,7 @@ export default function EditProfileScreen() {
         value={form.suffix}
         onChange={(v) => setField('suffix', v)}
         allowClear
+        getLabel={(v) => SuffixLabel[v]}
       />
       <DateField
         label="Date of birth"
@@ -129,6 +133,7 @@ export default function EditProfileScreen() {
         value={form.gender}
         onChange={(v) => setField('gender', v)}
         error={fieldErrors.gender}
+        getLabel={(v) => GenderLabel[v]}
       />
       <View className="my-5 border-t border-border" />
 
@@ -136,7 +141,7 @@ export default function EditProfileScreen() {
         Contact
       </ThemedText>
       <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phone_country_code} />
-      <TextField label="Address" value={form.address} onChangeText={(v) => setField('address', v)} multiline error={fieldErrors.address} />
+      <AddressFields value={form.address} onChange={(v) => setField('address', v)} />
       <View className="my-5 border-t border-border" />
 
       <ThemedText type="overline" className="mb-2 mt-5">
@@ -148,8 +153,16 @@ export default function EditProfileScreen() {
         value={form.blood_type}
         onChange={(v) => setField('blood_type', v)}
         error={fieldErrors.blood_type}
+        getLabel={(v) => BloodTypeLabel[v]}
       />
-      <TextField label="Religion" value={form.religion} onChangeText={(v) => setField('religion', v)} />
+      <SelectField
+        placeholder="Religion"
+        options={RELIGION_OPTIONS}
+        value={form.religion}
+        onChange={(v) => setField('religion', v)}
+        allowClear
+        getLabel={(v) => ReligionLabel[v]}
+      />
       <View className="flex-row items-center justify-between">
         <ThemedText>No blood transfusion</ThemedText>
         <Switch value={form.no_blood_transfusion} onValueChange={(v) => setField('no_blood_transfusion', v)} />

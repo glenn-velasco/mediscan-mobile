@@ -20,6 +20,7 @@ import { useDeleteDiagnosis } from '@/features/diagnoses/useDeleteDiagnosis';
 import { DIAGNOSIS_SEVERITY_OPTIONS, type DiagnosisSeverity } from '@/constants/diagnosis-severity';
 import { useTheme } from '@/hooks/use-theme';
 import { useGuardedPress } from '@/lib/use-guarded-press';
+import { formatIsoDate } from '@/lib/format-date';
 import type { DiagnosisRow } from '@/db/schema';
 
 export type DiagnosesBottomSheetHandle = {
@@ -50,7 +51,7 @@ const DiagnosisSheetRow = memo(function DiagnosisSheetRow({
         <ThemedText style={{ color: theme.foreground }}>{item.condition}</ThemedText>
         {item.date_of_diagnosis ? (
           <ThemedText type="small" color="mutedForeground">
-            Diagnosed {item.date_of_diagnosis}
+            Diagnosed {formatIsoDate(item.date_of_diagnosis)}
           </ThemedText>
         ) : null}
       </View>

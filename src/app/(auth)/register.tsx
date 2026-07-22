@@ -7,6 +7,7 @@ import { AuthLayout } from '@/components/layouts/auth-layout';
 import { TextField } from '@/components/form/text-field';
 import { PasswordField } from '@/components/form/password-field';
 import { SelectField } from '@/components/form/select-field';
+import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
 import { DateField } from '@/components/form/date-field';
 import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
 import { FormError } from '@/components/form/form-error';
@@ -14,10 +15,12 @@ import { PrimaryButton } from '@/components/primary-button';
 import { useRegister } from '@/features/auth/useRegister';
 import { useApiError } from '@/api/use-api-error';
 import { getFieldErrors } from '@/api/errors';
-import { SUFFIX_OPTIONS, type Suffix } from '@/constants/suffix';
-import { GENDER_OPTIONS, type Gender } from '@/constants/gender';
-import { BLOOD_TYPE_OPTIONS, type BloodType } from '@/constants/blood-type';
+import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
+import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
+import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
+import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import type { MedicalInformationAddress } from '@/api/types';
 import { registerSchema } from '@/lib/validation/register-schema';
 import { registrationMedicalInfoSchema } from '@/lib/validation/registration-medical-info-schema';
 import { useTheme } from '@/hooks/use-theme';
@@ -44,7 +47,8 @@ export default function RegisterScreen() {
   const [address, setAddress] = useState('');
 
   const [bloodType, setBloodType] = useState<BloodType | undefined>(undefined);
-  const [religion, setReligion] = useState('');
+  const [religion, setReligion] = useState<Religion | undefined>(undefined);
+  const [medicalAddress, setMedicalAddress] = useState<MedicalInformationAddress>(EMPTY_ADDRESS);
   const [noBloodTransfusion, setNoBloodTransfusion] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -152,7 +156,7 @@ export default function RegisterScreen() {
         last_name: step0Result.data.lastName,
         suffix: step0Result.data.suffix,
         dob: dateOfBirth,
-        gender: medicalResult.data.gender.toLowerCase(),
+        gender: medicalResult.data.gender,
         address,
         phone_number: phoneNumber,
         phone_country_code: phoneValue.countryCode,
@@ -169,7 +173,7 @@ export default function RegisterScreen() {
         gender: gender || undefined,
         phone_country_code: phoneValue.countryCode || undefined,
         phone: phoneValue.phone || undefined,
-        address: address || undefined,
+        address: medicalAddress,
         blood_type: bloodType || undefined,
         religion: religion || undefined,
         no_blood_transfusion: noBloodTransfusion,
@@ -221,7 +225,7 @@ export default function RegisterScreen() {
           <TextField label="First name" leftIcon="person-outline" value={firstName} onChangeText={setFirstName} error={fieldErrors.firstName} />
           <TextField label="Middle name" leftIcon="person-outline" value={middleName} onChangeText={setMiddleName} />
           <TextField label="Last name" leftIcon="person-outline" value={lastName} onChangeText={setLastName} error={fieldErrors.lastName} />
-          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={suffix} onChange={setSuffix} allowClear />
+          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={suffix} onChange={setSuffix} allowClear getLabel={(v) => SuffixLabel[v]} />
 
           <ThemedText type="overline" className="mb-3 mt-4">
             Account credentials
@@ -266,6 +270,7 @@ export default function RegisterScreen() {
             value={gender}
             onChange={setGender}
             error={fieldErrors.gender}
+            getLabel={(v) => GenderLabel[v]}
           />
           <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
           <TextField label="Address" value={address} onChangeText={setAddress} multiline error={fieldErrors.address} />
@@ -281,13 +286,22 @@ export default function RegisterScreen() {
           <ThemedText type="overline" className="mb-3">
             Medical details
           </ThemedText>
+          <AddressFields value={medicalAddress} onChange={setMedicalAddress} />
           <SelectField
             placeholder="Blood type"
             options={BLOOD_TYPE_OPTIONS}
             value={bloodType}
             onChange={setBloodType}
+            getLabel={(v) => BloodTypeLabel[v]}
           />
-          <TextField label="Religion" value={religion} onChangeText={setReligion} />
+          <SelectField
+            placeholder="Religion"
+            options={RELIGION_OPTIONS}
+            value={religion}
+            onChange={setReligion}
+            allowClear
+            getLabel={(v) => ReligionLabel[v]}
+          />
           <View className="mb-4 flex-row items-center justify-between">
             <ThemedText>No blood transfusion</ThemedText>
             <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} />

@@ -8,11 +8,13 @@ import { Avatar } from '@/components/avatar';
 import { Card } from '@/components/card';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
+import type { Suffix } from '@/constants/suffix';
 import { useBleAdvertising } from '@/features/ble-sync/useBleAdvertising';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
+import { buildFullName } from '@/lib/build-full-name';
 
 export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -51,7 +53,14 @@ export default function AccountScreen() {
         showsVerticalScrollIndicator={false}
       >
       <View className="mb-8 items-center gap-1">
-        <Avatar name={user?.fullname ?? '?'} size={72} />
+        <Avatar
+          name={
+            user
+              ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined })
+              : '?'
+          }
+          size={72}
+        />
         <ThemedText color="mutedForeground">{user?.email}</ThemedText>
         {user?.permissions?.includes('verified professional') ? (
           <View

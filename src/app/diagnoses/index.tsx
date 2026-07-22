@@ -13,6 +13,7 @@ import { ConflictBanner } from '@/components/conflict-banner';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useAttestations, useUnconfirmedDiagnosisAttestations, useConfirmDiagnosisAttestationMatch } from '@/features/professional-attestations/useAttestations';
 import { useTheme } from '@/hooks/use-theme';
+import { formatIsoDate } from '@/lib/format-date';
 import type { DiagnosisRow } from '@/db/schema';
 
 const UnconfirmedDiagnosisAttestations = memo(function UnconfirmedDiagnosisAttestations({ diagnoses }: { diagnoses: DiagnosisRow[] }) {
@@ -72,7 +73,7 @@ const DiagnosisRowCard = memo(function DiagnosisRowCard({ item, verifiedCount }:
           <View className="flex-1">
             <ThemedText>{item.condition}</ThemedText>
             <ThemedText type="small" color="mutedForeground">
-              {syncLabel ?? (item.date_of_diagnosis ? `Diagnosed ${item.date_of_diagnosis}` : '')}
+              {syncLabel ?? (item.date_of_diagnosis ? `Diagnosed ${formatIsoDate(item.date_of_diagnosis)}` : '')}
             </ThemedText>
           </View>
           <View className="flex-row items-center gap-2">
