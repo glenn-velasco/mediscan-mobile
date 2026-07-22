@@ -42,9 +42,15 @@ const mockSetToken = setToken as jest.Mock;
 async function registerWithMedicalInfo(
   payload: Omit<RegisterPayload, 'device_name'>,
   medicalInfo?: MedicalInformationPayload,
-): Promise<{ user: { id: number; fullname: string } }> {
+): Promise<{ user: { id: number; fullname: string } } | { pending: true }> {
   const device_name = await getDeviceName();
-  const { token, user } = await apiRegister({ ...payload, device_name });
+  const response = await apiRegister({ ...payload, device_name });
+
+  if (response.pending) {
+    return { pending: true };
+  }
+
+  const { token, user } = response;
   await setToken(token);
 
   if (medicalInfo) {
@@ -183,6 +189,6 @@ describe('AuthContext register flow', () => {
   it('returns the registered user', async () => {
     const result = await registerWithMedicalInfo(registerPayload(), medicalInfoPayload());
 
-    expect(result.user).toEqual(mockUser);
+    expect('pending' in result ? undefined : result.user).toEqual(mockUser);
   });
 });
