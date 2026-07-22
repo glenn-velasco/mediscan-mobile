@@ -1,11 +1,13 @@
-import type { EnvelopeType } from '@/api/types';
+import type { EnvelopeType, MedicalInformationAddress } from '@/api/types';
 import type { Gender } from '@/constants/gender';
 import type { BloodType } from '@/constants/blood-type';
 import type { Suffix } from '@/constants/suffix';
+import type { Religion } from '@/constants/religion';
 import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
 import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
 import { SUFFIX_OPTIONS } from '@/constants/suffix';
+import { RELIGION_OPTIONS } from '@/constants/religion';
 import { DIAGNOSIS_SEVERITY_OPTIONS } from '@/constants/diagnosis-severity';
 
 /**
@@ -75,8 +77,8 @@ export type MedicalInformationPatch = {
   phone_country_code?: string | null;
   phone?: string | null;
   blood_type?: BloodType | null;
-  religion?: string | null;
-  address?: string | null;
+  religion?: Religion | null;
+  address?: MedicalInformationAddress | null;
   no_blood_transfusion?: boolean;
 };
 
@@ -95,6 +97,15 @@ const DIAGNOSIS_SEVERITIES = new Set<string>(DIAGNOSIS_SEVERITY_OPTIONS);
 const GENDER_SET = new Set<string>(GENDER_OPTIONS);
 const BLOOD_TYPE_SET = new Set<string>(BLOOD_TYPE_OPTIONS);
 const SUFFIX_SET = new Set<string>(SUFFIX_OPTIONS);
+const RELIGION_SET = new Set<string>(RELIGION_OPTIONS);
+const ADDRESS_KEYS = new Set(['street', 'unit', 'city', 'province', 'postal_code', 'country']);
+
+function isAddressOrNull(value: unknown): value is MedicalInformationAddress | null {
+  if (value === null) return true;
+  if (typeof value !== 'object' || Array.isArray(value)) return false;
+  const entries = Object.entries(value as Record<string, unknown>);
+  return entries.every(([key, v]) => ADDRESS_KEYS.has(key) && (typeof v === 'string' || v === null));
+}
 
 function isPerson(value: unknown): value is { user_id: number; name: string } {
   return (
@@ -183,9 +194,10 @@ export function parseEnvelopePlaintext(envelopeType: EnvelopeType, plaintext: un
           case 'date_of_birth':
           case 'phone_country_code':
           case 'phone':
-          case 'religion':
-          case 'address':
             if (!isStrOrNull(value)) return null;
+            break;
+          case 'address':
+            if (!isAddressOrNull(value)) return null;
             break;
           case 'suffix':
             if (!isEnumOrNull(value, SUFFIX_SET)) return null;
@@ -195,6 +207,9 @@ export function parseEnvelopePlaintext(envelopeType: EnvelopeType, plaintext: un
             break;
           case 'blood_type':
             if (!isEnumOrNull(value, BLOOD_TYPE_SET)) return null;
+            break;
+          case 'religion':
+            if (!isEnumOrNull(value, RELIGION_SET)) return null;
             break;
           case 'no_blood_transfusion':
             if (typeof value !== 'boolean') return null;

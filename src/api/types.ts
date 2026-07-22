@@ -1,6 +1,9 @@
 import type { Gender } from '@/constants/gender';
 import type { BloodType } from '@/constants/blood-type';
 import type { Suffix } from '@/constants/suffix';
+import type { Religion } from '@/constants/religion';
+import type { AllergySeverity } from '@/constants/allergy-severity';
+import type { RelationToPatient } from '@/constants/relation-to-patient';
 import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
 
 export type ApiEnvelope<T> = {
@@ -31,11 +34,21 @@ export type User = {
   medical_information?: MedicalInformation | null;
 };
 
+/** Matches the server's structured `MedicalInformation.address` shape — see resources/js/types/medicalinformation.ts on the backend. */
+export type MedicalInformationAddress = {
+  street: string | null;
+  unit: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  country: string | null;
+};
+
 export type Allergy = {
   id: number;
   allergen: string;
   reaction: string | null;
-  severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
+  severity: AllergySeverity;
 };
 
 export type Diagnosis = {
@@ -60,9 +73,9 @@ export type MedicalInformation = {
   date_of_birth: string | null;
   gender: Gender | null;
   phone: string;
-  address: string;
+  address: MedicalInformationAddress | null;
   blood_type: BloodType | null;
-  religion: string;
+  religion: Religion | null;
   no_blood_transfusion: boolean;
   allergies: Allergy[];
   diagnoses: Diagnosis[];
@@ -104,15 +117,15 @@ export type MedicalInformationPayload = {
   phone_country_code?: string;
   phone?: string;
   blood_type?: BloodType;
-  religion?: string;
-  address?: string;
+  religion?: Religion;
+  address?: MedicalInformationAddress;
   no_blood_transfusion?: boolean;
 };
 
 export type EmergencyContact = {
   id: number;
   name: string;
-  relationship: string | null;
+  relationship: RelationToPatient | null;
   phone_country_code: string | null;
   phone: string | null;
   is_primary: boolean;
@@ -121,7 +134,7 @@ export type EmergencyContact = {
 
 export type EmergencyContactPayload = {
   name: string;
-  relationship?: string;
+  relationship?: RelationToPatient;
   phone_country_code?: string;
   phone?: string;
   is_primary?: boolean;
@@ -130,7 +143,7 @@ export type EmergencyContactPayload = {
 export type AllergyPayload = {
   allergen: string;
   reaction?: string;
-  severity: Allergy['severity'];
+  severity: AllergySeverity;
 };
 
 export type DiagnosisPayload = {

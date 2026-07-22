@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
 import { SUFFIX_OPTIONS } from '@/constants/suffix';
+import { RELIGION_OPTIONS } from '@/constants/religion';
 
 export const medicalInformationSchema = z.object({
   first_name: z.string().trim().min(1, 'First name is required'),
@@ -14,8 +15,15 @@ export const medicalInformationSchema = z.object({
   phone_country_code: z.string().trim().min(1, 'Country code is required'),
   phone: z.string().trim().min(1, 'Phone number is required'),
   blood_type: z.enum(BLOOD_TYPE_OPTIONS, { message: 'Blood type is required' }),
-  religion: z.string().trim().optional(),
-  address: z.string().trim().min(1, 'Address is required'),
+  religion: z.enum(RELIGION_OPTIONS).optional(),
+  address: z.object({
+    street: z.string().trim().max(255).nullable(),
+    unit: z.string().trim().max(255).nullable(),
+    city: z.string().trim().max(255).nullable(),
+    province: z.string().trim().max(255).nullable(),
+    postal_code: z.string().trim().max(20).nullable(),
+    country: z.string().trim().max(255).nullable(),
+  }),
   no_blood_transfusion: z.boolean(),
 });
 

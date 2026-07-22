@@ -1,6 +1,7 @@
 import type { Gender } from '@/constants/gender';
 import type { BloodType } from '@/constants/blood-type';
 import type { Suffix } from '@/constants/suffix';
+import type { Religion } from '@/constants/religion';
 import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
 
 export type SyncStatus = 'synced' | 'pending' | 'syncing' | 'conflict';
@@ -18,7 +19,7 @@ export type MedicalInformationEncryptedFields = {
   phone_country_code: string | null;
   phone: string | null;
   blood_type: BloodType | null;
-  religion: string | null;
+  religion: Religion | null;
   address: string | null;
   no_blood_transfusion: 0 | 1;
 };
