@@ -18,11 +18,13 @@ import { PickerField } from '@/components/form/picker-field';
 import { TextField } from '@/components/form/text-field';
 import { DateField } from '@/components/form/date-field';
 import { SelectField } from '@/components/form/select-field';
+import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
 import { PhoneInput } from '@/components/form/phone-input';
 import { useAuth } from '@/auth/useAuth';
 import { useSubmitEnvelope } from '@/features/professional-sync/useSubmitEnvelope';
 import { useTheme } from '@/hooks/use-theme';
 import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
+import { formatIsoDate } from '@/lib/format-date';
 import { scanForPatient, connectAndSubmit } from '@/services/ble-central.service';
 import { seal } from '@/services/sealed-box.service';
 import type {
@@ -34,17 +36,19 @@ import type {
   MedicalInformationUpdateEnvelope,
   MedicalInformationPatch,
 } from '@/lib/envelope-schema';
-import type { EnvelopeType } from '@/api/types';
+import type { EnvelopeType, MedicalInformationAddress } from '@/api/types';
 import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
-import { GENDER_OPTIONS, type Gender } from '@/constants/gender';
-import { BLOOD_TYPE_OPTIONS, type BloodType } from '@/constants/blood-type';
-import { SUFFIX_OPTIONS, type Suffix } from '@/constants/suffix';
-import { DIAGNOSIS_SEVERITY_OPTIONS } from '@/constants/diagnosis-severity';
+import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
+import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
+import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
+import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
+import { DIAGNOSIS_SEVERITY_OPTIONS, DiagnosisSeverityLabel } from '@/constants/diagnosis-severity';
+import { ALLERGY_SEVERITY_OPTIONS, AllergySeverityLabel } from '@/constants/allergy-severity';
 
 export type ManageInfoBottomSheetHandle = { present: (patientId: number, qrData: string) => void; dismiss: () => void };
 
-const ALLERGY_SEVERITIES: AllergyVerificationEnvelope['severity'][] = ['mild', 'moderate', 'severe', 'life-threatening'];
-const DIAGNOSIS_SEVERITIES: DiagnosisSeverity[] = ['chronic', 'ongoing', 'acute', 'critical'];
+const ALLERGY_SEVERITIES: AllergyVerificationEnvelope['severity'][] = [...ALLERGY_SEVERITY_OPTIONS];
+const DIAGNOSIS_SEVERITIES: DiagnosisSeverity[] = [...DIAGNOSIS_SEVERITY_OPTIONS];
 
 type ManageAllergy = {
   key: string;
@@ -91,8 +95,8 @@ type MedInfoFormState = {
   date_of_birth: string;
   gender: Gender | undefined;
   blood_type: BloodType | undefined;
-  religion: string;
-  address: string;
+  religion: Religion | undefined;
+  address: MedicalInformationAddress;
   no_blood_transfusion: boolean;
   phone_country_code: string;
   phone: string;
@@ -106,8 +110,8 @@ const EMPTY_MED_INFO_FORM: MedInfoFormState = {
   date_of_birth: '',
   gender: undefined,
   blood_type: undefined,
-  religion: '',
-  address: '',
+  religion: undefined,
+  address: EMPTY_ADDRESS,
   no_blood_transfusion: false,
   phone_country_code: 'PH',
   phone: '',
@@ -181,13 +185,31 @@ function initMedications(info: ScannedEmergencyInfo): ManageMedication[] {
   }));
 }
 
+function scannedField(value: string): string {
+  return value && value !== '—' ? value : '';
+}
+
 function medInfoFromScanned(info: ScannedEmergencyInfo): MedInfoFormState {
   return {
     ...EMPTY_MED_INFO_FORM,
-    date_of_birth: info.dateOfBirth && info.dateOfBirth !== '—' ? info.dateOfBirth : '',
+    first_name: scannedField(info.firstName),
+    middle_name: scannedField(info.middleName),
+    last_name: scannedField(info.lastName),
+    suffix: SUFFIX_OPTIONS.includes(info.suffix as Suffix) ? (info.suffix as Suffix) : undefined,
+    date_of_birth: scannedField(info.dateOfBirth),
     gender: GENDER_OPTIONS.includes(info.gender as Gender) ? (info.gender as Gender) : undefined,
-    address: info.address && info.address !== '—' ? info.address : '',
-    phone: info.phone && info.phone !== '—' ? info.phone : '',
+    blood_type: BLOOD_TYPE_OPTIONS.includes(info.bloodType as BloodType) ? (info.bloodType as BloodType) : undefined,
+    religion: RELIGION_OPTIONS.includes(info.religion as Religion) ? (info.religion as Religion) : undefined,
+    address: {
+      street: scannedField(info.street) || null,
+      unit: scannedField(info.unit) || null,
+      city: scannedField(info.city) || null,
+      province: scannedField(info.province) || null,
+      postal_code: scannedField(info.postalCode) || null,
+      country: scannedField(info.country) || null,
+    },
+    phone: scannedField(info.phone),
+    phone_country_code: scannedField(info.phoneCountryCode) || 'PH',
     no_blood_transfusion: info.noBloodTransfusion === 'Yes',
   };
 }
@@ -421,8 +443,8 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
     if (medInfoForm.date_of_birth !== medInfoInitial.date_of_birth) patch.date_of_birth = medInfoForm.date_of_birth || null;
     if (medInfoForm.gender !== medInfoInitial.gender) patch.gender = medInfoForm.gender ?? null;
     if (medInfoForm.blood_type !== medInfoInitial.blood_type) patch.blood_type = medInfoForm.blood_type ?? null;
-    if (medInfoForm.religion !== medInfoInitial.religion) patch.religion = medInfoForm.religion || null;
-    if (medInfoForm.address !== medInfoInitial.address) patch.address = medInfoForm.address || null;
+    if (medInfoForm.religion !== medInfoInitial.religion) patch.religion = medInfoForm.religion ?? null;
+    if (JSON.stringify(medInfoForm.address) !== JSON.stringify(medInfoInitial.address)) patch.address = medInfoForm.address;
     if (medInfoForm.phone !== medInfoInitial.phone) patch.phone = medInfoForm.phone || null;
     if (medInfoForm.phone_country_code !== medInfoInitial.phone_country_code) patch.phone_country_code = medInfoForm.phone_country_code || null;
     if (medInfoForm.no_blood_transfusion !== medInfoInitial.no_blood_transfusion) patch.no_blood_transfusion = medInfoForm.no_blood_transfusion;
@@ -648,7 +670,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
         <Card className="mb-4 gap-1">
           <ThemedText className="text-lg font-semibold">{info.name}</ThemedText>
           <ThemedText type="small" color="mutedForeground">
-            {info.dateOfBirth} · {info.gender}
+            {formatIsoDate(info.dateOfBirth)} · {GENDER_OPTIONS.includes(info.gender as Gender) ? GenderLabel[info.gender as Gender] : info.gender}
           </ThemedText>
         </Card>
 
@@ -664,16 +686,16 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
           <TextField label="First name" value={medInfoForm.first_name} onChangeText={(v) => setMedInfoField('first_name', v)} />
           <TextField label="Middle name" value={medInfoForm.middle_name} onChangeText={(v) => setMedInfoField('middle_name', v)} />
           <TextField label="Last name" value={medInfoForm.last_name} onChangeText={(v) => setMedInfoField('last_name', v)} />
-          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={medInfoForm.suffix} onChange={(v) => setMedInfoField('suffix', v)} allowClear />
+          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={medInfoForm.suffix} onChange={(v) => setMedInfoField('suffix', v)} allowClear getLabel={(v) => SuffixLabel[v]} />
           <DateField label="Date of birth" value={medInfoForm.date_of_birth} onChange={(v) => setMedInfoField('date_of_birth', v)} maximumDate={new Date()} />
-          <SelectField placeholder="Gender" options={GENDER_OPTIONS} value={medInfoForm.gender} onChange={(v) => setMedInfoField('gender', v)} />
+          <SelectField placeholder="Gender" options={GENDER_OPTIONS} value={medInfoForm.gender} onChange={(v) => setMedInfoField('gender', v)} getLabel={(v) => GenderLabel[v]} />
           <PhoneInput
             value={{ countryCode: medInfoForm.phone_country_code, phone: medInfoForm.phone }}
             onChange={(v) => { setMedInfoField('phone_country_code', v.countryCode); setMedInfoField('phone', v.phone); }}
           />
-          <TextField label="Address" value={medInfoForm.address} onChangeText={(v) => setMedInfoField('address', v)} multiline />
-          <SelectField placeholder="Blood type" options={BLOOD_TYPE_OPTIONS} value={medInfoForm.blood_type} onChange={(v) => setMedInfoField('blood_type', v)} />
-          <TextField label="Religion" value={medInfoForm.religion} onChangeText={(v) => setMedInfoField('religion', v)} />
+          <AddressFields value={medInfoForm.address} onChange={(v) => setMedInfoField('address', v)} />
+          <SelectField placeholder="Blood type" options={BLOOD_TYPE_OPTIONS} value={medInfoForm.blood_type} onChange={(v) => setMedInfoField('blood_type', v)} getLabel={(v) => BloodTypeLabel[v]} />
+          <SelectField placeholder="Religion" options={RELIGION_OPTIONS} value={medInfoForm.religion} onChange={(v) => setMedInfoField('religion', v)} allowClear getLabel={(v) => ReligionLabel[v]} />
           <View className="mb-4 flex-row items-center justify-between">
             <ThemedText>No blood transfusion</ThemedText>
             <Switch value={medInfoForm.no_blood_transfusion} onValueChange={(v) => setMedInfoField('no_blood_transfusion', v)} />
@@ -715,7 +737,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                           onChangeText={(v) => setAllergy(item.key, { allergen: v })}
                         />
                       ) : null}
-                      <PickerField label="Severity" options={ALLERGY_SEVERITIES} value={item.severity} onChange={(v) => setAllergy(item.key, { severity: v })} />
+                      <PickerField label="Severity" options={ALLERGY_SEVERITIES} value={item.severity} onChange={(v) => setAllergy(item.key, { severity: v })} getLabel={(v) => AllergySeverityLabel[v]} />
                       <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}
@@ -796,7 +818,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                           onChangeText={(v) => setDiagnosis(item.key, { condition: v })}
                         />
                       ) : null}
-                      <PickerField label="Severity" options={DIAGNOSIS_SEVERITIES} value={item.severity} onChange={(v) => setDiagnosis(item.key, { severity: v })} />
+                      <PickerField label="Severity" options={DIAGNOSIS_SEVERITIES} value={item.severity} onChange={(v) => setDiagnosis(item.key, { severity: v })} getLabel={(v) => DiagnosisSeverityLabel[v]} />
                       <BottomSheetTextInput
                         className="rounded-lg border px-3 py-2 text-base"
                         style={{ borderColor: theme.input, color: theme.foreground }}

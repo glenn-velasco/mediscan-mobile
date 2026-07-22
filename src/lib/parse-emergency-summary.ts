@@ -28,18 +28,31 @@ export type ScannedEmergencyInfo = {
   patientId: number | null;
   generatedAt: string;
   name: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix: string;
   dateOfBirth: string;
   gender: string;
+  bloodType: string;
+  religion: string;
   noBloodTransfusion: string;
   phone: string;
-  address: string;
+  phoneCountryCode: string;
+  street: string;
+  unit: string;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: string;
   allergies: ScannedAllergy[];
   diagnoses: ScannedDiagnosis[];
   medications: ScannedMedication[];
   emergencyContacts: ScannedEmergencyContact[];
 };
 
-const FIELD_PATTERN = /^(Patient ID|Generated|Name|DOB|Gender|No blood transfusion|Phone|Address):\s*(.*)$/;
+const FIELD_PATTERN =
+  /^(Patient ID|Generated|Name|First name|Middle name|Last name|Suffix|DOB|Gender|Blood type|Religion|No blood transfusion|Phone country code|Phone|Street|Unit|City|Province|Postal code|Country):\s*(.*)$/;
 const ALLERGY_PATTERN = /^-\s*(.+?)\s*\(([^,)]+)(?:,\s*([^)]+))?\)$/;
 const DIAGNOSIS_PATTERN = /^-\s*([^,]+),\s*(\S+)(?:,\s*(.+))?$/;
 const MEDICATION_PATTERN = /^-\s*([^,]+),\s*([^,]+)(?:,\s*(.+))?$/;
@@ -62,11 +75,23 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
     patientId: null,
     generatedAt: '',
     name: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    suffix: '',
     dateOfBirth: '',
     gender: '',
+    bloodType: '',
+    religion: '',
     noBloodTransfusion: '',
     phone: '',
-    address: '',
+    phoneCountryCode: '',
+    street: '',
+    unit: '',
+    city: '',
+    province: '',
+    postalCode: '',
+    country: '',
     allergies: [],
     diagnoses: [],
     medications: [],
@@ -174,11 +199,29 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
       case 'Name':
         info.name = value;
         break;
+      case 'First name':
+        info.firstName = value;
+        break;
+      case 'Middle name':
+        info.middleName = value;
+        break;
+      case 'Last name':
+        info.lastName = value;
+        break;
+      case 'Suffix':
+        info.suffix = value;
+        break;
       case 'DOB':
         info.dateOfBirth = value;
         break;
       case 'Gender':
         info.gender = value;
+        break;
+      case 'Blood type':
+        info.bloodType = value;
+        break;
+      case 'Religion':
+        info.religion = value;
         break;
       case 'No blood transfusion':
         info.noBloodTransfusion = value;
@@ -186,8 +229,26 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
       case 'Phone':
         info.phone = value;
         break;
-      case 'Address':
-        info.address = value;
+      case 'Phone country code':
+        info.phoneCountryCode = value;
+        break;
+      case 'Street':
+        info.street = value;
+        break;
+      case 'Unit':
+        info.unit = value;
+        break;
+      case 'City':
+        info.city = value;
+        break;
+      case 'Province':
+        info.province = value;
+        break;
+      case 'Postal code':
+        info.postalCode = value;
+        break;
+      case 'Country':
+        info.country = value;
         break;
     }
   }

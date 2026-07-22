@@ -1,6 +1,7 @@
 import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import type { DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
+import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 
 /**
  * Builds the plaintext emergency summary encoded in the QR. This stays plain, testable text —
@@ -18,16 +19,34 @@ export function buildEmergencySummary(
   diagnoses?: DiagnosisRow[],
   medications?: MedicationRow[],
 ): string {
+  // Name and address are also carried as separate structured fields (below the human-readable
+  // "Name" line) so parseEmergencySummary() can populate the "Manage info" form's discrete
+  // fields (first/middle/last name, suffix, street/unit/city/etc.) directly instead of having to
+  // reverse-guess them by splitting a single formatted display string.
+  const address = parseStoredAddress(medicalInformation.address);
+
   const lines = [
     'MEDISCAN EMERGENCY INFO',
     `Patient ID: ${patientId}`,
     `Generated: ${generatedAt.toISOString()}`,
     `Name: ${medicalInformation.full_name || 'Unknown'}`,
+    `First name: ${medicalInformation.first_name || '—'}`,
+    `Middle name: ${medicalInformation.middle_name || '—'}`,
+    `Last name: ${medicalInformation.last_name || '—'}`,
+    `Suffix: ${medicalInformation.suffix || '—'}`,
     `DOB: ${medicalInformation.date_of_birth || '—'}`,
     `Gender: ${medicalInformation.gender || '—'}`,
+    `Blood type: ${medicalInformation.blood_type || '—'}`,
+    `Religion: ${medicalInformation.religion || '—'}`,
     `No blood transfusion: ${medicalInformation.no_blood_transfusion ? 'Yes' : 'No'}`,
     `Phone: ${medicalInformation.phone || '—'}`,
-    `Address: ${medicalInformation.address || '—'}`,
+    `Phone country code: ${medicalInformation.phone_country_code || '—'}`,
+    `Street: ${address?.street || '—'}`,
+    `Unit: ${address?.unit || '—'}`,
+    `City: ${address?.city || '—'}`,
+    `Province: ${address?.province || '—'}`,
+    `Postal code: ${address?.postal_code || '—'}`,
+    `Country: ${address?.country || '—'}`,
   ];
 
   if (allergies && allergies.length > 0) {
