@@ -5,6 +5,7 @@ import { getCurrentUserId } from '@/db/context';
 import { encryptField, decryptField } from '@/lib/crypto';
 import type { EmergencyContactRawRow, EmergencyContactRow } from '@/db/schema';
 import type { EmergencyContactPayload } from '@/api/types';
+import type { RelationToPatient } from '@/constants/relation-to-patient';
 
 async function decryptRow(row: EmergencyContactRawRow): Promise<EmergencyContactRow> {
   return {
@@ -196,7 +197,7 @@ export async function upsertFromServer(record: {
 export function toPayload(row: EmergencyContactRow): EmergencyContactPayload {
   return {
     name: row.name,
-    relationship: row.relationship ?? undefined,
+    relationship: (row.relationship as RelationToPatient | null) ?? undefined,
     phone_country_code: row.phone_country_code ?? undefined,
     phone: row.phone ?? undefined,
     is_primary: !!row.is_primary,

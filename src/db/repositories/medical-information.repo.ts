@@ -9,10 +9,11 @@ import type {
   MedicalInformationRow,
   SyncStatus,
 } from '@/db/schema';
-import type { MedicalInformationPayload } from '@/api/types';
+import type { MedicalInformationPayload, MedicalInformationAddress } from '@/api/types';
 import type { Suffix } from '@/constants/suffix';
 import type { Gender } from '@/constants/gender';
 import type { BloodType } from '@/constants/blood-type';
+import type { Religion } from '@/constants/religion';
 
 async function decryptRow(row: MedicalInformationRawRow): Promise<MedicalInformationRow> {
   return {
@@ -32,7 +33,7 @@ async function decryptRow(row: MedicalInformationRawRow): Promise<MedicalInforma
     phone_country_code: await decryptField(row.phone_country_code),
     phone: await decryptField(row.phone),
     blood_type: (await decryptField(row.blood_type)) as MedicalInformationRow['blood_type'],
-    religion: await decryptField(row.religion),
+    religion: (await decryptField(row.religion)) as MedicalInformationRow['religion'],
     address: await decryptField(row.address),
     no_blood_transfusion: row.no_blood_transfusion,
   };
@@ -97,7 +98,7 @@ export async function saveLocalEdit(
     phone: payload.phone ?? null,
     blood_type: payload.blood_type ?? null,
     religion: payload.religion ?? null,
-    address: payload.address ?? null,
+    address: payload.address ? JSON.stringify(payload.address) : null,
     no_blood_transfusion: payload.no_blood_transfusion ? 1 : 0,
   };
 
@@ -195,7 +196,7 @@ export async function applyProfessionalUpdate(patch: MedicalInformationPatch): P
   if (patch.phone !== undefined) merged.phone = patch.phone;
   if (patch.blood_type !== undefined) merged.blood_type = patch.blood_type;
   if (patch.religion !== undefined) merged.religion = patch.religion;
-  if (patch.address !== undefined) merged.address = patch.address;
+  if (patch.address !== undefined) merged.address = patch.address ? JSON.stringify(patch.address) : null;
   if (patch.no_blood_transfusion !== undefined) merged.no_blood_transfusion = patch.no_blood_transfusion ? 1 : 0;
 
   if (namePartChanged || patch.middle_name !== undefined || patch.suffix !== undefined) {
@@ -256,13 +257,10 @@ export async function applyProfessionalUpdate(patch: MedicalInformationPatch): P
  * numeric `id` is stored in `server_id` instead. Last-write-wins, same as `Allergy.upsertFromServer`
  * et al.: this unconditionally overwrites the local row with what the server returned.
  *
- * KNOWN GAP: the server's `suffix`/`gender`/`blood_type` enum values are lowercase snake_case
- * (e.g. "male"), but this app's local `Suffix`/`Gender`/`BloodType` types are capitalized display
- * values (e.g. "Male") - see src/constants/{suffix,gender,blood-type}.ts. This function currently
- * casts through rather than normalizing casing, since normalizing it incorrectly could silently
- * break dropdown/comparison logic elsewhere in the app that this repo doesn't have visibility into.
- * Needs a real value-mapping fix before this path is relied on for medical_information display
- * fields, not just for round-tripping.
+ * The server's `suffix`/`gender`/`blood_type`/`religion` enum values are lowercase snake_case
+ * (e.g. "male"), which now matches this app's local `Suffix`/`Gender`/`BloodType`/`Religion` types
+ * exactly - see src/constants/{suffix,gender,blood-type,religion}.ts - so no casing normalization
+ * is needed here, just a type-level cast from the untyped sync payload.
  */
 export async function saveFromServer(record: {
   id: number;
@@ -274,7 +272,7 @@ export async function saveFromServer(record: {
   gender: string;
   blood_type: string | null;
   religion: string | null;
-  address: Record<string, unknown> | null;
+  address: MedicalInformationAddress | null;
   no_blood_transfusion: boolean;
   updated_at: string;
 }): Promise<void> {
@@ -298,7 +296,7 @@ export async function saveFromServer(record: {
     phone_country_code: existing?.phone_country_code ?? null,
     phone: existing?.phone ?? null,
     blood_type: record.blood_type as BloodType | null,
-    religion: record.religion,
+    religion: record.religion as Religion | null,
     address: record.address ? JSON.stringify(record.address) : null,
     no_blood_transfusion: record.no_blood_transfusion ? 1 : 0,
   };
@@ -376,7 +374,19 @@ export function toPayload(row: MedicalInformationRow): MedicalInformationPayload
     phone: row.phone ?? undefined,
     blood_type: row.blood_type ?? undefined,
     religion: row.religion ?? undefined,
-    address: row.address ?? undefined,
+    address: parseStoredAddress(row.address),
     no_blood_transfusion: !!row.no_blood_transfusion,
   };
+}
+
+/** The local column stores the address as a JSON-stringified blob (see `encryptFields`/`decryptRow`); this parses it back into the structured shape the rest of the app expects. */
+export function parseStoredAddress(raw: string | null): MedicalInformationAddress | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed as MedicalInformationAddress;
+  } catch {
+    // fall through
+  }
+  return undefined;
 }
