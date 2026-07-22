@@ -1,4 +1,12 @@
+/** See qr-cipher.test.ts: react-native-libsodium's JSI bindings aren't available under jest-expo's Node environment. */
+jest.mock('react-native-libsodium', () => {
+  const sodium = require('libsodium-wrappers');
+  return { __esModule: true, default: sodium, ready: sodium.ready };
+});
+
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
+import { parseEmergencySummary } from '@/lib/parse-emergency-summary';
+import { encryptQrPayload } from '@/lib/qr-cipher';
 import type { AllergyRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
 
 const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
@@ -20,9 +28,16 @@ function medicalInformation(overrides: Partial<MedicalInformationRow> = {}): Med
     gender: 'male',
     phone_country_code: '63',
     phone: '9674352324',
-    blood_type: 'A+',
+    blood_type: 'a_positive',
     religion: null,
-    address: '12 Mabini St, Cebu',
+    address: JSON.stringify({
+      street: '12 Mabini St',
+      unit: null,
+      city: 'Cebu City',
+      province: 'Cebu',
+      postal_code: '6000',
+      country: 'Philippines',
+    }),
     no_blood_transfusion: 0,
     ...overrides,
   } as MedicalInformationRow;
@@ -92,7 +107,12 @@ describe('buildEmergencySummary', () => {
     expect(summary).toContain('DOB: 1998-04-02');
     expect(summary).toContain('Gender: male');
     expect(summary).toContain('Phone: 9674352324');
-    expect(summary).toContain('Address: 12 Mabini St, Cebu');
+    expect(summary).toContain('Phone country code: 63');
+    expect(summary).toContain('Street: 12 Mabini St');
+    expect(summary).toContain('City: Cebu City');
+    expect(summary).toContain('Province: Cebu');
+    expect(summary).toContain('Postal code: 6000');
+    expect(summary).toContain('Country: Philippines');
   });
 
   it('renders the no-blood-transfusion flag as Yes/No rather than a raw 0/1', () => {
@@ -124,6 +144,7 @@ describe('buildEmergencySummary', () => {
         date_of_birth: null,
         gender: null,
         phone: null,
+        phone_country_code: null,
         address: null,
       }),
       [],
@@ -134,7 +155,12 @@ describe('buildEmergencySummary', () => {
     expect(summary).toContain('DOB: —');
     expect(summary).toContain('Gender: —');
     expect(summary).toContain('Phone: —');
-    expect(summary).toContain('Address: —');
+    expect(summary).toContain('Phone country code: —');
+    expect(summary).toContain('Street: —');
+    expect(summary).toContain('City: —');
+    expect(summary).toContain('Province: —');
+    expect(summary).toContain('Postal code: —');
+    expect(summary).toContain('Country: —');
   });
 
   /**
@@ -229,19 +255,35 @@ describe('buildEmergencySummary', () => {
 
   /**
    * The payload is the plaintext behind the QR, so what it does *not* carry matters as much as
-   * what it does. Religion is stored on the profile but deliberately stays out of the QR.
+   * what it does. The email is stored on the profile but deliberately stays out of the QR.
    */
   it('does not leak profile fields that are not part of the QR contract', () => {
     const summary = buildEmergencySummary(
       1,
       GENERATED_AT,
-      medicalInformation({ religion: 'Catholic', blood_type: 'A+' }),
+      medicalInformation({ religion: 'catholic', blood_type: 'a_positive' }),
       [],
       [],
     );
 
-    expect(summary).not.toContain('Catholic');
-    expect(summary).not.toContain('Religion');
     expect(summary).not.toContain('glenn@example.com');
+  });
+
+  it('round-trips structured address, phone country code and emergency contacts through parseEmergencySummary', async () => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [contact()]);
+    const encoded = await encryptQrPayload(summary);
+    const parsed = await parseEmergencySummary(encoded);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.phone).toBe('9674352324');
+    expect(parsed?.phoneCountryCode).toBe('63');
+    expect(parsed?.street).toBe('12 Mabini St');
+    expect(parsed?.city).toBe('Cebu City');
+    expect(parsed?.province).toBe('Cebu');
+    expect(parsed?.postalCode).toBe('6000');
+    expect(parsed?.country).toBe('Philippines');
+    expect(parsed?.emergencyContacts).toEqual([
+      { name: 'Maria Velasco', relationship: 'Mother', phone: '+63 9171234567' },
+    ]);
   });
 });

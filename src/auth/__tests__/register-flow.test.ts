@@ -79,12 +79,12 @@ function medicalInfoPayload(): MedicalInformationPayload {
     first_name: 'John',
     last_name: 'Doe',
     date_of_birth: '1990-05-15',
-    gender: 'Male',
+    gender: 'male',
     phone_country_code: 'PH',
     phone: '9171234567',
-    address: '123 Main St',
-    blood_type: 'O+',
-    religion: 'Catholic',
+    address: { street: '123 Main St', unit: null, city: null, province: null, postal_code: null, country: null },
+    blood_type: 'o_positive',
+    religion: 'catholic',
     no_blood_transfusion: false,
   };
 }
