@@ -34,7 +34,6 @@ import { useMedications } from '@/features/medications/useMedications';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
 import { useTheme } from '@/hooks/use-theme';
-import { calculateAge } from '@/lib/calculate-age';
 import { cn } from '@/lib/cn';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import { pullPendingSync } from '@/services/pending-sync.service';
@@ -60,7 +59,7 @@ export default function HomeScreen() {
   const guardedPush = useGuardedPress((href: Parameters<typeof router.push>[0]) => router.push(href));
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
-  const age = profile ? calculateAge(profile.date_of_birth) : null;
+  const age = profile ? user?.age : null;
 
   /**
    * Counts distinct professionals currently verifying a record — not raw attestation rows, since one
