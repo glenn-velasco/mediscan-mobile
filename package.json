@@ -98,7 +98,8 @@
     "preset": "jest-expo",
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/example/"
+      "/example/",
+      "/.claude/worktrees/"
     ]
   },
   "private": true,

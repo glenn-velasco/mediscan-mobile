@@ -41,3 +41,34 @@ export async function decryptJson<T>(payload: string | null | undefined): Promis
   if (!plaintext) return null;
   return JSON.parse(plaintext) as T;
 }
+
+/**
+ * Encrypts a single string value with AES-256-CBC, one PHI column at a time
+ * rather than a whole-row JSON blob (see migration 011 for why: per-field
+ * columns let each field be read/written independently instead of forcing a
+ * decrypt of the entire row to read one value). Same `${iv}:${ciphertext}`
+ * format and key as `encryptJson` - just applied to a plain string.
+ */
+export async function encryptField(value: string | null | undefined): Promise<string | null> {
+  if (value === null || value === undefined) return null;
+
+  const key = await getOrCreateKey();
+  const iv = CryptoJS.lib.WordArray.random(16);
+  const ciphertext = CryptoJS.AES.encrypt(value, CryptoJS.enc.Hex.parse(key), { iv }).toString();
+  return `${iv.toString(CryptoJS.enc.Hex)}:${ciphertext}`;
+}
+
+/** Reverses `encryptField`. Returns null for empty/malformed input. */
+export async function decryptField(payload: string | null | undefined): Promise<string | null> {
+  if (!payload) return null;
+
+  const [ivHex, ciphertext] = payload.split(':');
+  if (!ivHex || !ciphertext) return null;
+
+  const key = await getOrCreateKey();
+  const plaintext = CryptoJS.AES.decrypt(ciphertext, CryptoJS.enc.Hex.parse(key), {
+    iv: CryptoJS.enc.Hex.parse(ivHex),
+  }).toString(CryptoJS.enc.Utf8);
+
+  return plaintext || null;
+}

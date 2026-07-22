@@ -2,18 +2,11 @@ import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
-import { encryptJson, decryptJson } from '@/lib/crypto';
-import type { MedicationEncryptedFields, MedicationRawRow, MedicationRow } from '@/db/schema';
+import { encryptField, decryptField } from '@/lib/crypto';
+import type { MedicationRawRow, MedicationRow } from '@/db/schema';
 import type { MedicationPayload } from '@/api/types';
 
 async function decryptRow(row: MedicationRawRow): Promise<MedicationRow> {
-  const fields = (await decryptJson<MedicationEncryptedFields>(row.encrypted_data)) ?? {
-    name: '',
-    dosage: '',
-    frequency: '',
-    notes: null,
-  };
-
   return {
     local_uuid: row.local_uuid,
     user_id: row.user_id,
@@ -21,7 +14,10 @@ async function decryptRow(row: MedicationRawRow): Promise<MedicationRow> {
     sync_status: row.sync_status,
     deleted_locally: row.deleted_locally,
     updated_at_local: row.updated_at_local,
-    ...fields,
+    name: (await decryptField(row.name)) ?? '',
+    dosage: (await decryptField(row.dosage)) ?? '',
+    frequency: row.frequency,
+    notes: await decryptField(row.notes),
   };
 }
 
@@ -30,6 +26,17 @@ export async function getAll(): Promise<MedicationRow[]> {
   const userId = getCurrentUserId();
   const rows = await db.getAllAsync<MedicationRawRow>(
     'SELECT * FROM medications WHERE user_id = ? AND deleted_locally = 0 ORDER BY updated_at_local DESC',
+    userId,
+  );
+  return Promise.all(rows.map(decryptRow));
+}
+
+/** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
+export async function getAllForPush(): Promise<MedicationRow[]> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  const rows = await db.getAllAsync<MedicationRawRow>(
+    'SELECT * FROM medications WHERE user_id = ? ORDER BY updated_at_local DESC',
     userId,
   );
   return Promise.all(rows.map(decryptRow));
@@ -49,19 +56,16 @@ export async function createLocal(payload: MedicationPayload): Promise<string> {
   const userId = getCurrentUserId();
   const localUuid = Crypto.randomUUID();
   const now = new Date().toISOString();
-  const encryptedData = await encryptJson<MedicationEncryptedFields>({
-    name: payload.name,
-    dosage: payload.dosage,
-    frequency: payload.frequency,
-    notes: payload.notes ?? null,
-  });
 
   await db.runAsync(
-    `INSERT INTO medications (local_uuid, user_id, server_id, encrypted_data, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, 'synced', 0, ?)`,
+    `INSERT INTO medications (local_uuid, user_id, server_id, name, dosage, frequency, notes, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, NULL, ?, ?, ?, ?, 'synced', 0, ?)`,
     localUuid,
     userId,
-    encryptedData,
+    await encryptField(payload.name),
+    await encryptField(payload.dosage),
+    payload.frequency,
+    await encryptField(payload.notes ?? null),
     now,
   );
   return localUuid;
@@ -72,16 +76,12 @@ export async function updateLocal(localUuid: string, payload: Partial<Medication
   const existing = await getByLocalUuid(localUuid);
   if (!existing) return;
 
-  const encryptedData = await encryptJson<MedicationEncryptedFields>({
-    name: payload.name ?? existing.name,
-    dosage: payload.dosage ?? existing.dosage,
-    frequency: payload.frequency ?? existing.frequency,
-    notes: payload.notes !== undefined ? payload.notes ?? null : existing.notes,
-  });
-
   await db.runAsync(
-    `UPDATE medications SET encrypted_data = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    encryptedData,
+    `UPDATE medications SET name = ?, dosage = ?, frequency = ?, notes = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
+    await encryptField(payload.name ?? existing.name),
+    await encryptField(payload.dosage ?? existing.dosage),
+    payload.frequency ?? existing.frequency,
+    await encryptField(payload.notes !== undefined ? (payload.notes ?? null) : existing.notes),
     new Date().toISOString(),
     localUuid,
   );
@@ -150,6 +150,40 @@ export async function discardConflict(localUuid: string): Promise<void> {
     `UPDATE medications SET sync_status = 'synced', deleted_locally = 0, updated_at_local = ? WHERE local_uuid = ?`,
     new Date().toISOString(),
     localUuid,
+  );
+}
+
+/** See `allergies.repo.ts`'s `upsertFromServer` for the design rationale - identical shape. */
+export async function upsertFromServer(record: {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes?: string;
+  updated_at: string;
+}): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+
+  await db.runAsync(
+    `INSERT INTO medications (local_uuid, user_id, server_id, name, dosage, frequency, notes, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, ?, 'synced', 0, ?)
+     ON CONFLICT(local_uuid) DO UPDATE SET
+       server_id = 1,
+       name = excluded.name,
+       dosage = excluded.dosage,
+       frequency = excluded.frequency,
+       notes = excluded.notes,
+       sync_status = 'synced',
+       deleted_locally = 0,
+       updated_at_local = excluded.updated_at_local`,
+    record.id,
+    userId,
+    await encryptField(record.name),
+    await encryptField(record.dosage),
+    record.frequency,
+    await encryptField(record.notes ?? null),
+    record.updated_at,
   );
 }
 

@@ -45,11 +45,11 @@ describe('medications.repo', () => {
     });
 
     const db = await getDb();
-    const raw = await db.getFirstAsync<{ encrypted_data: string }>(
-      'SELECT encrypted_data FROM medications WHERE local_uuid = ?',
+    const raw = await db.getFirstAsync<{ name: string }>(
+      'SELECT name FROM medications WHERE local_uuid = ?',
       localUuid,
     );
-    expect(raw!.encrypted_data).not.toContain('Aspirin');
+    expect(raw!.name).not.toContain('Aspirin');
   });
 
   it('getAll excludes soft-deleted rows and orders by updated_at_local DESC', async () => {

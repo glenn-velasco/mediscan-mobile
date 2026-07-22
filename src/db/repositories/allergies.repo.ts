@@ -2,17 +2,11 @@ import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
-import { encryptJson, decryptJson } from '@/lib/crypto';
-import type { AllergyEncryptedFields, AllergyRawRow, AllergyRow } from '@/db/schema';
+import { encryptField, decryptField } from '@/lib/crypto';
+import type { AllergyRawRow, AllergyRow } from '@/db/schema';
 import type { AllergyPayload } from '@/api/types';
 
 async function decryptRow(row: AllergyRawRow): Promise<AllergyRow> {
-  const fields = (await decryptJson<AllergyEncryptedFields>(row.encrypted_data)) ?? {
-    allergen: '',
-    reaction: null,
-    severity: 'mild' as const,
-  };
-
   return {
     local_uuid: row.local_uuid,
     user_id: row.user_id,
@@ -20,7 +14,9 @@ async function decryptRow(row: AllergyRawRow): Promise<AllergyRow> {
     sync_status: row.sync_status,
     deleted_locally: row.deleted_locally,
     updated_at_local: row.updated_at_local,
-    ...fields,
+    allergen: (await decryptField(row.allergen)) ?? '',
+    reaction: await decryptField(row.reaction),
+    severity: row.severity,
   };
 }
 
@@ -29,6 +25,17 @@ export async function getAll(): Promise<AllergyRow[]> {
   const userId = getCurrentUserId();
   const rows = await db.getAllAsync<AllergyRawRow>(
     'SELECT * FROM allergies WHERE user_id = ? AND deleted_locally = 0 ORDER BY updated_at_local DESC',
+    userId,
+  );
+  return Promise.all(rows.map(decryptRow));
+}
+
+/** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
+export async function getAllForPush(): Promise<AllergyRow[]> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  const rows = await db.getAllAsync<AllergyRawRow>(
+    'SELECT * FROM allergies WHERE user_id = ? ORDER BY updated_at_local DESC',
     userId,
   );
   return Promise.all(rows.map(decryptRow));
@@ -48,18 +55,15 @@ export async function createLocal(payload: AllergyPayload): Promise<string> {
   const userId = getCurrentUserId();
   const localUuid = Crypto.randomUUID();
   const now = new Date().toISOString();
-  const encryptedData = await encryptJson<AllergyEncryptedFields>({
-    allergen: payload.allergen,
-    reaction: payload.reaction ?? null,
-    severity: payload.severity,
-  });
 
   await db.runAsync(
-    `INSERT INTO allergies (local_uuid, user_id, server_id, encrypted_data, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, 'synced', 0, ?)`,
+    `INSERT INTO allergies (local_uuid, user_id, server_id, allergen, reaction, severity, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, NULL, ?, ?, ?, 'synced', 0, ?)`,
     localUuid,
     userId,
-    encryptedData,
+    await encryptField(payload.allergen),
+    await encryptField(payload.reaction ?? null),
+    payload.severity,
     now,
   );
   return localUuid;
@@ -70,15 +74,11 @@ export async function updateLocal(localUuid: string, payload: Partial<AllergyPay
   const existing = await getByLocalUuid(localUuid);
   if (!existing) return;
 
-  const encryptedData = await encryptJson<AllergyEncryptedFields>({
-    allergen: payload.allergen ?? existing.allergen,
-    reaction: payload.reaction ?? existing.reaction,
-    severity: payload.severity ?? existing.severity,
-  });
-
   await db.runAsync(
-    `UPDATE allergies SET encrypted_data = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    encryptedData,
+    `UPDATE allergies SET allergen = ?, reaction = ?, severity = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
+    await encryptField(payload.allergen ?? existing.allergen),
+    await encryptField(payload.reaction ?? existing.reaction),
+    payload.severity ?? existing.severity,
     new Date().toISOString(),
     localUuid,
   );
@@ -147,6 +147,42 @@ export async function discardConflict(localUuid: string): Promise<void> {
     `UPDATE allergies SET sync_status = 'synced', deleted_locally = 0, updated_at_local = ? WHERE local_uuid = ?`,
     new Date().toISOString(),
     localUuid,
+  );
+}
+
+/**
+ * Writes a record pulled from `GET /sync`. The server's `id` IS this row's `local_uuid` (see the
+ * client-generated-UUID design in the backend repo's docs/SYNC.md), so this is a plain upsert-by-key
+ * - never a create-then-reconcile step. Last-write-wins: whatever the server returned overwrites the
+ * local row unconditionally, since the server is only ever asked for rows changed since the last pull.
+ */
+export async function upsertFromServer(record: {
+  id: string;
+  allergen: string;
+  reaction?: string;
+  severity: AllergyRow['severity'];
+  updated_at: string;
+}): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+
+  await db.runAsync(
+    `INSERT INTO allergies (local_uuid, user_id, server_id, allergen, reaction, severity, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, 'synced', 0, ?)
+     ON CONFLICT(local_uuid) DO UPDATE SET
+       server_id = 1,
+       allergen = excluded.allergen,
+       reaction = excluded.reaction,
+       severity = excluded.severity,
+       sync_status = 'synced',
+       deleted_locally = 0,
+       updated_at_local = excluded.updated_at_local`,
+    record.id,
+    userId,
+    await encryptField(record.allergen),
+    await encryptField(record.reaction ?? null),
+    record.severity,
+    record.updated_at,
   );
 }
 

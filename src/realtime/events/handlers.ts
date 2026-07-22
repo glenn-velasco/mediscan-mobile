@@ -7,6 +7,7 @@ import { professionalApplicationQueryKey } from '@/features/professional-applica
 import { professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
+import { pullPatientChanges } from '@/services/patient-sync.service';
 
 const TAG = '[EventHandler]';
 
@@ -49,6 +50,15 @@ export function createUserChannelHandlers(deps: {
       await pullPendingSync();
       await deps.queryClient.invalidateQueries({ queryKey: pendingSyncQueryKey });
       await deps.queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
+    },
+
+    // Independent of PendingSyncEnvelopeCreated above - this is the patient-authored CRUD sync
+    // system (see docs/SYNC.md), not the BLE/professional-attestation relay. Triggers an immediate
+    // pull instead of waiting for the 60s poll in src/sync/triggers.ts; that poll stays as a
+    // fallback for missed events (offline delivery gaps), not the primary trigger.
+    PatientRecordUpdated: async (payload) => {
+      console.log(TAG, 'PatientRecordUpdated received', { recordType: payload.record_type, recordId: payload.record_id });
+      await pullPatientChanges();
     },
 
     ProfessionalApplicationStatusChanged: async (payload) => {

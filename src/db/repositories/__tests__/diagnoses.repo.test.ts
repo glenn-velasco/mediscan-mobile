@@ -41,11 +41,11 @@ describe('diagnoses.repo', () => {
     });
 
     const db = await getDb();
-    const raw = await db.getFirstAsync<{ encrypted_data: string }>(
-      'SELECT encrypted_data FROM diagnoses WHERE local_uuid = ?',
+    const raw = await db.getFirstAsync<{ condition: string }>(
+      'SELECT condition FROM diagnoses WHERE local_uuid = ?',
       localUuid,
     );
-    expect(raw!.encrypted_data).not.toContain('diabetes');
+    expect(raw!.condition).not.toContain('diabetes');
   });
 
   it('getAll excludes soft-deleted diagnoses', async () => {

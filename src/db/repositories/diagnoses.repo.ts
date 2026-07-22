@@ -2,17 +2,11 @@ import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
-import { encryptJson, decryptJson } from '@/lib/crypto';
-import type { DiagnosisEncryptedFields, DiagnosisRawRow, DiagnosisRow } from '@/db/schema';
+import { encryptField, decryptField } from '@/lib/crypto';
+import type { DiagnosisRawRow, DiagnosisRow } from '@/db/schema';
 import type { DiagnosisPayload } from '@/api/types';
 
 async function decryptRow(row: DiagnosisRawRow): Promise<DiagnosisRow> {
-  const fields = (await decryptJson<DiagnosisEncryptedFields>(row.encrypted_data)) ?? {
-    condition: '',
-    date_of_diagnosis: null,
-    severity: 'chronic' as const,
-  };
-
   return {
     local_uuid: row.local_uuid,
     user_id: row.user_id,
@@ -20,7 +14,9 @@ async function decryptRow(row: DiagnosisRawRow): Promise<DiagnosisRow> {
     sync_status: row.sync_status,
     deleted_locally: row.deleted_locally,
     updated_at_local: row.updated_at_local,
-    ...fields,
+    condition: (await decryptField(row.condition)) ?? '',
+    date_of_diagnosis: row.date_of_diagnosis,
+    severity: row.severity,
   };
 }
 
@@ -29,6 +25,17 @@ export async function getAll(): Promise<DiagnosisRow[]> {
   const userId = getCurrentUserId();
   const rows = await db.getAllAsync<DiagnosisRawRow>(
     'SELECT * FROM diagnoses WHERE user_id = ? AND deleted_locally = 0 ORDER BY updated_at_local DESC',
+    userId,
+  );
+  return Promise.all(rows.map(decryptRow));
+}
+
+/** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
+export async function getAllForPush(): Promise<DiagnosisRow[]> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  const rows = await db.getAllAsync<DiagnosisRawRow>(
+    'SELECT * FROM diagnoses WHERE user_id = ? ORDER BY updated_at_local DESC',
     userId,
   );
   return Promise.all(rows.map(decryptRow));
@@ -45,18 +52,15 @@ export async function createLocal(payload: DiagnosisPayload): Promise<string> {
   const userId = getCurrentUserId();
   const localUuid = Crypto.randomUUID();
   const now = new Date().toISOString();
-  const encryptedData = await encryptJson<DiagnosisEncryptedFields>({
-    condition: payload.condition,
-    date_of_diagnosis: payload.date_of_diagnosis ?? null,
-    severity: payload.severity,
-  });
 
   await db.runAsync(
-    `INSERT INTO diagnoses (local_uuid, user_id, server_id, encrypted_data, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, 'synced', 0, ?)`,
+    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, NULL, ?, ?, ?, 'synced', 0, ?)`,
     localUuid,
     userId,
-    encryptedData,
+    await encryptField(payload.condition),
+    payload.date_of_diagnosis ?? null,
+    payload.severity,
     now,
   );
   return localUuid;
@@ -67,15 +71,11 @@ export async function updateLocal(localUuid: string, payload: Partial<DiagnosisP
   const existing = await getByLocalUuid(localUuid);
   if (!existing) return;
 
-  const encryptedData = await encryptJson<DiagnosisEncryptedFields>({
-    condition: payload.condition ?? existing.condition,
-    date_of_diagnosis: payload.date_of_diagnosis ?? existing.date_of_diagnosis,
-    severity: payload.severity ?? existing.severity,
-  });
-
   await db.runAsync(
-    `UPDATE diagnoses SET encrypted_data = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    encryptedData,
+    `UPDATE diagnoses SET condition = ?, date_of_diagnosis = ?, severity = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
+    await encryptField(payload.condition ?? existing.condition),
+    payload.date_of_diagnosis ?? existing.date_of_diagnosis,
+    payload.severity ?? existing.severity,
     new Date().toISOString(),
     localUuid,
   );
@@ -144,6 +144,37 @@ export async function discardConflict(localUuid: string): Promise<void> {
     `UPDATE diagnoses SET sync_status = 'synced', deleted_locally = 0, updated_at_local = ? WHERE local_uuid = ?`,
     new Date().toISOString(),
     localUuid,
+  );
+}
+
+/** See `allergies.repo.ts`'s `upsertFromServer` for the design rationale - identical shape. */
+export async function upsertFromServer(record: {
+  id: string;
+  condition: string;
+  date_of_diagnosis?: string;
+  severity: DiagnosisRow['severity'];
+  updated_at: string;
+}): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+
+  await db.runAsync(
+    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, 'synced', 0, ?)
+     ON CONFLICT(local_uuid) DO UPDATE SET
+       server_id = 1,
+       condition = excluded.condition,
+       date_of_diagnosis = excluded.date_of_diagnosis,
+       severity = excluded.severity,
+       sync_status = 'synced',
+       deleted_locally = 0,
+       updated_at_local = excluded.updated_at_local`,
+    record.id,
+    userId,
+    await encryptField(record.condition),
+    record.date_of_diagnosis ?? null,
+    record.severity,
+    record.updated_at,
   );
 }
 

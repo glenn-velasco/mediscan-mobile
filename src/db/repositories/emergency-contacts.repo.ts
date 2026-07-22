@@ -2,19 +2,11 @@ import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
-import { encryptJson, decryptJson } from '@/lib/crypto';
-import type { EmergencyContactEncryptedFields, EmergencyContactRawRow, EmergencyContactRow } from '@/db/schema';
+import { encryptField, decryptField } from '@/lib/crypto';
+import type { EmergencyContactRawRow, EmergencyContactRow } from '@/db/schema';
 import type { EmergencyContactPayload } from '@/api/types';
 
 async function decryptRow(row: EmergencyContactRawRow): Promise<EmergencyContactRow> {
-  const fields = (await decryptJson<EmergencyContactEncryptedFields>(row.encrypted_data)) ?? {
-    name: '',
-    relationship: null,
-    phone_country_code: null,
-    phone: null,
-    is_primary: 0,
-  };
-
   return {
     local_uuid: row.local_uuid,
     user_id: row.user_id,
@@ -22,7 +14,11 @@ async function decryptRow(row: EmergencyContactRawRow): Promise<EmergencyContact
     sync_status: row.sync_status,
     deleted_locally: row.deleted_locally,
     updated_at_local: row.updated_at_local,
-    ...fields,
+    name: (await decryptField(row.name)) ?? '',
+    relationship: row.relationship,
+    phone_country_code: row.phone_country_code,
+    phone: await decryptField(row.phone),
+    is_primary: row.is_primary,
   };
 }
 
@@ -31,6 +27,17 @@ export async function getAll(): Promise<EmergencyContactRow[]> {
   const userId = getCurrentUserId();
   const rows = await db.getAllAsync<EmergencyContactRawRow>(
     'SELECT * FROM emergency_contacts WHERE user_id = ? AND deleted_locally = 0 ORDER BY updated_at_local DESC',
+    userId,
+  );
+  return Promise.all(rows.map(decryptRow));
+}
+
+/** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
+export async function getAllForPush(): Promise<EmergencyContactRow[]> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  const rows = await db.getAllAsync<EmergencyContactRawRow>(
+    'SELECT * FROM emergency_contacts WHERE user_id = ? ORDER BY updated_at_local DESC',
     userId,
   );
   return Promise.all(rows.map(decryptRow));
@@ -50,20 +57,17 @@ export async function createLocal(payload: EmergencyContactPayload): Promise<str
   const userId = getCurrentUserId();
   const localUuid = Crypto.randomUUID();
   const now = new Date().toISOString();
-  const encryptedData = await encryptJson<EmergencyContactEncryptedFields>({
-    name: payload.name,
-    relationship: payload.relationship ?? null,
-    phone_country_code: payload.phone_country_code ?? null,
-    phone: payload.phone ?? null,
-    is_primary: payload.is_primary ? 1 : 0,
-  });
 
   await db.runAsync(
-    `INSERT INTO emergency_contacts (local_uuid, user_id, server_id, encrypted_data, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, 'synced', 0, ?)`,
+    `INSERT INTO emergency_contacts (local_uuid, user_id, server_id, name, relationship, phone_country_code, phone, is_primary, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
     localUuid,
     userId,
-    encryptedData,
+    await encryptField(payload.name),
+    payload.relationship ?? null,
+    payload.phone_country_code ?? null,
+    await encryptField(payload.phone ?? null),
+    payload.is_primary ? 1 : 0,
     now,
   );
   return localUuid;
@@ -74,17 +78,13 @@ export async function updateLocal(localUuid: string, payload: Partial<EmergencyC
   const existing = await getByLocalUuid(localUuid);
   if (!existing) return;
 
-  const encryptedData = await encryptJson<EmergencyContactEncryptedFields>({
-    name: payload.name ?? existing.name,
-    relationship: payload.relationship ?? existing.relationship,
-    phone_country_code: payload.phone_country_code ?? existing.phone_country_code,
-    phone: payload.phone ?? existing.phone,
-    is_primary: payload.is_primary !== undefined ? (payload.is_primary ? 1 : 0) : existing.is_primary,
-  });
-
   await db.runAsync(
-    `UPDATE emergency_contacts SET encrypted_data = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    encryptedData,
+    `UPDATE emergency_contacts SET name = ?, relationship = ?, phone_country_code = ?, phone = ?, is_primary = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
+    await encryptField(payload.name ?? existing.name),
+    payload.relationship ?? existing.relationship,
+    payload.phone_country_code ?? existing.phone_country_code,
+    await encryptField(payload.phone ?? existing.phone),
+    payload.is_primary !== undefined ? (payload.is_primary ? 1 : 0) : existing.is_primary,
     new Date().toISOString(),
     localUuid,
   );
@@ -151,6 +151,45 @@ export async function discardConflict(localUuid: string): Promise<void> {
     `UPDATE emergency_contacts SET sync_status = 'synced', deleted_locally = 0, updated_at_local = ? WHERE local_uuid = ?`,
     new Date().toISOString(),
     localUuid,
+  );
+}
+
+/** See `allergies.repo.ts`'s `upsertFromServer` for the design rationale - identical shape. */
+export async function upsertFromServer(record: {
+  id: string;
+  name: string;
+  relationship?: string;
+  phone_country_code?: string;
+  phone?: string;
+  // Optional, not just `boolean`: mirrors `EmergencyContactPayload.is_primary?`, which the server
+  // itself treats as optional/defaultable - a pulled record that omits it just isn't primary.
+  is_primary?: boolean;
+  updated_at: string;
+}): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+
+  await db.runAsync(
+    `INSERT INTO emergency_contacts (local_uuid, user_id, server_id, name, relationship, phone_country_code, phone, is_primary, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'synced', 0, ?)
+     ON CONFLICT(local_uuid) DO UPDATE SET
+       server_id = 1,
+       name = excluded.name,
+       relationship = excluded.relationship,
+       phone_country_code = excluded.phone_country_code,
+       phone = excluded.phone,
+       is_primary = excluded.is_primary,
+       sync_status = 'synced',
+       deleted_locally = 0,
+       updated_at_local = excluded.updated_at_local`,
+    record.id,
+    userId,
+    await encryptField(record.name),
+    record.relationship ?? null,
+    record.phone_country_code ?? null,
+    await encryptField(record.phone ?? null),
+    record.is_primary ? 1 : 0,
+    record.updated_at,
   );
 }
 

@@ -6,7 +6,7 @@ import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
 export type SyncStatus = 'synced' | 'pending' | 'syncing' | 'conflict';
 export type AllergySyncStatus = SyncStatus | 'failed' | 'deleted_pending';
 
-/** The PHI fields that get AES-encrypted into `encrypted_data` rather than stored as plain columns. */
+/** The PHI fields, each AES-encrypted into its own column (see migration 011) rather than one whole-row blob. */
 export type MedicalInformationEncryptedFields = {
   full_name: string;
   first_name: string;
@@ -23,12 +23,24 @@ export type MedicalInformationEncryptedFields = {
   no_blood_transfusion: 0 | 1;
 };
 
-/** The actual SQLite row shape — PHI lives only in the encrypted blob. */
+/** The actual SQLite row shape — every `MedicalInformationEncryptedFields` column holds ciphertext at rest (see `encryptField`/`decryptField` in `src/lib/crypto.ts`), except `no_blood_transfusion` which isn't PHI on its own. */
 export type MedicalInformationRawRow = {
   user_id: number;
   server_id: number | null;
   email: string;
-  encrypted_data: string;
+  full_name: string | null;
+  first_name: string | null;
+  middle_name: string | null;
+  last_name: string | null;
+  suffix: string | null;
+  date_of_birth: string | null;
+  gender: string | null;
+  phone_country_code: string | null;
+  phone: string | null;
+  blood_type: string | null;
+  religion: string | null;
+  address: string | null;
+  no_blood_transfusion: 0 | 1;
   sync_status: SyncStatus;
   updated_at_local: string;
   server_updated_at: string | null;
@@ -50,11 +62,14 @@ export type AllergyEncryptedFields = {
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
 };
 
+/** `allergen`/`reaction` hold ciphertext at rest; `severity` is a bounded enum, stored plaintext (see migration 011's table comment). */
 export type AllergyRawRow = {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
-  encrypted_data: string;
+  allergen: string;
+  reaction: string | null;
+  severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -77,11 +92,16 @@ export type EmergencyContactEncryptedFields = {
   is_primary: 0 | 1;
 };
 
+/** `name`/`phone` hold ciphertext at rest; `relationship`/`phone_country_code`/`is_primary` are bounded/non-identifying, stored plaintext. */
 export type EmergencyContactRawRow = {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
-  encrypted_data: string;
+  name: string;
+  relationship: string | null;
+  phone_country_code: string | null;
+  phone: string | null;
+  is_primary: 0 | 1;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -102,11 +122,14 @@ export type DiagnosisEncryptedFields = {
   severity: DiagnosisSeverity;
 };
 
+/** `condition` holds ciphertext at rest; `date_of_diagnosis`/`severity` are stored plaintext (see migration 011's table comment). */
 export type DiagnosisRawRow = {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
-  encrypted_data: string;
+  condition: string;
+  date_of_diagnosis: string | null;
+  severity: DiagnosisSeverity;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -128,11 +151,15 @@ export type MedicationEncryptedFields = {
   notes: string | null;
 };
 
+/** `name`/`dosage`/`notes` hold ciphertext at rest; `frequency` is short structured text, stored plaintext. */
 export type MedicationRawRow = {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
-  encrypted_data: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  notes: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
