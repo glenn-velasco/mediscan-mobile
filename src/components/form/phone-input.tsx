@@ -255,6 +255,7 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
 
       <BottomSheetModal
         ref={sheetRef}
+        stackBehavior="push"
         snapPoints={['70%']}
         index={0}
         enableDynamicSizing={false}

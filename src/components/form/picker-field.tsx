@@ -8,11 +8,14 @@ export function PickerField<T extends string>({
   options,
   value,
   onChange,
+  getLabel = (v) => v,
 }: {
   label: string;
   options: readonly T[];
-  value: T;
+  value: T | undefined;
   onChange: (value: T) => void;
+  /** Maps an option value to its display label. Defaults to the raw value. */
+  getLabel?: (value: T) => string;
 }) {
   const theme = useTheme();
   return (
@@ -34,7 +37,7 @@ export function PickerField<T extends string>({
               }}
             >
               <ThemedText type="small" style={selected ? { color: theme.primaryForeground } : undefined}>
-                {option}
+                {getLabel(option)}
               </ThemedText>
             </Pressable>
           );

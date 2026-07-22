@@ -7,9 +7,12 @@ import {
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
+import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+
+const AnimatedText = Animated.createAnimatedComponent(ThemedText);
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
@@ -22,6 +25,8 @@ type DateFieldProps = {
   minimumDate?: Date;
   maximumDate?: Date;
   error?: string;
+  /** Background painted behind the floated label where it overlaps the border, so it blends into whatever the field sits on. Defaults to the screen background — override when nesting inside a Card or other surface using `theme.card`. */
+  floatingLabelBackground?: string;
 };
 
 function parseIsoDate(value: string): Date {
@@ -42,11 +47,27 @@ function formatDisplay(value: string): string {
   return parseIsoDate(value).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-/** Date input styled to match TextField, but the label doubles as the placeholder (shown in place of a value) instead of sitting above the field. */
-export function DateField({ label, value, onChange, minimumDate, maximumDate, error }: DateFieldProps) {
+/** Date input styled to match TextField — label floats to the top edge of the box once a date is picked, same as TextField/SelectField. */
+export function DateField({ label, value, onChange, minimumDate, maximumDate, error, floatingLabelBackground }: DateFieldProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const sheetRef = useRef<BottomSheetModal>(null);
+  const floated = !!value;
+
+  const progress = useDerivedValue(() => withTiming(floated ? 1 : 0, { duration: 150 }), [floated]);
+
+  const labelContainerStyle = useAnimatedStyle(() => ({
+    top: progress.value * -9,
+    transform: [{ translateY: (1 - progress.value) * 14 }],
+  }));
+
+  const labelTextStyle = useAnimatedStyle(() => ({
+    fontSize: 16 - progress.value * 4,
+  }));
+
+  const valueTextStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
 
   const handlePicked = (event: { type?: string }, date?: Date) => {
     if (event.type === 'set' && date) {
@@ -65,12 +86,29 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
             sheetRef.current?.present();
           }
         }}
-        className="rounded-xl px-4 py-2.5"
+        className="relative rounded-xl px-4 py-3"
         style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input }}
       >
-        <ThemedText className="text-base" style={{ color: value ? theme.foreground : theme.mutedForeground }}>
-          {value ? formatDisplay(value) : label}
-        </ThemedText>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            { position: 'absolute', left: 16, paddingHorizontal: 4 },
+            labelContainerStyle,
+            floated ? { backgroundColor: floatingLabelBackground ?? theme.background } : null,
+          ]}
+        >
+          <AnimatedText
+            style={[
+              { color: error ? theme.destructive : theme.mutedForeground, fontFamily: 'Inter-Medium' },
+              labelTextStyle,
+            ]}
+          >
+            {label}
+          </AnimatedText>
+        </Animated.View>
+        <AnimatedText className="text-base" style={[{ color: theme.foreground }, valueTextStyle]}>
+          {value ? formatDisplay(value) : ''}
+        </AnimatedText>
       </Pressable>
       {error ? (
         <ThemedText type="small" color="destructive" className="mt-1">
@@ -91,6 +129,7 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
       ) : (
         <BottomSheetModal
           ref={sheetRef}
+          stackBehavior="push"
           enableDynamicSizing
           backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
           handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
