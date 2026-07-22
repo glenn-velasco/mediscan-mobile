@@ -10,6 +10,16 @@ import { queryClient } from '@/lib/query-client';
 
 const PERIODIC_INTERVAL_MS = 60_000;
 
+/**
+ * Foreground, NetInfo reconnect, and the periodic interval can all fire in quick succession
+ * (e.g. NetInfo re-reporting "connected" a few times as the OS settles, right as the app comes to
+ * the foreground) — without a shared cooldown each one kicks off its own full push+pull cycle,
+ * and retries of already-failing items pile on top, which is enough to trip the backend's
+ * `sync`/`api` rate limits (429 Too Many Attempts) during normal use, not just abuse.
+ */
+const MIN_TRIGGER_INTERVAL_MS = 10_000;
+let lastTriggerAt = 0;
+
 let initialized = false;
 
 /**
@@ -43,33 +53,31 @@ export function useSyncTriggers(): void {
       });
     };
 
-    void pullPendingSync();
-    void syncPatientData();
-    safeRefreshUser();
-    void retryPendingRevoke();
+    /** Shared cooldown across all trigger sources — see MIN_TRIGGER_INTERVAL_MS above. */
+    const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean }) => {
+      const now = Date.now();
+      if (now - lastTriggerAt < MIN_TRIGGER_INTERVAL_MS) return;
+      lastTriggerAt = now;
 
-    const netInfoUnsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected) {
-        void pullPendingSync();
-        void syncPatientData();
-        safeRefreshUser();
-      }
-    });
-
-    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        void pullPendingSync();
-        void syncPatientData();
-        safeRefreshUser();
-        void retryPendingRevoke();
-        void queryClient.invalidateQueries();
-      }
-    });
-
-    const interval = setInterval(() => {
       void pullPendingSync();
       void syncPatientData();
       safeRefreshUser();
+      if (extras?.retryRevoke) void retryPendingRevoke();
+      if (extras?.invalidateQueries) void queryClient.invalidateQueries();
+    };
+
+    runTriggeredSync({ retryRevoke: true });
+
+    const netInfoUnsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected) runTriggeredSync();
+    });
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') runTriggeredSync({ retryRevoke: true, invalidateQueries: true });
+    });
+
+    const interval = setInterval(() => {
+      runTriggeredSync();
     }, PERIODIC_INTERVAL_MS);
 
     return () => {

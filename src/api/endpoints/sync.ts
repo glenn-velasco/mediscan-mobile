@@ -3,6 +3,7 @@ import type { AllergyApiRecord } from '@/api/endpoints/allergies';
 import type { DiagnosisApiRecord } from '@/api/endpoints/diagnoses';
 import type { MedicationApiRecord } from '@/api/endpoints/medications';
 import type { EmergencyContactApiRecord } from '@/api/endpoints/emergency-contacts';
+import type { MedicalInformationAddress } from '@/api/types';
 
 export type MedicalInformationSyncRecord = {
   id: number;
@@ -15,7 +16,7 @@ export type MedicalInformationSyncRecord = {
   blood_type: string | null;
   religion: string | null;
   national_id: string | null;
-  address: Record<string, unknown> | null;
+  address: MedicalInformationAddress | null;
   no_blood_transfusion: boolean;
   updated_at: string;
 };
