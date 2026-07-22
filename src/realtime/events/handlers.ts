@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { addNotification } from '@/features/notifications/notifications.store';
+import { registrationMatchQueryKey } from '@/features/registration-match/usePendingRegistrationMatch';
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
 import { professionalApplicationQueryKey } from '@/features/professional-application/useProfessionalApplication';
@@ -76,6 +77,16 @@ export function createUserChannelHandlers(deps: {
       } catch {
         console.warn(TAG, 'refreshUser failed — likely offline, will pick up changes on next online fetch');
       }
+    },
+
+    MedicalInformationRegistrationMatchCreated: async (payload) => {
+      console.log(TAG, 'MedicalInformationRegistrationMatchCreated received', { id: payload.medical_information_registration_match_id });
+      void addNotification({
+        title: 'Verification needed',
+        body: 'Someone registered claiming to be linked to your medical record. Was this you?',
+        href: `/registration-match/${payload.medical_information_registration_match_id}`,
+      });
+      await deps.queryClient.invalidateQueries({ queryKey: registrationMatchQueryKey });
     },
   };
 }

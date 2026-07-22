@@ -18,7 +18,16 @@ type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
   login: (payload: Omit<LoginPayload, 'device_name'>) => Promise<void>;
-  register: (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => Promise<void>;
+  /**
+   * Resolves `{ pending: true }` when the submitted name+dob matched an existing record and the
+   * registration is held awaiting that record's primary user's confirmation - no account/session
+   * is created in that case, so `status` stays 'unauthenticated'. Otherwise resolves
+   * `{ pending: false }` after logging the new account in normally.
+   */
+  register: (
+    payload: Omit<RegisterPayload, 'device_name'>,
+    medicalInfo?: MedicalInformationPayload,
+  ) => Promise<{ pending: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -120,7 +129,14 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   const register = useCallback(async (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => {
     setStatus('authenticating');
     const device_name = await getDeviceName();
-    const { token, user: registeredUser } = await apiRegister({ ...payload, device_name });
+    const response = await apiRegister({ ...payload, device_name });
+
+    if (response.pending) {
+      setStatus('unauthenticated');
+      return { pending: true };
+    }
+
+    const { token, user: registeredUser } = response;
     await setToken(token);
     setCurrentUserId(registeredUser.id);
 
@@ -133,6 +149,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     setStatus('authenticated');
     void backfillUserId(registeredUser.id);
     await saveUser(registeredUser);
+    return { pending: false };
   }, []);
 
   const logout = useCallback(async () => {

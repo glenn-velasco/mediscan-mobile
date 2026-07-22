@@ -106,6 +106,17 @@ export type LoginResponseData = {
   user: User;
 };
 
+/**
+ * Registration either materializes an account immediately (the common
+ * case), or - when the submitted name+dob matches an existing primary-owned
+ * medical record - holds the data server-side pending that record's primary
+ * user confirming it's really them. No account/token exists yet in the
+ * pending case.
+ */
+export type RegisterResponseData =
+  | { pending: true }
+  | ({ pending: false } & LoginResponseData);
+
 export type MedicalInformationPayload = {
   email: string;
   first_name: string;

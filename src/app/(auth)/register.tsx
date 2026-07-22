@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Switch, View } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { AuthLayout } from '@/components/layouts/auth-layout';
@@ -27,6 +27,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 export default function RegisterScreen() {
   const { mutateAsync: register, isPending } = useRegister();
+  const router = useRouter();
   const theme = useTheme();
   const { message, setError, clearErrors } = useApiError();
 
@@ -179,7 +180,10 @@ export default function RegisterScreen() {
         no_blood_transfusion: noBloodTransfusion,
       };
 
-      await register({ payload: registerPayload, medicalInfo });
+      const result = await register({ payload: registerPayload, medicalInfo });
+      if (result.pending) {
+        router.replace('/registration-pending');
+      }
     } catch (err) {
       console.warn('[register] error:', err);
       setError(err);

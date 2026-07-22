@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { hasCurrentUser, getCurrentUserId } from '@/db/context';
 import { getCachedToken } from '@/auth/token-storage';
-import { NetworkError, UnauthenticatedError, ValidationError } from '@/api/errors';
+import { NetworkError, UnauthenticatedError, ValidationError, getErrorStatus } from '@/api/errors';
 import { backoffDelayMs } from '@/lib/backoff';
 import { queryClient } from '@/lib/query-client';
 import {
@@ -115,11 +115,25 @@ async function pushRecord<TPayload>(
   }
 }
 
-async function pushOne(tag: string, action: () => Promise<void>, localUuid: string): Promise<void> {
+async function pushOne(
+  tag: string,
+  action: () => Promise<void>,
+  localUuid: string,
+  onNotFound: (localUuid: string) => Promise<void>,
+): Promise<void> {
   try {
     await action();
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError) throw err;
+    // The server no longer has this record - most likely its parent medical_information record
+    // was merged/deleted server-side (e.g. a registration-match accept moved it elsewhere, or an
+    // admin deleted it). Retrying forever would just log the same 404 every cycle; drop the local
+    // row instead since there's nothing left to reconcile it against.
+    if (getErrorStatus(err) === 404) {
+      console.warn(TAG, `${tag} no longer exists server-side, dropping local copy`, { localUuid });
+      await onNotFound(localUuid);
+      return;
+    }
     console.warn(TAG, `failed to push ${tag}, will retry next cycle`, { localUuid, error: String(err) });
   }
 }
@@ -134,6 +148,7 @@ async function pushAllergies(): Promise<void> {
           markSyncedCreate: allergiesRepo.markSyncedCreate,
         }),
       row.local_uuid,
+      allergiesRepo.hardDelete,
     );
   }
 }
@@ -148,6 +163,7 @@ async function pushDiagnoses(): Promise<void> {
           markSyncedCreate: diagnosesRepo.markSyncedCreate,
         }),
       row.local_uuid,
+      diagnosesRepo.hardDelete,
     );
   }
 }
@@ -162,6 +178,7 @@ async function pushMedications(): Promise<void> {
           markSyncedCreate: medicationsRepo.markSyncedCreate,
         }),
       row.local_uuid,
+      medicationsRepo.hardDelete,
     );
   }
 }
@@ -178,6 +195,7 @@ async function pushEmergencyContacts(): Promise<void> {
           { hardDelete: emergencyContactsRepo.hardDelete, markSyncedCreate: emergencyContactsRepo.markSyncedCreate },
         ),
       row.local_uuid,
+      emergencyContactsRepo.hardDelete,
     );
   }
 }

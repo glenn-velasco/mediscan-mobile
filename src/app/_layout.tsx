@@ -59,8 +59,9 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     );
   }, []);
 
-  const ready = fontsLoaded && status !== 'idle' && seen !== null && primed !== null && dbReady;
   const authenticated = status === 'authenticated';
+
+  const ready = fontsLoaded && status !== 'idle' && seen !== null && primed !== null && dbReady;
 
   useEffect(() => {
     if (ready) {
@@ -94,10 +95,12 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
         <Stack.Screen name="emergency-contacts" />
         <Stack.Screen name="account" />
         <Stack.Screen name="professional-application" />
+        <Stack.Screen name="registration-match" />
         <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
       </Stack.Protected>
       <Stack.Protected guard={ready && seen === true && !authenticated}>
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="registration-pending" />
       </Stack.Protected>
       <Stack.Protected guard={ready}>
         <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />

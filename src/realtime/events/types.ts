@@ -11,6 +11,8 @@ export type UserChannelEventMap = {
   PendingSyncEnvelopeCreated: { envelope_id: number; envelope_type: string };
   /** Professional application was approved/rejected by admin or background job. */
   ProfessionalApplicationStatusChanged: { application_id: number; status: string };
+  /** A new registration matched this user's own primary-owned medical record and needs their decision. */
+  MedicalInformationRegistrationMatchCreated: { medical_information_registration_match_id: number };
   /**
    * A patient-authored record (allergy/diagnosis/medication/emergency_contact) changed - created,
    * updated, or deleted - on another device or via the web. Independent of PendingSyncEnvelopeCreated
