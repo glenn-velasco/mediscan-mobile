@@ -80,7 +80,14 @@
       "expo-local-authentication",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0d7377"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

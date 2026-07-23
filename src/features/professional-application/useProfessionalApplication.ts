@@ -43,15 +43,14 @@ export function useProfessionalApplicationBroadcastStatus(applicationId: number 
 
 /** Polls (and is invalidated by ProfessionalApplicationStatusChanged, see realtime/events/handlers.ts) an application's review status. */
 export function useProfessionalApplication(applicationId: number | undefined) {
-  const { data: broadcastStatus } = useProfessionalApplicationBroadcastStatus(applicationId);
-
   return useQuery({
     queryKey: [...professionalApplicationQueryKey, applicationId],
     queryFn: () => getProfessionalApplication(applicationId!),
-    // The backend deletes the application record once it's denied, so the GET below is doomed to
-    // 404 forever after that — skip it entirely instead of hitting (and logging) a guaranteed
-    // failure. The status screen falls back to the broadcast status in that case (see [id].tsx).
-    enabled: !!applicationId && broadcastStatus !== 'denied',
+    // A denied application is soft-deleted, not hard-deleted, and GET /professional-applications/{id}
+    // is bound with withTrashed() on the backend specifically so this keeps working (with
+    // rejection_reason intact) until the record is pruned days later — see
+    // routes/api/v1.php and ProfessionalApplicationService::prune() on the backend.
+    enabled: !!applicationId,
     // Backend processing (OCR + liveness + face-match) typically finishes in seconds; poll while
     // it's still in flight so the status screen updates even if the realtime event is missed.
     // Bail out once the query is erroring — react-query keeps the last-successful `data` around on

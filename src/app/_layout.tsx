@@ -7,6 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import { router, Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,6 +31,18 @@ import { ensureDeviceKeyRegistered } from '@/services/device-key.service';
 import { useSyncTriggers } from '@/sync/triggers';
 
 type BootMode = 'pending' | 'lightweight' | 'full';
+
+// Without this, a local notification fired while the app is foregrounded (see
+// showLocalNotification in src/lib/notifications.ts) is silently swallowed on some
+// platforms instead of showing a banner.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 function RootNavigator({ onReady }: { onReady: () => void }) {
   const { status } = useAuth();
@@ -80,6 +93,14 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     return addQuickScanRouteListener((route) => {
       if (route === 'quick-scan') router.replace('/quick-scan');
     });
+  }, []);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const href = response.notification.request.content.data?.href;
+      if (typeof href === 'string') router.push(href as never);
+    });
+    return () => sub.remove();
   }, []);
 
   return (

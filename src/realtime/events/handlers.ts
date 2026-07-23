@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { addNotification } from '@/features/notifications/notifications.store';
+import { showLocalNotification } from '@/lib/notifications';
 import { registrationMatchQueryKey } from '@/features/registration-match/usePendingRegistrationMatch';
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
@@ -69,7 +70,9 @@ export function createUserChannelHandlers(deps: {
       deps.queryClient.setQueryData([...professionalApplicationBroadcastStatusQueryKey, payload.application_id], payload.status);
       const content = APPLICATION_STATUS_NOTIFICATION[payload.status];
       if (content) {
-        void addNotification({ ...content, href: `/professional-application/${payload.application_id}` });
+        const href = `/professional-application/${payload.application_id}`;
+        void addNotification({ ...content, href });
+        void showLocalNotification({ ...content, data: { href } });
       }
       await deps.queryClient.invalidateQueries({ queryKey: [...professionalApplicationQueryKey, payload.application_id] });
       try {

@@ -22,6 +22,10 @@ export default function AccountScreen() {
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
   const { data: myApplication } = useMyProfessionalApplication();
+  // A denied/auto-rejected application is soft-deleted but still returned by the API for a few
+  // days before pruning — the user already learned the outcome via notification, so treat it the
+  // same as having no application at all and let them reapply right away.
+  const isApplicationActive = !!myApplication && myApplication.status !== 'denied' && myApplication.status !== 'auto_rejected';
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
   const ble = useBleAdvertising();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
@@ -80,11 +84,11 @@ export default function AccountScreen() {
       <Card className="mb-4 p-0">
         {!user?.permissions?.includes('verified professional') ? (
           <Link
-            href={myApplication ? `/professional-application/${myApplication.id}` : '/professional-application/create'}
+            href={isApplicationActive ? `/professional-application/${myApplication!.id}` : '/professional-application/create'}
             asChild
           >
             <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <ThemedText>{myApplication ? 'View application status' : 'Get verified as a professional'}</ThemedText>
+              <ThemedText>{isApplicationActive ? 'View application status' : 'Get verified as a professional'}</ThemedText>
               <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
             </Pressable>
           </Link>

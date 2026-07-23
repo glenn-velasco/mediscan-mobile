@@ -6,7 +6,11 @@ import { AppLayout } from '@/components/layouts/app-layout';
 import { Card } from '@/components/card';
 import { PrimaryButton } from '@/components/primary-button';
 import { ThemedText } from '@/components/themed-text';
-import { useProfessionalApplication, useProfessionalApplicationBroadcastStatus } from '@/features/professional-application/useProfessionalApplication';
+import {
+  useMyProfessionalApplication,
+  useProfessionalApplication,
+  useProfessionalApplicationBroadcastStatus,
+} from '@/features/professional-application/useProfessionalApplication';
 import { useTheme } from '@/hooks/use-theme';
 import { getErrorMessage, getErrorStatus } from '@/api/errors';
 import { formatIsoDate } from '@/lib/format-date';
@@ -83,14 +87,25 @@ export default function ProfessionalApplicationStatusScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const applicationId = Number(id);
   const { data: application, isError, error } = useProfessionalApplication(applicationId);
+  const { data: myApplication } = useMyProfessionalApplication();
   const { data: broadcastStatus } = useProfessionalApplicationBroadcastStatus(applicationId);
 
-  // The GET-by-id can be unavailable (404, or skipped entirely once we already know the
-  // application was denied and the backend deleted the record — see useProfessionalApplication.ts)
-  // even though we already know the real status from the realtime broadcast. Prefer that over a
-  // generic "not found"/loading screen whenever there's no fetched data to show, and only fall
-  // back further when we truly have nothing.
+  // The GET-by-id can still fail (network error, or the application was pruned days after
+  // denial — see ProfessionalApplicationService::prune() on the backend) even though we have a
+  // more durable source: the "my latest application" query, which reflects the same record
+  // regardless of whether this device was connected when any realtime event fired. Prefer that,
+  // then fall back further to the realtime broadcast (session-only, may be empty), before giving
+  // up on a generic error/loading screen.
   if (!application) {
+    if (myApplication && myApplication.id === applicationId) {
+      return (
+        <AppLayout>
+          <StatusHero status={myApplication.status} rejectionReason={myApplication.rejection_reason} stale />
+          <PrimaryButton label="Back to account" onPress={() => router.replace('/account')} />
+        </AppLayout>
+      );
+    }
+
     if (broadcastStatus) {
       return (
         <AppLayout>
