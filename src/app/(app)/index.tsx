@@ -24,13 +24,10 @@ import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { VerifiedCountBadge } from '@/components/verified-count-badge';
-import type { Suffix } from '@/constants/suffix';
-import { GenderLabel } from '@/constants/gender';
 import { BloodTypeLabel } from '@/constants/blood-type';
+import { GenderLabel } from '@/constants/gender';
 import { ReligionLabel } from '@/constants/religion';
-import { buildFullName } from '@/lib/build-full-name';
-import { formatAddress } from '@/lib/format-address';
-import { formatIsoDate } from '@/lib/format-date';
+import type { Suffix } from '@/constants/suffix';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useAllergies } from '@/features/allergies/useAllergies';
@@ -41,7 +38,10 @@ import { useMedications } from '@/features/medications/useMedications';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
 import { useTheme } from '@/hooks/use-theme';
+import { buildFullName } from '@/lib/build-full-name';
 import { cn } from '@/lib/cn';
+import { formatAddress } from '@/lib/format-address';
+import { formatIsoDate } from '@/lib/format-date';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
@@ -218,18 +218,20 @@ export default function HomeScreen() {
             />
             <View className="flex-row gap-2">
               <InfoTile
-                icon="hourglass"
-                iconColor={theme.primary}
-                iconBgKey="primary"
-                label="Age"
-                value={age !== null ? `${age} yrs` : '—'}
-              />
-              <InfoTile
                 icon="calendar"
                 iconColor={theme.mutedForeground}
                 iconBgKey="muted"
                 label="Date of birth"
                 value={profile.date_of_birth ? formatIsoDate(profile.date_of_birth) : '—'}
+              />
+            </View>
+            <View className="flex-row gap-2">
+              <InfoTile
+                icon="hourglass"
+                iconColor={theme.primary}
+                iconBgKey="primary"
+                label="Age"
+                value={age !== null ? `${age} yrs` : '—'}
               />
             </View>
             <View className="flex-row gap-2">
