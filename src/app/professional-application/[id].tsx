@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useProfessionalApplication, useProfessionalApplicationBroadcastStatus } from '@/features/professional-application/useProfessionalApplication';
 import { useTheme } from '@/hooks/use-theme';
 import { getErrorMessage, getErrorStatus } from '@/api/errors';
+import { formatIsoDate } from '@/lib/format-date';
 import type { ProfessionalApplicationStatus } from '@/api/types';
 
 const STATUS_LABEL: Record<ProfessionalApplicationStatus, string> = {
@@ -117,30 +118,6 @@ export default function ProfessionalApplicationStatusScreen() {
   return (
     <AppLayout>
       <StatusHero status={application.status} rejectionReason={application.rejection_reason} />
-
-      {(application.profession || application.license_number) && (
-        <Card className="gap-2">
-          <ThemedText type="overline">Extracted from your ID</ThemedText>
-          {application.profession ? (
-            <View className="flex-row justify-between">
-              <ThemedText type="small" color="mutedForeground">Profession</ThemedText>
-              <ThemedText type="small">{application.profession}</ThemedText>
-            </View>
-          ) : null}
-          {application.license_number ? (
-            <View className="flex-row justify-between">
-              <ThemedText type="small" color="mutedForeground">License number</ThemedText>
-              <ThemedText type="small">{application.license_number}</ThemedText>
-            </View>
-          ) : null}
-          {application.license_expiry ? (
-            <View className="flex-row justify-between">
-              <ThemedText type="small" color="mutedForeground">Expiry</ThemedText>
-              <ThemedText type="small">{application.license_expiry}</ThemedText>
-            </View>
-          ) : null}
-        </Card>
-      )}
     </AppLayout>
   );
 }

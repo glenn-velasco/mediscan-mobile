@@ -842,7 +842,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                         <DiagnosisSeverityIcon severity={item.severity} size={36} />
                         <View className="flex-1 shrink">
                           <ThemedText className="font-semibold">{item.condition}</ThemedText>
-                          {item.dateOfDiagnosis ? <ThemedText type="small" color="mutedForeground">Diagnosed {item.dateOfDiagnosis}</ThemedText> : null}
+                          {item.dateOfDiagnosis ? <ThemedText type="small" color="mutedForeground">Diagnosed {formatIsoDate(item.dateOfDiagnosis)}</ThemedText> : null}
                         </View>
                         <DiagnosisSeverityBadge severity={item.severity} />
                         <Pressable onPress={() => handleEdit('diagnosis', item.key)} hitSlop={6} disabled={sending}>

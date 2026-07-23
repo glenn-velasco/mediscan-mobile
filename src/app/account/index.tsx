@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useBleAdvertising } from '@/features/ble-sync/useBleAdvertising';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
+import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
@@ -20,6 +21,7 @@ export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
+  const { data: myApplication } = useMyProfessionalApplication();
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
   const ble = useBleAdvertising();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
@@ -77,9 +79,12 @@ export default function AccountScreen() {
 
       <Card className="mb-4 p-0">
         {!user?.permissions?.includes('verified professional') ? (
-          <Link href="/professional-application/create" asChild>
+          <Link
+            href={myApplication ? `/professional-application/${myApplication.id}` : '/professional-application/create'}
+            asChild
+          >
             <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <ThemedText>Get verified as a professional</ThemedText>
+              <ThemedText>{myApplication ? 'View application status' : 'Get verified as a professional'}</ThemedText>
               <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
             </Pressable>
           </Link>

@@ -1,10 +1,27 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getProfessionalApplication } from '@/api/endpoints/professional-applications';
+import { getMyProfessionalApplication, getProfessionalApplication } from '@/api/endpoints/professional-applications';
 import type { ProfessionalApplicationStatus } from '@/api/types';
-import { professionalApplicationBroadcastStatusQueryKey, professionalApplicationQueryKey } from '@/lib/query-keys';
+import {
+  myProfessionalApplicationQueryKey,
+  professionalApplicationBroadcastStatusQueryKey,
+  professionalApplicationQueryKey,
+} from '@/lib/query-keys';
 
 export { professionalApplicationQueryKey };
+
+/** The current user's latest professional application (any status), or null if they've never applied. */
+export function useMyProfessionalApplication() {
+  return useQuery({
+    queryKey: myProfessionalApplicationQueryKey,
+    queryFn: getMyProfessionalApplication,
+    // The app persists the query cache to AsyncStorage and restores it on cold start, so a
+    // previously-cached `null` (from before the user had applied) would otherwise be served as
+    // "fresh" for the global staleTime window instead of refetching. Always refetch on mount here
+    // so the account screen reflects a newly-created application right away.
+    staleTime: 0,
+  });
+}
 
 /**
  * Reads the last status pushed over the realtime broadcast for this application (see

@@ -10,6 +10,9 @@ export const emergencyContactsQueryKey = ['emergency-contacts'] as const;
 export const medicalInformationQueryKey = ['medical-information'] as const;
 export const attestationsQueryKey = ['professional-attestations'] as const;
 export const professionalApplicationQueryKey = ['professional-application'] as const;
+// The authenticated user's latest application (any status), used to decide whether the account
+// screen should route into "create" or straight to the existing application's status screen.
+export const myProfessionalApplicationQueryKey = ['professional-application', 'mine'] as const;
 // Separate from professionalApplicationQueryKey: holds just the last status seen over the
 // realtime broadcast, so the status screen has something to show even when the GET-by-id 404s
 // (e.g. the backend removes/relocates the record once an application is denied).

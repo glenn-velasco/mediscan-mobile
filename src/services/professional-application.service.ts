@@ -11,7 +11,7 @@ export type ProfessionalApplicationSubmission = {
   selfieFrames: CapturedFile[];
   flashFrames: CapturedFile[];
   flashColors: string[];
-  coe: CapturedFile;
+  dateOfBirth: string;
 };
 
 function appendFile(formData: FormData, field: string, file: CapturedFile) {
@@ -29,7 +29,7 @@ export function submitProfessionalApplication(submission: ProfessionalApplicatio
   submission.selfieFrames.forEach((frame) => appendFile(formData, 'selfie_frames[]', frame));
   submission.flashFrames.forEach((frame) => appendFile(formData, 'flash_frames[]', frame));
   submission.flashColors.forEach((color) => formData.append('flash_colors[]', color));
-  appendFile(formData, 'coe', submission.coe);
+  formData.append('date_of_birth', submission.dateOfBirth);
 
   return submitProfessionalApplicationRequest(formData);
 }

@@ -1,8 +1,8 @@
-/** Formats a `YYYY-MM-DD` date-only string (e.g. `medical_information.date_of_birth`) as e.g. "July 22, 1990". Returns the original value unparsed if it isn't a valid date, rather than crashing on unexpected input. */
+/** Formats a `YYYY-MM-DD` date-only string (e.g. `medical_information.date_of_birth`) as e.g. "July 22, 1990". Also tolerates a full ISO datetime string (e.g. `2026-07-20T00:00:00.000000Z`) by taking its date portion. Returns the original value unparsed if it isn't a valid date, rather than crashing on unexpected input. */
 export function formatIsoDate(value: string | null | undefined): string {
   if (!value) return '';
 
-  const [year, month, day] = value.split('-').map(Number);
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
   const parsed = new Date(year, (month ?? 1) - 1, day ?? 1);
   if (Number.isNaN(parsed.getTime())) return value;
 

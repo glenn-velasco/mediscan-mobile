@@ -8,3 +8,8 @@ export function submitProfessionalApplication(formData: FormData) {
 export function getProfessionalApplication(id: number) {
   return apiClient.get<ProfessionalApplication>(`api/v1/professional-applications/${id}`);
 }
+
+export async function getMyProfessionalApplication() {
+  const applications = await apiClient.get<ProfessionalApplication[]>('api/v1/professional-applications');
+  return applications[0] ?? null;
+}
