@@ -11,6 +11,7 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/card';
+import { InfoRow } from '@/components/info-row';
 import { PrimaryButton } from '@/components/primary-button';
 import { SeverityIcon, SeverityBadge } from '@/components/severity-badge';
 import { DiagnosisSeverityIcon, DiagnosisSeverityBadge } from '@/components/diagnosis-severity-badge';
@@ -42,6 +43,7 @@ import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
 import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
 import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
+import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 import { DIAGNOSIS_SEVERITY_OPTIONS, DiagnosisSeverityLabel } from '@/constants/diagnosis-severity';
 import { ALLERGY_SEVERITY_OPTIONS, AllergySeverityLabel } from '@/constants/allergy-severity';
 
@@ -679,6 +681,38 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
             <ThemedText type="small" color="destructive">{syncError}</ThemedText>
           </Card>
         ) : null}
+
+        {/* Emergency contacts (read-only) */}
+        <View className="mb-6 gap-2">
+          <ThemedText type="overline">Emergency contacts</ThemedText>
+          {info.emergencyContacts.length === 0 ? (
+            <Card>
+              <ThemedText type="label" color="mutedForeground">None recorded.</ThemedText>
+            </Card>
+          ) : (
+            <Card className="p-0">
+              <View className="px-4">
+                {info.emergencyContacts.map((contact, i) => (
+                  <View key={i}>
+                    <InfoRow label="Name" value={contact.name} />
+                    {contact.relationship && (
+                      <InfoRow
+                        label="Relationship"
+                        value={
+                          RELATION_TO_PATIENT_OPTIONS.includes(contact.relationship as RelationToPatient)
+                            ? RelationToPatientLabel[contact.relationship as RelationToPatient]
+                            : contact.relationship
+                        }
+                      />
+                    )}
+                    {contact.phone && <InfoRow label="Phone" value={contact.phone} last={i === info.emergencyContacts.length - 1} />}
+                    {i < info.emergencyContacts.length - 1 && <View className="border-b border-border" />}
+                  </View>
+                ))}
+              </View>
+            </Card>
+          )}
+        </View>
 
         {/* Medical information */}
         <View className="mb-6 gap-1">
