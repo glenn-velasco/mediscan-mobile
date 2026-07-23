@@ -43,7 +43,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Mediscan uses the camera to scan another person's emergency QR code, photograph your ID, and verify your identity."
+          "cameraPermission": "Mediscan uses the camera to scan another person's emergency QR code, photograph your ID, verify your identity, and take your profile photo."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mediscan uses your photo library to let you choose a profile photo."
         }
       ],
       [
