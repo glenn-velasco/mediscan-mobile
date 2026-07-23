@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 import { login as apiLogin, logout as apiLogout, me as apiMe, register as apiRegister } from '@/api/endpoints/auth';
+import { updateMedicalInformation } from '@/api/endpoints/medical-information';
 import { registerUnauthenticatedHandler } from '@/api/client';
 import { getDeviceName } from '@/auth/device-name';
 import { clearToken, loadToken, setToken } from '@/auth/token-storage';
@@ -141,7 +142,21 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     setCurrentUserId(registeredUser.id);
 
     if (medicalInfo) {
-      await medicalInformationRepo.saveLocalEdit(medicalInfo, 'synced', registeredUser.id);
+      const interimId = registeredUser.medical_information?.id;
+      try {
+        if (interimId == null) {
+          throw new Error('Registration response is missing the interim medical_information id');
+        }
+        // Registration only creates a bare-bones "interim" medical_information record
+        // server-side (name/dob/gender). Fill in the rest (address, religion, etc.) via
+        // update so it isn't wiped out by the next sync pull before it's ever uploaded.
+        const record = await updateMedicalInformation(interimId, medicalInfo);
+        await medicalInformationRepo.saveFromServer(record);
+      } catch {
+        // Offline or request failure: keep the data locally as pending so the normal
+        // sync push flow uploads it later, instead of silently marking it synced.
+        await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
+      }
       queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
     }
 
