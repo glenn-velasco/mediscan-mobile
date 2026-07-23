@@ -1,4 +1,4 @@
-import { registrationMedicalInfoSchema } from '@/lib/validation/registration-medical-info-schema';
+import { registrationMedicalInfoSchema, registrationAddressSchema } from '@/lib/validation/registration-medical-info-schema';
 
 describe('registrationMedicalInfoSchema', () => {
   const today = new Date();
@@ -11,7 +11,6 @@ describe('registrationMedicalInfoSchema', () => {
     gender: 'Male',
     phone_country_code: 'PH',
     phone: '9171234567',
-    address: '123 Main Street, Manila',
     blood_type: 'O+',
     religion: 'Catholic',
     no_blood_transfusion: false,
@@ -81,18 +80,12 @@ describe('registrationMedicalInfoSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects empty address', () => {
-    const result = registrationMedicalInfoSchema.safeParse({ ...validData, address: '' });
-    expect(result.success).toBe(false);
-  });
-
   it('accepts optional fields omitted (blood_type, religion, no_blood_transfusion)', () => {
     const result = registrationMedicalInfoSchema.safeParse({
       date_of_birth: yesterdayStr,
       gender: 'Female',
       phone_country_code: 'US',
       phone: '5551234567',
-      address: '456 Oak Ave',
     });
     expect(result.success).toBe(true);
   });
@@ -108,5 +101,41 @@ describe('registrationMedicalInfoSchema', () => {
       const result = registrationMedicalInfoSchema.safeParse({ ...validData, blood_type: bt });
       expect(result.success).toBe(true);
     }
+  });
+});
+
+describe('registrationAddressSchema', () => {
+  const validAddress = {
+    street: '123 Main Street',
+    city: 'Manila',
+    unit: null,
+    province: 'Metro Manila',
+    postal_code: '1000',
+    country: 'Philippines',
+  };
+
+  it('accepts a fully filled address', () => {
+    const result = registrationAddressSchema.safeParse(validAddress);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts optional fields omitted or null', () => {
+    const result = registrationAddressSchema.safeParse({ street: '123 Main Street', city: 'Manila' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects empty street', () => {
+    const result = registrationAddressSchema.safeParse({ ...validAddress, street: '' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty city', () => {
+    const result = registrationAddressSchema.safeParse({ ...validAddress, city: '' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing street and city', () => {
+    const result = registrationAddressSchema.safeParse({});
+    expect(result.success).toBe(false);
   });
 });

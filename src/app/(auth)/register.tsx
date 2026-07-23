@@ -21,8 +21,9 @@ import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/
 import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import type { MedicalInformationAddress } from '@/api/types';
+import { formatAddress } from '@/lib/format-address';
 import { registerSchema } from '@/lib/validation/register-schema';
-import { registrationMedicalInfoSchema } from '@/lib/validation/registration-medical-info-schema';
+import { registrationMedicalInfoSchema, registrationAddressSchema } from '@/lib/validation/registration-medical-info-schema';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function RegisterScreen() {
@@ -45,7 +46,6 @@ export default function RegisterScreen() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState<Gender | undefined>(undefined);
   const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({ countryCode: 'PH', phone: '' });
-  const [address, setAddress] = useState('');
 
   const [bloodType, setBloodType] = useState<BloodType | undefined>(undefined);
   const [religion, setReligion] = useState<Religion | undefined>(undefined);
@@ -87,7 +87,6 @@ export default function RegisterScreen() {
         gender,
         phone_country_code: phoneValue.countryCode,
         phone: phoneValue.phone,
-        address,
         blood_type: bloodType,
         religion,
         no_blood_transfusion: noBloodTransfusion,
@@ -129,7 +128,6 @@ export default function RegisterScreen() {
       gender,
       phone_country_code: phoneValue.countryCode,
       phone: phoneValue.phone,
-      address,
       blood_type: bloodType,
       religion,
       no_blood_transfusion: noBloodTransfusion,
@@ -137,6 +135,13 @@ export default function RegisterScreen() {
     if (!medicalResult.success) {
       setFieldErrors(parseFieldErrors(medicalResult.error.issues));
       setStep(1);
+      return;
+    }
+
+    const addressResult = registrationAddressSchema.safeParse(medicalAddress);
+    if (!addressResult.success) {
+      setFieldErrors(parseFieldErrors(addressResult.error.issues));
+      setStep(2);
       return;
     }
 
@@ -158,7 +163,7 @@ export default function RegisterScreen() {
         suffix: step0Result.data.suffix,
         dob: dateOfBirth,
         gender: medicalResult.data.gender,
-        address,
+        address: formatAddress(medicalAddress),
         phone_number: phoneNumber,
         phone_country_code: phoneValue.countryCode,
       };
@@ -190,9 +195,11 @@ export default function RegisterScreen() {
       const apiErrors = getFieldErrors(err, { dob: 'date_of_birth', phone_number: 'phone' });
       if (Object.keys(apiErrors).length > 0) {
         setFieldErrors((prev) => ({ ...prev, ...apiErrors }));
-        const step1Keys = ['date_of_birth', 'gender', 'address', 'phone', 'phone_country_code'];
+        const step2Keys = ['address'];
+        const step1Keys = ['date_of_birth', 'gender', 'phone', 'phone_country_code'];
         const step0Keys = ['firstName', 'lastName', 'email', 'password', 'passwordConfirmation'];
-        if (step1Keys.some((k) => k in apiErrors)) setStep(1);
+        if (step2Keys.some((k) => k in apiErrors)) setStep(2);
+        else if (step1Keys.some((k) => k in apiErrors)) setStep(1);
         else if (step0Keys.some((k) => k in apiErrors)) setStep(0);
       }
     }
@@ -277,7 +284,6 @@ export default function RegisterScreen() {
             getLabel={(v) => GenderLabel[v]}
           />
           <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
-          <TextField label="Address" value={address} onChangeText={setAddress} multiline error={fieldErrors.address} />
 
           <FormError message={message} />
           <PrimaryButton label="Next" onPress={onNext} />
@@ -290,7 +296,11 @@ export default function RegisterScreen() {
           <ThemedText type="overline" className="mb-3">
             Medical details
           </ThemedText>
-          <AddressFields value={medicalAddress} onChange={setMedicalAddress} />
+          <AddressFields
+            value={medicalAddress}
+            onChange={setMedicalAddress}
+            errors={{ street: fieldErrors.street || fieldErrors.address, city: fieldErrors.city }}
+          />
           <SelectField
             placeholder="Blood type"
             options={BLOOD_TYPE_OPTIONS}

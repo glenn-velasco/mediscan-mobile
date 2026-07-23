@@ -1,8 +1,15 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
+import { formatAddress } from '@/lib/format-address';
+import type { MedicalInformationAddress } from '@/api/types';
+
 /**
  * Builds the API register payload and medical info payload from form state.
  * Extracted from register.tsx onSubmit for testability.
+ *
+ * There is a single structured `address` collected once (medical details step); the flat
+ * `users.address` string sent in registerPayload is derived from it via `formatAddress`,
+ * rather than being a second, separately-typed address field (see register.tsx).
  */
 function buildRegisterPayloads(
   formData: {
@@ -17,7 +24,7 @@ function buildRegisterPayloads(
     gender: string;
     phoneCountryCode: string;
     phone: string;
-    address: string;
+    address: MedicalInformationAddress;
     bloodType?: string;
     religion?: string;
     noBloodTransfusion: boolean;
@@ -39,7 +46,7 @@ function buildRegisterPayloads(
     suffix: formData.suffix,
     dob: formData.dateOfBirth,
     gender: formData.gender.toLowerCase(),
-    address: formData.address,
+    address: formatAddress(formData.address),
     phone_number: phoneNumber,
     phone_country_code: formData.phoneCountryCode,
   };
@@ -54,7 +61,7 @@ function buildRegisterPayloads(
     gender: formData.gender || undefined,
     phone_country_code: formData.phoneCountryCode || undefined,
     phone: formData.phone || undefined,
-    address: formData.address || undefined,
+    address: formData.address,
     blood_type: formData.bloodType || undefined,
     religion: formData.religion || undefined,
     no_blood_transfusion: formData.noBloodTransfusion,
@@ -76,7 +83,14 @@ describe('register payload construction', () => {
     gender: 'Male',
     phoneCountryCode: 'PH',
     phone: '9171234567',
-    address: '123 Main Street, Manila',
+    address: {
+      street: '123 Main Street',
+      unit: null,
+      city: 'Manila',
+      province: 'Metro Manila',
+      postal_code: '1000',
+      country: 'Philippines',
+    } as MedicalInformationAddress,
     bloodType: 'O+',
     religion: 'Catholic',
     noBloodTransfusion: false,
@@ -117,7 +131,7 @@ describe('register payload construction', () => {
     expect(medicalInfo.gender).toBe('Male');
     expect(medicalInfo.phone_country_code).toBe('PH');
     expect(medicalInfo.phone).toBe('9171234567');
-    expect(medicalInfo.address).toBe('123 Main Street, Manila');
+    expect(medicalInfo.address).toEqual(fullFormData.address);
     expect(medicalInfo.blood_type).toBe('O+');
     expect(medicalInfo.religion).toBe('Catholic');
     expect(medicalInfo.no_blood_transfusion).toBe(false);

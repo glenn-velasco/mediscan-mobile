@@ -17,8 +17,16 @@ export const registrationMedicalInfoSchema = z.object({
   phone: z.string().trim().min(1, 'Phone number is required'),
   blood_type: z.enum(BLOOD_TYPE_OPTIONS).optional(),
   religion: z.enum(RELIGION_OPTIONS).optional(),
-  address: z.string().trim().min(1, 'Address is required'),
   no_blood_transfusion: z.boolean().optional(),
+});
+
+export const registrationAddressSchema = z.object({
+  street: z.string().trim().min(1, 'Street is required'),
+  city: z.string().trim().min(1, 'City is required'),
+  unit: z.string().nullable().optional(),
+  province: z.string().nullable().optional(),
+  postal_code: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
 });
 
 export type RegistrationMedicalInfoFormValues = z.infer<typeof registrationMedicalInfoSchema>;
