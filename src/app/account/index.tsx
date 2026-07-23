@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useBleAdvertising } from '@/features/ble-sync/useBleAdvertising';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
+import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
@@ -21,6 +22,7 @@ export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
+  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const { data: myApplication } = useMyProfessionalApplication();
   // A denied/auto-rejected application is soft-deleted but still returned by the API for a few
   // days before pruning — the user already learned the outcome via notification, so treat it the
@@ -65,6 +67,7 @@ export default function AccountScreen() {
               ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined })
               : '?'
           }
+          imageUrl={medicalInformationAvatar?.avatar}
           size={72}
         />
         <ThemedText color="mutedForeground">{user?.email}</ThemedText>

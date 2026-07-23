@@ -1,6 +1,11 @@
-import { apiClient } from '@/api/client';
+import { apiClient, postMultipart } from '@/api/client';
 import type { MedicalInformationPayload } from '@/api/types';
 import type { MedicalInformationSyncRecord } from '@/api/endpoints/sync';
+
+// Only the fields this app actually reads off MedicalInformationResource — its full shape (fullname,
+// linked_user_count, contacts, transfusion_consents, created_at) differs from the /sync endpoint's
+// MedicalInformationSyncRecord, so this is deliberately its own narrower type, not an extension of it.
+export type MedicalInformationApiRecord = { id: number; avatar: string | null };
 
 /** Bridges the one remaining shape mismatch between the mobile payload and the server's request body: `date_of_birth` (mobile) <-> `dob` (server). `address` is already structured on both sides. */
 function toServerPayload(payload: MedicalInformationPayload) {
@@ -24,4 +29,13 @@ export function createMedicalInformation(payload: MedicalInformationPayload) {
 
 export function updateMedicalInformation(id: number, payload: MedicalInformationPayload) {
   return apiClient.put<MedicalInformationSyncRecord>(`api/v1/medical-information/${id}`, toServerPayload(payload));
+}
+
+/** The authenticated user's own linked medical information record, including its `avatar` URL. */
+export function getMedicalInformation() {
+  return apiClient.get<MedicalInformationApiRecord>('api/v1/medical-information');
+}
+
+export function uploadMedicalInformationAvatar(id: number, formData: FormData) {
+  return postMultipart<MedicalInformationApiRecord>(`api/v1/medical-information/${id}/avatar`, formData);
 }

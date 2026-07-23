@@ -34,6 +34,7 @@ import { useAllergies } from '@/features/allergies/useAllergies';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
+import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useMedications } from '@/features/medications/useMedications';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
@@ -50,6 +51,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
@@ -186,7 +188,13 @@ export default function HomeScreen() {
         <GradientHeader edgeToEdge topInset={insets.top}>
           <View className="flex-row items-center gap-4">
             <Pressable onPress={() => avatarSheetRef.current?.present()} hitSlop={8} accessibilityLabel="View profile picture">
-              <Avatar name={profile.full_name || 'Unnamed'} size={48} className="bg-white/20" textColor="primaryForeground" />
+              <Avatar
+                name={profile.full_name || 'Unnamed'}
+                imageUrl={medicalInformationAvatar?.avatar}
+                size={48}
+                className="bg-white/20"
+                textColor="primaryForeground"
+              />
             </Pressable>
             <View className="flex-1 gap-1">
               <ThemedText className="text-xl font-semibold" style={{ color: theme.primaryForeground }}>
@@ -552,7 +560,7 @@ export default function HomeScreen() {
           />
         )}
       </View>
-      <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} />
+      <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />

@@ -8,6 +8,7 @@ export default function ProfileStackLayout() {
   return (
     <Stack screenOptions={screenOptions}>
       <Stack.Screen name="edit" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="avatar" options={{ title: 'Update photo' }} />
     </Stack>
   );
 }

@@ -4,6 +4,7 @@ import { Link, useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
+import { Avatar } from '@/components/avatar';
 import { TextField } from '@/components/form/text-field';
 import { DateField } from '@/components/form/date-field';
 import { SelectField } from '@/components/form/select-field';
@@ -13,6 +14,7 @@ import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useUpdateMedicalInformation } from '@/features/medical-information/useUpdateMedicalInformation';
+import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useAuth } from '@/auth/useAuth';
 import { useApiError } from '@/api/use-api-error';
 import { getFieldErrors } from '@/api/errors';
@@ -41,6 +43,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { data: existing } = useMedicalInformation();
+  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const { mutateAsync: save, isPending } = useUpdateMedicalInformation();
   const { message, setError, clearErrors } = useApiError();
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -106,6 +109,13 @@ export default function EditProfileScreen() {
 
   return (
     <AppLayout>
+      <View className="mb-6 items-center gap-2">
+        <Avatar name={existing?.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} size={80} />
+        <Link href="/profile/avatar">
+          <ThemedText type="linkPrimary">Change photo</ThemedText>
+        </Link>
+      </View>
+
       <ThemedText type="overline" className="mb-2">
         Identity
       </ThemedText>

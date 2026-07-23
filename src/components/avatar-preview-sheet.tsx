@@ -12,7 +12,10 @@ function renderBackdrop(props: BottomSheetBackdropProps) {
 }
 
 /** Tapping the header avatar shows this instead of navigating anywhere — just a bigger look at the same avatar, no settings link. */
-export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: string }>(function AvatarPreviewSheet({ name }, ref) {
+export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: string; imageUrl?: string | null }>(function AvatarPreviewSheet(
+  { name, imageUrl },
+  ref,
+) {
   const sheetRef = useRef<BottomSheetModal>(null);
   const theme = useTheme();
 
@@ -30,7 +33,7 @@ export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: s
       backdropComponent={renderBackdrop}
     >
       <BottomSheetView className="items-center gap-4 px-6 pb-10 pt-4">
-        <Avatar name={name} size={128} />
+        <Avatar name={name} imageUrl={imageUrl} size={128} />
         <ThemedText className="text-lg font-semibold">{name}</ThemedText>
       </BottomSheetView>
     </BottomSheetModal>
