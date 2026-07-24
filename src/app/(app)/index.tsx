@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
 import { AllergiesBottomSheet, type AllergiesBottomSheetHandle } from '@/components/allergies-bottom-sheet';
+import { ConditionsBottomSheet, type ConditionsBottomSheetHandle } from '@/components/conditions-bottom-sheet';
 import { Avatar } from '@/components/avatar';
 import { AvatarPreviewSheet, type AvatarPreviewSheetHandle } from '@/components/avatar-preview-sheet';
 import { Card } from '@/components/card';
@@ -19,6 +20,8 @@ import { InfoTile } from '@/components/info-tile';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { MedicationsBottomSheet, type MedicationsBottomSheetHandle } from '@/components/medications-bottom-sheet';
 import { NotificationBellButton } from '@/components/notification-bell-button';
+import { OnboardingChecklistCard } from '@/components/onboarding-checklist-card';
+import { OnboardingChecklistSheet, type OnboardingChecklistSheetHandle } from '@/components/onboarding-checklist-sheet';
 import { QrIconButton } from '@/components/qr-icon-button';
 import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -31,11 +34,14 @@ import type { Suffix } from '@/constants/suffix';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useAllergies } from '@/features/allergies/useAllergies';
+import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
+import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useMedications } from '@/features/medications/useMedications';
+import { addNotification } from '@/features/notifications/notifications.store';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
 import { useTheme } from '@/hooks/use-theme';
@@ -44,6 +50,8 @@ import { cn } from '@/lib/cn';
 import { formatAddress } from '@/lib/format-address';
 import { formatIsoDate } from '@/lib/format-date';
 import { useGuardedPress } from '@/lib/use-guarded-press';
+import { showLocalNotification } from '@/lib/notifications';
+import { useOnboardingChecklist, type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 export default function HomeScreen() {
@@ -55,17 +63,90 @@ export default function HomeScreen() {
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
+  const conditionsSheetRef = useRef<ConditionsBottomSheetHandle>(null);
   const diagnosesSheetRef = useRef<DiagnosesBottomSheetHandle>(null);
   const medicationsSheetRef = useRef<MedicationsBottomSheetHandle>(null);
+  const onboardingChecklistSheetRef = useRef<OnboardingChecklistSheetHandle>(null);
   const { user, refreshUser, logout } = useAuth();
+  const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { data: medicalInformation, isLoading } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
+  const { data: conditions = [] } = useConditions();
   const { data: diagnoses = [] } = useDiagnoses();
   const { data: medications = [] } = useMedications();
   const { data: attestations = [] } = useAttestations();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
+  const { mutateAsync: sendEmailVerification } = useSendEmailVerification();
   useQrWidget(user?.id ?? 0);
   const guardedPush = useGuardedPress((href: Parameters<typeof router.push>[0]) => router.push(href));
+
+  const checklist = useOnboardingChecklist({
+    userId: user?.id,
+    emailVerified: !!user?.email_verified_at,
+    hasEmergencyContacts: emergencyContacts.length > 0,
+    hasAllergies: allergies.length > 0,
+    hasConditions: conditions.length > 0,
+    hasMedications: medications.length > 0,
+  });
+
+  const handleSelectOnboardingTask = useCallback((id: OnboardingTaskId) => {
+    switch (id) {
+      case 'email_verified':
+        void sendEmailVerification();
+        void addNotification({ title: 'Verification email sent', body: 'Check your inbox to confirm your email address.' });
+        onboardingChecklistSheetRef.current?.dismiss();
+        break;
+      case 'emergency_contacts':
+        onboardingChecklistSheetRef.current?.dismiss();
+        emergencyContactsSheetRef.current?.presentAdd();
+        break;
+      case 'allergies':
+        onboardingChecklistSheetRef.current?.dismiss();
+        allergiesSheetRef.current?.presentAdd();
+        break;
+      case 'conditions':
+        onboardingChecklistSheetRef.current?.dismiss();
+        conditionsSheetRef.current?.presentAdd();
+        break;
+      case 'medications':
+        onboardingChecklistSheetRef.current?.dismiss();
+        medicationsSheetRef.current?.presentAdd();
+        break;
+    }
+  }, [sendEmailVerification]);
+
+  useEffect(() => {
+    if (!checklist.visible) return;
+    checklist.markNotified().then((shouldNotify) => {
+      if (!shouldNotify) return;
+      void addNotification({ title: 'Finish setting up your profile', body: `${checklist.doneCount} of ${checklist.total} steps done — a few optional details left.` });
+      void showLocalNotification({ title: 'Finish setting up your profile', body: 'A few optional details are still missing from your medical profile.' });
+    });
+  }, [checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
+
+  useEffect(() => {
+    if (!checklist.loaded || checklist.complete) return;
+    checklist.markPrompted().then((shouldPrompt) => {
+      if (shouldPrompt) router.push('/onboarding-tasks');
+    });
+  }, [checklist.loaded, checklist.complete, checklist.markPrompted, router]);
+
+  const prevTaskDoneRef = useRef<Map<OnboardingTaskId, boolean> | null>(null);
+  useEffect(() => {
+    if (!checklist.loaded) return;
+    const prev = prevTaskDoneRef.current;
+    if (prev) {
+      const justCompleted = checklist.tasks.find((task) => task.done && prev.get(task.id) === false);
+      if (justCompleted) {
+        const doneCount = checklist.tasks.filter((t) => t.done).length;
+        const body = doneCount === checklist.total
+          ? 'Nice work — your profile is fully set up!'
+          : `${doneCount} of ${checklist.total} steps done — keep going.`;
+        void addNotification({ title: `${justCompleted.title} — done!`, body });
+      }
+    }
+    prevTaskDoneRef.current = new Map(checklist.tasks.map((task) => [task.id, task.done]));
+  }, [checklist.loaded, checklist.tasks, checklist.total]);
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
   const age = profile ? user?.age : null;
@@ -77,7 +158,7 @@ export default function HomeScreen() {
    * (matched uuid, professional) pair is that professional's latest action; a `note: '__unverify__'`
    * sentinel there means they've since turned their "Mark as verified" toggle off, so they're excluded.
    */
-  const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
+  const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_condition_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
     const seen = new Set<string>();
     const map = new Map<string, Set<number>>();
     for (const a of attestations) {
@@ -108,6 +189,11 @@ export default function HomeScreen() {
 
   const allergyVerifiedCount = useMemo(
     () => countVerifiedByLatestAction('allergy_verification', 'matched_allergy_local_uuid'),
+    [countVerifiedByLatestAction],
+  );
+
+  const conditionVerifiedCount = useMemo(
+    () => countVerifiedByLatestAction('condition_verification', 'matched_condition_local_uuid'),
     [countVerifiedByLatestAction],
   );
 
@@ -184,7 +270,7 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1">
-        <AppLayout onRefresh={handleRefresh} maxContentWidth={640} contentContainerStyle={{ paddingBottom: 110 + insets.bottom }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
         <GradientHeader edgeToEdge topInset={insets.top}>
           <View className="flex-row items-center gap-4">
             <Pressable onPress={() => avatarSheetRef.current?.present()} hitSlop={8} accessibilityLabel="View profile picture">
@@ -207,7 +293,17 @@ export default function HomeScreen() {
             <NotificationBellButton onPress={() => guardedPush('/notifications')} />
           </View>
         </GradientHeader>
-        <View className="mb-6 mt-5 gap-2">
+      </View>
+      <AppLayout onRefresh={handleRefresh} maxContentWidth={640} contentContainerStyle={{ paddingTop: 4, paddingBottom: 110 + insets.bottom }}>
+        {checklist.visible ? (
+          <OnboardingChecklistCard
+            doneCount={checklist.doneCount}
+            total={checklist.total}
+            onPress={() => onboardingChecklistSheetRef.current?.present()}
+            onDismiss={() => void checklist.dismiss()}
+          />
+        ) : null}
+        <View className="mb-6 gap-2">
           <View className="mb-1 flex-row items-center justify-between">
             <ThemedText type="overline">Personal information</ThemedText>
             <Link href="/profile/edit">
@@ -417,6 +513,54 @@ export default function HomeScreen() {
 
         <View className="mb-6 gap-2">
           <View className="mb-1 flex-row items-center justify-between">
+            <ThemedText type="overline">Conditions</ThemedText>
+            <View className="flex-row items-center gap-4">
+              <Pressable onPress={() => conditionsSheetRef.current?.present()} hitSlop={8}>
+                <ThemedText type="small" color="primary" className="font-semibold">
+                  View all
+                </ThemedText>
+              </Pressable>
+              <Pressable onPress={() => conditionsSheetRef.current?.presentAdd()} hitSlop={12}>
+                <Ionicons name="add" size={20} color={theme.primary} />
+              </Pressable>
+            </View>
+          </View>
+
+          {conditions.length === 0 ? (
+            <Pressable onPress={() => conditionsSheetRef.current?.presentAdd()}>
+              <Card>
+                <View className="flex-row items-center gap-3">
+                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                    <Ionicons name="fitness" size={18} color={theme.mutedForeground} />
+                  </View>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first condition — it takes 10 seconds.</ThemedText>
+                </View>
+              </Card>
+            </Pressable>
+          ) : (
+            <Card className="p-0">
+              {conditions.map((condition, i) => (
+                <Pressable
+                  key={condition.local_uuid}
+                  onPress={() => conditionsSheetRef.current?.presentView(condition.local_uuid)}
+                >
+                  <View
+                    className={cn(
+                      'flex-row items-center gap-3 px-4 py-3.5',
+                      i < conditions.length - 1 && 'border-b border-border',
+                    )}
+                  >
+                    <ThemedText className="flex-1 shrink font-semibold">{condition.description}</ThemedText>
+                    <VerifiedCountBadge count={conditionVerifiedCount.get(condition.local_uuid) ?? 0} />
+                  </View>
+                </Pressable>
+              ))}
+            </Card>
+          )}
+        </View>
+
+        <View className="mb-6 gap-2">
+          <View className="mb-1 flex-row items-center justify-between">
             <ThemedText type="overline">Diagnoses</ThemedText>
             <View className="flex-row items-center gap-4">
               <Pressable onPress={() => diagnosesSheetRef.current?.present()} hitSlop={8}>
@@ -424,23 +568,36 @@ export default function HomeScreen() {
                   View all
                 </ThemedText>
               </Pressable>
-              <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()} hitSlop={12}>
-                <Ionicons name="add" size={20} color={theme.primary} />
-              </Pressable>
+              {isVerifiedProfessional ? (
+                <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()} hitSlop={12}>
+                  <Ionicons name="add" size={20} color={theme.primary} />
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
           {diagnoses.length === 0 ? (
-            <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()}>
+            isVerifiedProfessional ? (
+              <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()}>
+                <Card>
+                  <View className="flex-row items-center gap-3">
+                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                      <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
+                    </View>
+                    <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first diagnosis — it takes 10 seconds.</ThemedText>
+                  </View>
+                </Card>
+              </Pressable>
+            ) : (
               <Card>
                 <View className="flex-row items-center gap-3">
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                     <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
                   </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first diagnosis — it takes 10 seconds.</ThemedText>
+                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">No diagnoses on file yet. A verified professional can add one.</ThemedText>
                 </View>
               </Card>
-            </Pressable>
+            )
           ) : (
             <Card className="p-0">
               {diagnoses.map((diagnosis, i) => (
@@ -460,6 +617,11 @@ export default function HomeScreen() {
                       {diagnosis.date_of_diagnosis ? (
                         <ThemedText type="small" color="mutedForeground">
                           Diagnosed {formatIsoDate(diagnosis.date_of_diagnosis)}
+                        </ThemedText>
+                      ) : null}
+                      {diagnosis.diagnosed_by_name ? (
+                        <ThemedText type="small" color="mutedForeground">
+                          Diagnosed by {diagnosis.diagnosed_by_name}
                         </ThemedText>
                       ) : null}
                     </View>
@@ -563,8 +725,10 @@ export default function HomeScreen() {
       <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
+      <ConditionsBottomSheet ref={conditionsSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />
       <MedicationsBottomSheet ref={medicationsSheetRef} />
+      <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} />
     </View>
   );
 }
