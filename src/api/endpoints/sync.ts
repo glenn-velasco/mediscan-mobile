@@ -17,6 +17,8 @@ export type MedicalInformationSyncRecord = {
   blood_type: string | null;
   religion: string | null;
   national_id: string | null;
+  phone_country_code: string | null;
+  phone: string | null;
   address: MedicalInformationAddress | null;
   no_blood_transfusion: boolean;
   updated_at: string;

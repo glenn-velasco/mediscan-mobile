@@ -272,6 +272,8 @@ export async function saveFromServer(record: {
   gender: string;
   blood_type: string | null;
   religion: string | null;
+  phone_country_code?: string | null;
+  phone?: string | null;
   address: MedicalInformationAddress | null;
   no_blood_transfusion: boolean;
   updated_at: string;
@@ -293,8 +295,8 @@ export async function saveFromServer(record: {
     suffix: record.suffix as Suffix | null,
     date_of_birth: record.dob,
     gender: record.gender as Gender,
-    phone_country_code: existing?.phone_country_code ?? null,
-    phone: existing?.phone ?? null,
+    phone_country_code: record.phone_country_code ?? existing?.phone_country_code ?? null,
+    phone: record.phone ?? existing?.phone ?? null,
     blood_type: record.blood_type as BloodType | null,
     religion: record.religion as Religion | null,
     address: record.address ? JSON.stringify(record.address) : null,
