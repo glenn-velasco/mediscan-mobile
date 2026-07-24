@@ -16,18 +16,24 @@ let subscriptions: { remove(): void }[] = [];
 let advertising = false;
 
 function isEnvelopeType(value: string): value is EnvelopeType {
-  return value === 'allergy_verification' || value === 'diagnosis_verification' || value === 'transfusion_witness' || value === 'general_note' || value === 'medical_information_update';
+  return value === 'allergy_verification' || 
+         value === 'condition_verification' || 
+         value === 'diagnosis_verification' || 
+         value === 'medication_verification' || 
+         value === 'transfusion_witness' || 
+         value === 'general_note' || 
+         value === 'medical_information_update';
 }
 
 async function handleCompleteEnvelope(wirePayload: string): Promise<void> {
-  console.log(TAG, 'envelope reassembly complete, processing');
+  console.debug(TAG, 'Envelope reassembly complete, processing');
   const decoded = decodeBleEnvelopePayload(wirePayload);
   if (!decoded || !isEnvelopeType(decoded.envelopeType)) {
-    console.warn(TAG, 'received malformed BLE envelope, discarding');
+    console.warn(TAG, 'Received malformed BLE envelope, discarding');
     await BlePeripheralNative.sendAck('failed:malformed_payload').catch(() => {});
     return;
   }
-  console.log(TAG, 'envelope decoded', { envelopeType: decoded.envelopeType });
+  console.debug(TAG, 'Envelope decoded', { envelopeType: decoded.envelopeType });
 
   const localId = Crypto.randomUUID();
   await pendingSyncEnvelopeRepo.insertReceived({
@@ -39,20 +45,22 @@ async function handleCompleteEnvelope(wirePayload: string): Promise<void> {
     ciphertext: decoded.ciphertextB64,
     expiresAt: null,
   });
+  console.debug(TAG, 'Envelope stored locally', { localId, envelopeType: decoded.envelopeType });
 
   const row = await pendingSyncEnvelopeRepo.getByLocalId(localId);
   if (!row) {
-    console.warn(TAG, 'row not found after insert, sending ack failed:internal_error');
+    console.warn(TAG, 'Row not found after insert, sending ack failed:internal_error');
     await BlePeripheralNative.sendAck('failed:internal_error').catch(() => {});
     return;
   }
 
+  console.debug(TAG, 'Processing envelope via merge service', { localId, envelopeType: decoded.envelopeType });
   const result = await processEnvelope(row);
-  console.log(TAG, 'envelope processed', { result });
+  console.debug(TAG, 'Envelope processed', { localId, result });
   const ackValue = result === 'merged' ? 'merged' : `failed:${result}`;
-  console.log(TAG, 'sending ack', { ackValue });
+  console.debug(TAG, 'Sending ack', { ackValue });
   await BlePeripheralNative.sendAck(ackValue).catch((err) => {
-    console.warn(TAG, 'failed to notify envelope_ack characteristic', { error: String(err) });
+    console.warn(TAG, 'Failed to notify envelope_ack characteristic', { error: String(err) });
   });
 }
 

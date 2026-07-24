@@ -15,7 +15,12 @@ export class PatientKeyNotFoundError extends Error {
  * present) — Scenario 1 (both devices present, over BLE) is handled separately by ble-central.service.ts,
  * which performs its own seal step using the public key read directly off the patient's peripheral.
  */
-export async function submitToPatient(patientId: number, envelopeType: EnvelopeType, payload: unknown): Promise<void> {
+export async function submitToPatient(
+  patientId: number,
+  envelopeType: EnvelopeType,
+  payload: unknown,
+  itemIdentifier?: string,
+): Promise<void> {
   let publicKey: string;
   try {
     const result = await getPatientPublicKey(patientId);
@@ -26,5 +31,9 @@ export async function submitToPatient(patientId: number, envelopeType: EnvelopeT
   }
 
   const ciphertext = await seal(payload, publicKey);
-  await submitEnvelope(patientId, { ciphertext, envelope_type: envelopeType });
+  await submitEnvelope(patientId, {
+    ciphertext,
+    envelope_type: envelopeType,
+    ...(itemIdentifier ? { item_identifier: itemIdentifier } : {}),
+  });
 }

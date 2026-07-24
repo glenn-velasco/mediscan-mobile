@@ -3,11 +3,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/useAuth';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import { attestationsQueryKey } from '@/lib/query-keys';
-import type { AllergyVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, GeneralNoteEnvelope, TransfusionWitnessEnvelope } from '@/lib/envelope-schema';
+import type { AllergyVerificationEnvelope, ConditionVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, GeneralNoteEnvelope, TransfusionWitnessEnvelope } from '@/lib/envelope-schema';
 
 export { attestationsQueryKey };
 
-type AttestationPayload = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope;
+type AttestationPayload = AllergyVerificationEnvelope | ConditionVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope;
 
 export function useAttestations() {
   const { user } = useAuth();
@@ -45,6 +45,16 @@ export function useAttestationsForMedication(medicationLocalUuid: string | undef
     queryKey: [...attestationsQueryKey, user?.id, 'for-medication', medicationLocalUuid],
     queryFn: () => professionalAttestationRepo.getForMedication<AttestationPayload>(medicationLocalUuid!),
     enabled: !!medicationLocalUuid && !!user,
+  });
+}
+
+/** Confirmed attestations for one condition — annotations, never overwrites patient-authored fields. */
+export function useAttestationsForCondition(conditionLocalUuid: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [...attestationsQueryKey, user?.id, 'for-condition', conditionLocalUuid],
+    queryFn: () => professionalAttestationRepo.getForCondition<AttestationPayload>(conditionLocalUuid!),
+    enabled: !!conditionLocalUuid && !!user,
   });
 }
 

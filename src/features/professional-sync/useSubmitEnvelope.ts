@@ -7,11 +7,12 @@ export type SubmitEnvelopeParams = {
   patientId: number;
   envelopeType: EnvelopeType;
   payload: unknown;
+  itemIdentifier?: string;
 };
 
 /** Scenario 2 (patient not physically present) submission over the relay — Scenario 1 goes through ble-central.service.ts directly, wired up alongside the BLE scan/submit screen in Phase 7. */
 export function useSubmitEnvelope() {
   return useMutation({
-    mutationFn: ({ patientId, envelopeType, payload }: SubmitEnvelopeParams) => submitToPatient(patientId, envelopeType, payload),
+    mutationFn: ({ patientId, envelopeType, payload, itemIdentifier }: SubmitEnvelopeParams) => submitToPatient(patientId, envelopeType, payload, itemIdentifier),
   });
 }

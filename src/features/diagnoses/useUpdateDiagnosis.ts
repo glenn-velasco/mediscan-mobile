@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import { diagnosesQueryKey } from '@/features/diagnoses/useDiagnoses';
+import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
 import type { DiagnosisPayload } from '@/api/types';
 
 export function useUpdateDiagnosis() {
@@ -12,6 +13,7 @@ export function useUpdateDiagnosis() {
       diagnosesRepo.updateLocal(localUuid, payload),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
+      queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
     },
   });
 }

@@ -108,6 +108,12 @@ async function pushRecord<TPayload>(
       // instead of leaving the row stuck unsynced forever.
       if (err instanceof ValidationError) {
         await api.update(row.local_uuid, payload);
+      } else if (getErrorStatus(err) === 404) {
+        // 404 on CREATE means the endpoint/parent record doesn't exist yet — NOT that this record
+        // was deleted. Skip for now and retry next cycle instead of hard-deleting (which would
+        // destroy data that never existed server-side).
+        console.warn(TAG, `create returned 404, will retry next cycle`, { localUuid: row.local_uuid });
+        return;
       } else {
         throw err;
       }
@@ -173,17 +179,24 @@ async function pushConditions(): Promise<void> {
 
 async function pushDiagnoses(): Promise<void> {
   const rows = await diagnosesRepo.getAllForPush();
-  if (rows.length === 0) return;
+  // Only push diagnoses that already exist on the server (have a server_id). New diagnoses
+  // created via BLE merge are authored by a verified professional whose envelope submission
+  // already created the record server-side — the patient's own sync can't create diagnoses
+  // (the server returns 404 since the patient lacks the "verified professional" permission).
+  const pushable = rows.filter((r) => r.server_id);
+  const skipped = rows.filter((r) => !r.server_id);
+  if (skipped.length > 0) {
+    console.debug(TAG, `pushDiagnoses: skipping ${skipped.length} BLE-merged diagnosis(es) without server_id (waiting for professional's push)`, {
+      uuids: skipped.map((r) => r.local_uuid),
+    });
+  }
+  if (pushable.length === 0) return;
 
-  // Creating a diagnosis needs an explicit target medical_information_id (a diagnosis is
-  // authored by a verified professional, possibly on someone else's record - see the
-  // backend's docs/DIAGNOSES.md) - the local medical_information row's server_id is this
-  // device's own linked record.
   const medicalInformation = await medicalInformationRepo.getLocal();
   const medicalInformationId = medicalInformation?.server_id;
   if (!medicalInformationId) return;
 
-  for (const row of rows) {
+  for (const row of pushable) {
     await pushOne(
       'diagnosis',
       () =>
@@ -300,7 +313,15 @@ export async function pullPatientChanges(): Promise<void> {
   isPulling = true;
   try {
     const since = await getLastSyncedAt();
+    console.debug(TAG, `pull: fetching changes since ${since ?? '(ever)'}`);
     const response = await pullSync(since);
+    console.debug(TAG, `pull: received`, {
+      allergies: response.allergies.length,
+      conditions: response.conditions.length,
+      diagnoses: response.diagnoses.length,
+      medications: response.medications.length,
+      emergency_contacts: response.emergency_contacts.length,
+    });
 
     if (response.medical_information) {
       await medicalInformationRepo.saveFromServer(response.medical_information);
@@ -324,8 +345,10 @@ export async function pullPatientChanges(): Promise<void> {
 
     for (const record of response.diagnoses) {
       if (record.deleted_at) {
+        console.debug(TAG, `pull: deleting diagnosis ${record.id}`);
         await diagnosesRepo.hardDelete(record.id);
       } else {
+        console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition, verified_by: record.verified_by });
         await diagnosesRepo.upsertFromServer(record);
       }
     }
