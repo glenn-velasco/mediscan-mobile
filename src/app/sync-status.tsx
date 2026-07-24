@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, View, ActivityIndicator } from 'react-native';
 
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
@@ -55,7 +55,7 @@ export default function SyncStatusScreen() {
   if (isLoading) {
     return (
       <ThemedView className="flex-1 items-center justify-center">
-        <ThemedText>Loading…</ThemedText>
+        <ActivityIndicator size="large" color={theme.primary} />
       </ThemedView>
     );
   }

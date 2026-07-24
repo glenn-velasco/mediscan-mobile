@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
@@ -60,6 +60,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
+  const [isReconciling, setIsReconciling] = useState(true);
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
@@ -221,7 +222,11 @@ export default function HomeScreen() {
         no_blood_transfusion: mi.no_blood_transfusion,
       }).then(() => {
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+      }).finally(() => {
+        setIsReconciling(false);
       });
+    } else if (medicalInformation || !user?.medical_information) {
+      setIsReconciling(false);
     }
   }, [medicalInformation, user, queryClient]);
 
@@ -235,10 +240,10 @@ export default function HomeScreen() {
     await queryClient.invalidateQueries();
   }, [refreshUser, queryClient]);
 
-  if (isLoading) {
+  if (isLoading || isReconciling) {
     return (
       <ThemedView className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
-        <ThemedText>Loading…</ThemedText>
+        <ActivityIndicator size="large" color={theme.primary} />
       </ThemedView>
     );
   }

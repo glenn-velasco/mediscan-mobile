@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 
 import { ThemedView } from '@/components/themed-view';
@@ -88,7 +88,7 @@ export default function MedicationsScreen() {
   if (isLoading) {
     return (
       <ThemedView className="flex-1 items-center justify-center">
-        <ThemedText>Loading…</ThemedText>
+        <ActivityIndicator size="large" color={theme.primary} />
       </ThemedView>
     );
   }

@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo } from 'react';
 import { Link, Stack } from 'expo-router';
-import { FlatList, Pressable, View , Alert } from 'react-native';
+import { FlatList, Pressable, View , Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -71,7 +71,7 @@ export default function EmergencyContactsScreen() {
       <ThemedView className="flex-1">
         {isLoading ? (
           <ThemedView className="flex-1 items-center justify-center">
-            <ThemedText>Loading…</ThemedText>
+            <ActivityIndicator size="large" color={theme.primary} />
           </ThemedView>
         ) : !contacts?.length ? (
           <ThemedView className="flex-1 items-center justify-center px-8">

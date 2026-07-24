@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,7 +25,9 @@ export default function RegistrationMatchScreen() {
   if (isLoading) {
     return (
       <AppLayout>
-        <ThemedText color="mutedForeground">Loading…</ThemedText>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
       </AppLayout>
     );
   }
