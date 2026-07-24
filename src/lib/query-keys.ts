@@ -4,6 +4,7 @@
  * hook drags in useAuth -> AuthContext, which is how those two ended up in a require cycle.
  */
 export const allergiesQueryKey = ['allergies'] as const;
+export const conditionsQueryKey = ['conditions'] as const;
 export const diagnosesQueryKey = ['diagnoses'] as const;
 export const medicationsQueryKey = ['medications'] as const;
 export const emergencyContactsQueryKey = ['emergency-contacts'] as const;

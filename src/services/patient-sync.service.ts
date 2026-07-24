@@ -7,6 +7,7 @@ import { backoffDelayMs } from '@/lib/backoff';
 import { queryClient } from '@/lib/query-client';
 import {
   allergiesQueryKey,
+  conditionsQueryKey,
   diagnosesQueryKey,
   medicationsQueryKey,
   emergencyContactsQueryKey,
@@ -14,12 +15,14 @@ import {
 } from '@/lib/query-keys';
 
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
+import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 
 import { createAllergy, updateAllergy, deleteAllergy } from '@/api/endpoints/allergies';
+import { createCondition, updateCondition, deleteCondition } from '@/api/endpoints/conditions';
 import { createDiagnosis, updateDiagnosis, deleteDiagnosis } from '@/api/endpoints/diagnoses';
 import { createMedication, updateMedication, deleteMedication } from '@/api/endpoints/medications';
 import {
@@ -153,15 +156,50 @@ async function pushAllergies(): Promise<void> {
   }
 }
 
+async function pushConditions(): Promise<void> {
+  for (const row of await conditionsRepo.getAllForPush()) {
+    await pushOne(
+      'condition',
+      () =>
+        pushRecord(row, conditionsRepo.toPayload(row), { create: createCondition, update: updateCondition, remove: deleteCondition }, {
+          hardDelete: conditionsRepo.hardDelete,
+          markSyncedCreate: conditionsRepo.markSyncedCreate,
+        }),
+      row.local_uuid,
+      conditionsRepo.hardDelete,
+    );
+  }
+}
+
 async function pushDiagnoses(): Promise<void> {
-  for (const row of await diagnosesRepo.getAllForPush()) {
+  const rows = await diagnosesRepo.getAllForPush();
+  if (rows.length === 0) return;
+
+  // Creating a diagnosis needs an explicit target medical_information_id (a diagnosis is
+  // authored by a verified professional, possibly on someone else's record - see the
+  // backend's docs/DIAGNOSES.md) - the local medical_information row's server_id is this
+  // device's own linked record.
+  const medicalInformation = await medicalInformationRepo.getLocal();
+  const medicalInformationId = medicalInformation?.server_id;
+  if (!medicalInformationId) return;
+
+  for (const row of rows) {
     await pushOne(
       'diagnosis',
       () =>
-        pushRecord(row, diagnosesRepo.toPayload(row), { create: createDiagnosis, update: updateDiagnosis, remove: deleteDiagnosis }, {
-          hardDelete: diagnosesRepo.hardDelete,
-          markSyncedCreate: diagnosesRepo.markSyncedCreate,
-        }),
+        pushRecord(
+          row,
+          diagnosesRepo.toPayload(row),
+          {
+            create: (id, payload) => createDiagnosis(medicalInformationId, id, payload),
+            update: updateDiagnosis,
+            remove: deleteDiagnosis,
+          },
+          {
+            hardDelete: diagnosesRepo.hardDelete,
+            markSyncedCreate: diagnosesRepo.markSyncedCreate,
+          },
+        ),
       row.local_uuid,
       diagnosesRepo.hardDelete,
     );
@@ -229,6 +267,7 @@ export async function pushPatientChanges(): Promise<void> {
   try {
     await pushMedicalInformation();
     await pushAllergies();
+    await pushConditions();
     await pushDiagnoses();
     await pushMedications();
     await pushEmergencyContacts();
@@ -275,6 +314,14 @@ export async function pullPatientChanges(): Promise<void> {
       }
     }
 
+    for (const record of response.conditions) {
+      if (record.deleted_at) {
+        await conditionsRepo.hardDelete(record.id);
+      } else {
+        await conditionsRepo.upsertFromServer(record);
+      }
+    }
+
     for (const record of response.diagnoses) {
       if (record.deleted_at) {
         await diagnosesRepo.hardDelete(record.id);
@@ -304,6 +351,7 @@ export async function pullPatientChanges(): Promise<void> {
 
     queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
     queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
+    queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
     queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
     queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
     queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });

@@ -1,6 +1,6 @@
 import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
-import type { DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
+import type { ConditionRow, DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 
 /**
@@ -18,6 +18,7 @@ export function buildEmergencySummary(
   emergencyContacts: EmergencyContactRow[],
   diagnoses?: DiagnosisRow[],
   medications?: MedicationRow[],
+  conditions?: ConditionRow[],
 ): string {
   // Name and address are also carried as separate structured fields (below the human-readable
   // "Name" line) so parseEmergencySummary() can populate the "Manage info" form's discrete
@@ -56,6 +57,15 @@ export function buildEmergencySummary(
     }
   } else {
     lines.push('Allergies: none recorded');
+  }
+
+  if (conditions && conditions.length > 0) {
+    lines.push('Conditions:');
+    for (const c of conditions) {
+      lines.push(`- ${c.description}`);
+    }
+  } else {
+    lines.push('Conditions: none recorded');
   }
 
   if (diagnoses && diagnoses.length > 0) {

@@ -12,6 +12,10 @@ export type ScannedEmergencyContact = {
   phone: string | null;
 };
 
+export type ScannedCondition = {
+  description: string;
+};
+
 export type ScannedDiagnosis = {
   condition: string;
   severity: string;
@@ -46,6 +50,7 @@ export type ScannedEmergencyInfo = {
   postalCode: string;
   country: string;
   allergies: ScannedAllergy[];
+  conditions: ScannedCondition[];
   diagnoses: ScannedDiagnosis[];
   medications: ScannedMedication[];
   emergencyContacts: ScannedEmergencyContact[];
@@ -54,6 +59,7 @@ export type ScannedEmergencyInfo = {
 const FIELD_PATTERN =
   /^(Patient ID|Generated|Name|First name|Middle name|Last name|Suffix|DOB|Gender|Blood type|Religion|No blood transfusion|Phone country code|Phone|Street|Unit|City|Province|Postal code|Country):\s*(.*)$/;
 const ALLERGY_PATTERN = /^-\s*(.+?)\s*\(([^,)]+)(?:,\s*([^)]+))?\)$/;
+const CONDITION_PATTERN = /^-\s*(.+)$/;
 const DIAGNOSIS_PATTERN = /^-\s*([^,]+),\s*(\S+)(?:,\s*(.+))?$/;
 const MEDICATION_PATTERN = /^-\s*([^,]+),\s*([^,]+)(?:,\s*(.+))?$/;
 const CONTACT_PATTERN = /^-\s*(.+?)(?:\s*\(([^)]+)\))?(?:\s*—\s*(.+))?$/;
@@ -93,12 +99,14 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
     postalCode: '',
     country: '',
     allergies: [],
+    conditions: [],
     diagnoses: [],
     medications: [],
     emergencyContacts: [],
   };
 
   let inAllergies = false;
+  let inConditions = false;
   let inDiagnoses = false;
   let inMedications = false;
   let inEmergencyContacts = false;
@@ -106,6 +114,16 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
   for (const line of lines.slice(1)) {
     if (line === 'Allergies:' || line === 'Allergies: none recorded') {
       inAllergies = true;
+      inConditions = false;
+      inDiagnoses = false;
+      inMedications = false;
+      inEmergencyContacts = false;
+      continue;
+    }
+
+    if (line === 'Conditions:' || line === 'Conditions: none recorded') {
+      inAllergies = false;
+      inConditions = true;
       inDiagnoses = false;
       inMedications = false;
       inEmergencyContacts = false;
@@ -114,6 +132,7 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
 
     if (line === 'Diagnoses:' || line === 'Diagnoses: none recorded') {
       inAllergies = false;
+      inConditions = false;
       inDiagnoses = true;
       inMedications = false;
       inEmergencyContacts = false;
@@ -122,6 +141,7 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
 
     if (line === 'Medications:' || line === 'Medications: none recorded') {
       inAllergies = false;
+      inConditions = false;
       inDiagnoses = false;
       inMedications = true;
       inEmergencyContacts = false;
@@ -130,6 +150,7 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
 
     if (line === 'Emergency contacts:') {
       inAllergies = false;
+      inConditions = false;
       inDiagnoses = false;
       inMedications = false;
       inEmergencyContacts = true;
@@ -143,6 +164,16 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
           allergen: allergyMatch[1],
           severity: allergyMatch[2].trim(),
           reaction: allergyMatch[3]?.trim() ?? null,
+        });
+      }
+      continue;
+    }
+
+    if (inConditions) {
+      const conditionMatch = CONDITION_PATTERN.exec(line);
+      if (conditionMatch) {
+        info.conditions.push({
+          description: conditionMatch[1].trim(),
         });
       }
       continue;

@@ -1,17 +1,19 @@
 import * as pendingSyncEnvelopeRepo from '@/db/repositories/pending-sync-envelope.repo';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
+import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
 import { processEnvelope } from '@/services/merge.service';
-import type { PendingSyncEnvelopeRow , AllergyRow, DiagnosisRow, MedicationRow } from '@/db/schema';
+import type { PendingSyncEnvelopeRow , AllergyRow, ConditionRow, DiagnosisRow, MedicationRow } from '@/db/schema';
 
 jest.mock('@/db/repositories/pending-sync-envelope.repo');
 jest.mock('@/db/repositories/professional-attestation.repo');
 jest.mock('@/db/repositories/allergies.repo');
+jest.mock('@/db/repositories/conditions.repo');
 jest.mock('@/db/repositories/diagnoses.repo');
 jest.mock('@/db/repositories/medications.repo');
 jest.mock('@/db/repositories/medical-information.repo');
@@ -28,6 +30,7 @@ jest.mock('@/lib/query-client', () => ({ queryClient: { invalidateQueries: jest.
 const mockUnseal = unseal as jest.Mock;
 const mockGetPrivateKeypair = getPrivateKeypair as jest.Mock;
 const mockGetAllAllergies = allergiesRepo.getAll as jest.Mock;
+const mockGetAllConditions = conditionsRepo.getAll as jest.Mock;
 const mockGetAllDiagnoses = diagnosesRepo.getAll as jest.Mock;
 const mockGetAllMedications = medicationsRepo.getAll as jest.Mock;
 const mockInsertAttestation = professionalAttestationRepo.insert as jest.Mock;
@@ -77,6 +80,21 @@ function makeDiagnosis(overrides: Partial<DiagnosisRow> = {}): DiagnosisRow {
     condition: 'Hypertension',
     date_of_diagnosis: null,
     severity: 'ongoing',
+    diagnosed_by_id: null,
+    diagnosed_by_name: null,
+    ...overrides,
+  };
+}
+
+function makeCondition(overrides: Partial<ConditionRow> = {}): ConditionRow {
+  return {
+    local_uuid: 'condition-1',
+    user_id: 0,
+    server_id: null,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-01-01T00:00:00.000Z',
+    description: 'Occasional migraines',
     ...overrides,
   };
 }
@@ -101,6 +119,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetPrivateKeypair.mockResolvedValue({ publicKey: new Uint8Array(), privateKey: new Uint8Array() });
   mockGetAllAllergies.mockResolvedValue([]);
+  mockGetAllConditions.mockResolvedValue([]);
   mockGetAllDiagnoses.mockResolvedValue([]);
   mockGetAllMedications.mockResolvedValue([]);
 });
@@ -219,6 +238,76 @@ describe('processEnvelope', () => {
 
     expect(mockGetAllAllergies).not.toHaveBeenCalled();
     expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedAllergyLocalUuid: null }));
+  });
+
+  it('merges and auto-matches a condition_verification envelope with exactly one case-insensitive description match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'condition_verification',
+      version: 1,
+      description: 'Occasional Migraines',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllConditions.mockResolvedValue([makeCondition({ local_uuid: 'condition-1', description: 'occasional migraines' })]);
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+    expect(result).toBe('merged');
+    expect(conditionsRepo.createLocal).not.toHaveBeenCalled();
+    expect(mockInsertAttestation).toHaveBeenCalledWith(
+      expect.objectContaining({ matchedConditionLocalUuid: 'condition-1', sourceEnvelopeLocalId: 'env-1' }),
+    );
+  });
+
+  it('stores an ambiguous match (two conditions with the same description) unmatched rather than guessing', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'condition_verification',
+      version: 1,
+      description: 'Occasional migraines',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllConditions.mockResolvedValue([
+      makeCondition({ local_uuid: 'condition-1', description: 'Occasional migraines' }),
+      makeCondition({ local_uuid: 'condition-2', description: 'Occasional migraines' }),
+    ]);
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+    expect(result).toBe('merged');
+    expect(conditionsRepo.createLocal).not.toHaveBeenCalled();
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: null }));
+  });
+
+  it('creates a new condition from the verification when there is no description match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'condition_verification',
+      version: 1,
+      description: 'Something unrecorded',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    (conditionsRepo.createLocal as jest.Mock).mockResolvedValue('condition-new');
+
+    await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+    expect(conditionsRepo.createLocal).toHaveBeenCalledWith({ description: 'Something unrecorded' });
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: 'condition-new' }));
+  });
+
+  it('never attempts a condition match for non-condition envelope types', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'general_note',
+      version: 1,
+      note: 'hello',
+      author: { user_id: 1, name: 'Dr. Reyes' },
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    await processEnvelope(makeEnvelope({ envelope_type: 'general_note' }));
+
+    expect(mockGetAllConditions).not.toHaveBeenCalled();
+    expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: null }));
   });
 
   it('auto-applies a medical_information_update envelope to the patient profile and records an attestation', async () => {
@@ -497,6 +586,56 @@ describe('processEnvelope', () => {
 
       expect(medicationsRepo.deleteLocal).not.toHaveBeenCalled();
       expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: null }));
+    });
+
+    it('__unverify__ on a matched condition links the attestation without touching the record', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'condition_verification',
+        version: 1,
+        description: 'Occasional migraines',
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__unverify__',
+      });
+      mockGetAllConditions.mockResolvedValue([makeCondition({ local_uuid: 'condition-1' })]);
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: 'condition-1' }));
+    });
+
+    it('__delete__ on a matched condition deletes the record and links the attestation to it', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'condition_verification',
+        version: 1,
+        description: 'Occasional migraines',
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__delete__',
+      });
+      mockGetAllConditions.mockResolvedValue([makeCondition({ local_uuid: 'condition-1' })]);
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+      expect(conditionsRepo.deleteLocal).toHaveBeenCalledWith('condition-1');
+      expect(conditionsRepo.createLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: 'condition-1' }));
+    });
+
+    it('__delete__ with no matched condition deletes nothing and returns null', async () => {
+      mockUnseal.mockResolvedValue({
+        type: 'condition_verification',
+        version: 1,
+        description: 'Unrecorded',
+        verified_by: { user_id: 1, name: 'Dr. Reyes' },
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__delete__',
+      });
+
+      await processEnvelope(makeEnvelope({ envelope_type: 'condition_verification' }));
+
+      expect(conditionsRepo.deleteLocal).not.toHaveBeenCalled();
+      expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedConditionLocalUuid: null }));
     });
   });
 });

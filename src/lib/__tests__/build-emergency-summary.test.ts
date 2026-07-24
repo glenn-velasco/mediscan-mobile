@@ -7,7 +7,7 @@ jest.mock('react-native-libsodium', () => {
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { parseEmergencySummary } from '@/lib/parse-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
-import type { AllergyRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
+import type { AllergyRow, ConditionRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
 
 const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
 
@@ -87,6 +87,19 @@ function medication(overrides: Partial<MedicationRow> = {}): MedicationRow {
     notes: null,
     ...overrides,
   } as MedicationRow;
+}
+
+function condition(overrides: Partial<ConditionRow> = {}): ConditionRow {
+  return {
+    local_uuid: 'condition-1',
+    user_id: 0,
+    server_id: 1,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    description: 'Occasional migraines',
+    ...overrides,
+  } as ConditionRow;
 }
 
 describe('buildEmergencySummary', () => {
@@ -222,6 +235,36 @@ describe('buildEmergencySummary', () => {
     expect(summary).toContain('- Aspirin, 100mg, Once daily');
     expect(summary).toContain('- Ibuprofen, 200mg');
     expect(summary).not.toContain('- Ibuprofen, 200mg,');
+  });
+
+  it.each([
+    ['an empty list', [] as ConditionRow[]],
+    ['an unresolved query (undefined)', undefined],
+  ])('reports no conditions recorded for %s', (_label, conditions) => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], undefined, undefined, conditions);
+
+    expect(summary).toContain('Conditions: none recorded');
+    expect(summary).not.toContain('Conditions:\n');
+  });
+
+  it('lists each condition by its description', () => {
+    const summary = buildEmergencySummary(
+      1,
+      GENERATED_AT,
+      medicalInformation(),
+      [],
+      [],
+      undefined,
+      undefined,
+      [
+        condition({ description: 'Occasional migraines' }),
+        condition({ local_uuid: 'condition-2', description: 'Seasonal allergies' }),
+      ],
+    );
+
+    expect(summary).toContain('Conditions:');
+    expect(summary).toContain('- Occasional migraines');
+    expect(summary).toContain('- Seasonal allergies');
   });
 
   it('omits the emergency contacts section entirely when there are none', () => {

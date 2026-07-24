@@ -1,5 +1,6 @@
 import { apiClient } from '@/api/client';
 import type { AllergyApiRecord } from '@/api/endpoints/allergies';
+import type { ConditionApiRecord } from '@/api/endpoints/conditions';
 import type { DiagnosisApiRecord } from '@/api/endpoints/diagnoses';
 import type { MedicationApiRecord } from '@/api/endpoints/medications';
 import type { EmergencyContactApiRecord } from '@/api/endpoints/emergency-contacts';
@@ -25,6 +26,7 @@ export type SyncResponse = {
   server_time: string;
   medical_information: MedicalInformationSyncRecord | null;
   allergies: AllergyApiRecord[];
+  conditions: ConditionApiRecord[];
   diagnoses: DiagnosisApiRecord[];
   medications: MedicationApiRecord[];
   emergency_contacts: EmergencyContactApiRecord[];

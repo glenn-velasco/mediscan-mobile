@@ -195,6 +195,62 @@ describe('parseEnvelopePlaintext', () => {
     });
   });
 
+  describe('condition_verification', () => {
+    it('accepts a well-formed condition_verification envelope', () => {
+      const plaintext = {
+        type: 'condition_verification',
+        version: 1,
+        description: 'Occasional migraines',
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('condition_verification', plaintext)).toEqual(plaintext);
+    });
+
+    it('accepts condition_verification with an optional note', () => {
+      const plaintext = {
+        type: 'condition_verification',
+        version: 1,
+        description: 'Seasonal allergies',
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+        note: '__delete__',
+      };
+      expect(parseEnvelopePlaintext('condition_verification', plaintext)).toEqual(plaintext);
+    });
+
+    it('rejects condition_verification missing description', () => {
+      const plaintext = {
+        type: 'condition_verification',
+        version: 1,
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('condition_verification', plaintext)).toBeNull();
+    });
+
+    it('rejects condition_verification missing verified_by', () => {
+      const plaintext = {
+        type: 'condition_verification',
+        version: 1,
+        description: 'Occasional migraines',
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('condition_verification', plaintext)).toBeNull();
+    });
+
+    it('rejects a type mismatch (filed under the wrong envelope_type)', () => {
+      const plaintext = {
+        type: 'condition_verification',
+        version: 1,
+        description: 'Occasional migraines',
+        verified_by: verifiedBy,
+        verified_at: '2026-01-01T00:00:00.000Z',
+      };
+      expect(parseEnvelopePlaintext('allergy_verification', plaintext)).toBeNull();
+    });
+  });
+
   it('accepts a well-formed transfusion_witness envelope', () => {
     const plaintext = {
       type: 'transfusion_witness',

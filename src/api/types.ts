@@ -51,11 +51,23 @@ export type Allergy = {
   severity: AllergySeverity;
 };
 
+/** A patient's own free-text note on their general health state - distinct from `Diagnosis`, which is the professional-authored formal identification of a specific condition. */
+export type Condition = {
+  id: number;
+  description: string;
+};
+
+export type DiagnosedBy = {
+  id: number;
+  fullname: string;
+};
+
 export type Diagnosis = {
   id: number;
   condition: string;
   date_of_diagnosis: string | null;
   severity: DiagnosisSeverity;
+  diagnosed_by: DiagnosedBy | null;
 };
 
 export type Medication = {
@@ -78,6 +90,7 @@ export type MedicalInformation = {
   religion: Religion | null;
   no_blood_transfusion: boolean;
   allergies: Allergy[];
+  conditions: Condition[];
   diagnoses: Diagnosis[];
   emergency_contacts: EmergencyContact[];
 };
@@ -157,6 +170,10 @@ export type AllergyPayload = {
   severity: AllergySeverity;
 };
 
+export type ConditionPayload = {
+  description: string;
+};
+
 export type DiagnosisPayload = {
   condition: string;
   date_of_diagnosis?: string;
@@ -204,7 +221,7 @@ export type DeviceKeyPayload = {
   label?: string;
 };
 
-export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update';
+export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'condition_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update';
 
 export type PendingSyncEnvelope = {
   id: number;

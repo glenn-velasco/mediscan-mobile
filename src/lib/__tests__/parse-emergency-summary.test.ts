@@ -1,7 +1,7 @@
 import { parseEmergencySummary } from '@/lib/parse-emergency-summary';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { decryptQrPayload } from '@/lib/qr-cipher';
-import type { AllergyRow, DiagnosisRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
+import type { AllergyRow, ConditionRow, DiagnosisRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
 
 // parseEmergencySummary's own logic starts after decryption; stub decryptQrPayload as an identity
 // pass-through so these tests exercise the plaintext parser directly (real encrypt/decrypt needs
@@ -68,6 +68,19 @@ function diagnosis(overrides: Partial<DiagnosisRow> = {}): DiagnosisRow {
   } as DiagnosisRow;
 }
 
+function condition(overrides: Partial<ConditionRow> = {}): ConditionRow {
+  return {
+    local_uuid: 'condition-1',
+    user_id: 0,
+    server_id: 1,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-07-15T09:00:00.000Z',
+    description: 'Occasional migraines',
+    ...overrides,
+  } as ConditionRow;
+}
+
 function contact(overrides: Partial<EmergencyContactRow> = {}): EmergencyContactRow {
   return {
     local_uuid: 'contact-1',
@@ -91,7 +104,7 @@ describe('parseEmergencySummary', () => {
     expect(await parseEmergencySummary('https://example.com')).toBeNull();
   });
 
-  it('round-trips allergies, diagnoses, medications and contacts through build → parse', async () => {
+  it('round-trips allergies, conditions, diagnoses, medications and contacts through build → parse', async () => {
     const summary = buildEmergencySummary(
       42,
       GENERATED_AT,
@@ -100,12 +113,14 @@ describe('parseEmergencySummary', () => {
       [contact()],
       [diagnosis()],
       [medication({ name: 'Aspirin', dosage: '100mg', frequency: 'Once daily' })],
+      [condition({ description: 'Occasional migraines' })],
     );
 
     const info = await parseEmergencySummary(summary);
 
     expect(info?.patientId).toBe(42);
     expect(info?.allergies).toEqual([{ allergen: 'Peanuts', severity: 'severe', reaction: 'Anaphylaxis' }]);
+    expect(info?.conditions).toEqual([{ description: 'Occasional migraines' }]);
     expect(info?.diagnoses).toEqual([{ condition: 'Hypertension', severity: 'ongoing', dateOfDiagnosis: '2024-03-15' }]);
     expect(info?.medications).toEqual([{ name: 'Aspirin', dosage: '100mg', frequency: 'Once daily' }]);
     expect(info?.emergencyContacts).toEqual([{ name: 'Maria Velasco', relationship: 'Mother', phone: '+63 9171234567' }]);
@@ -117,6 +132,14 @@ describe('parseEmergencySummary', () => {
     const info = await parseEmergencySummary(summary);
 
     expect(info?.medications).toEqual([]);
+  });
+
+  it('parses "Conditions: none recorded" into an empty conditions array', async () => {
+    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], [], [], []);
+
+    const info = await parseEmergencySummary(summary);
+
+    expect(info?.conditions).toEqual([]);
   });
 
   it('parses a medication line without a frequency as frequency: null', async () => {
