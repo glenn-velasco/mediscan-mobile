@@ -1,0 +1,3 @@
+# react-native-libsodium contains platform-specific binaries that hash differently
+# between local (Windows) and EAS (Linux) build servers, causing fingerprint mismatch
+node_modules/react-native-libsodium/**/*
