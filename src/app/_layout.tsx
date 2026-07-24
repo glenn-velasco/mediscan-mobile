@@ -9,7 +9,8 @@ import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
+import { AvoidSoftInput } from 'react-native-avoid-softinput';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -148,7 +149,7 @@ function LightweightQuickScan() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider skipNetworkRefresh>
           <BottomSheetModalProvider>
-            <StatusBar style="auto" />
+            <SystemBars style="auto" />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
             </Stack>
@@ -162,6 +163,12 @@ function LightweightQuickScan() {
 export default function RootLayout() {
   const [mode, setMode] = useState<BootMode>('pending');
   const promoteResolversRef = useRef<Array<() => void>>([]);
+
+  useEffect(() => {
+    AvoidSoftInput.setEnabled(true);
+    AvoidSoftInput.setShouldMimicIOSBehavior(true);
+    return () => AvoidSoftInput.setEnabled(false);
+  }, []);
 
   useEffect(() => {
     try {
@@ -205,7 +212,7 @@ export default function RootLayout() {
                 <AuthProvider>
                   <BroadcastProvider>
                     <BottomSheetModalProvider>
-                      <StatusBar style="auto" />
+                      <SystemBars style="auto" />
                       <RootNavigator onReady={handleFullTreeReady} />
                     </BottomSheetModalProvider>
                   </BroadcastProvider>

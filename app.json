@@ -19,7 +19,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["SYSTEM_ALERT_WINDOW", "VIBRATE", "RECORD_AUDIO"]
+      "permissions": [
+        "SYSTEM_ALERT_WINDOW",
+        "VIBRATE",
+        "RECORD_AUDIO"
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "output": "static",
@@ -78,6 +83,15 @@
               ]
             }
           ]
+        }
+      ],
+      [
+        "react-native-edge-to-edge",
+        {
+          "android": {
+            "parentTheme": "Default",
+            "enforceNavigationBarContrast": false
+          }
         }
       ],
       "./plugins/withUserLeaveHintFix.js",

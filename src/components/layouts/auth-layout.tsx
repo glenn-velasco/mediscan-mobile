@@ -1,4 +1,5 @@
-import { KeyboardAvoidingView, Platform, ScrollView, View, type ViewProps } from 'react-native';
+import { ScrollView, View, type ViewProps } from 'react-native';
+import { AvoidSoftInputView } from 'react-native-avoid-softinput';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
@@ -11,12 +12,12 @@ import { cn } from '@/lib/cn';
 export function AuthLayout({ children, className, ...rest }: ViewProps) {
   const theme = useTheme();
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.select({ ios: 'padding', default: undefined })}>
+    <AvoidSoftInputView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView contentContainerClassName="flex-grow" keyboardShouldPersistTaps="handled">
         <View className={cn('flex-1 justify-center gap-1 px-6', className)} {...rest}>
           {children}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </AvoidSoftInputView>
   );
 }

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import { AvoidSoftInputView } from 'react-native-avoid-softinput';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
@@ -69,9 +70,9 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
 
   if (avoidKeyboard) {
     return (
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.select({ ios: 'padding', default: undefined })}>
+      <AvoidSoftInputView style={{ flex: 1 }}>
         {scrollView}
-      </KeyboardAvoidingView>
+      </AvoidSoftInputView>
     );
   }
 
