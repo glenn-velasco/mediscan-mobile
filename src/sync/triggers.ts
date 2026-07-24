@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
 import { useAuth } from '@/auth/useAuth';
+import { getIsRegistering } from '@/auth/AuthContext';
 import { pullPendingSync } from '@/services/pending-sync.service';
 import { pushPatientChanges, pullPatientChanges } from '@/services/patient-sync.service';
 import { retryPendingRevoke } from '@/services/device-key.service';
@@ -55,6 +56,7 @@ export function useSyncTriggers(): void {
 
     /** Shared cooldown across all trigger sources — see MIN_TRIGGER_INTERVAL_MS above. */
     const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean }) => {
+      if (getIsRegistering()) return;
       const now = Date.now();
       if (now - lastTriggerAt < MIN_TRIGGER_INTERVAL_MS) return;
       lastTriggerAt = now;

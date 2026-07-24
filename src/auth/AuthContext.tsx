@@ -15,6 +15,13 @@ import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } f
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
 
+let isRegistering = false;
+
+/** Returns true while a registration is in progress — used by sync triggers to avoid overwriting freshly-saved data. */
+export function getIsRegistering(): boolean {
+  return isRegistering;
+}
+
 type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
@@ -128,43 +135,43 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const register = useCallback(async (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => {
-    setStatus('authenticating');
-    const device_name = await getDeviceName();
-    const response = await apiRegister({ ...payload, device_name });
+    isRegistering = true;
+    try {
+      setStatus('authenticating');
+      const device_name = await getDeviceName();
+      const response = await apiRegister({ ...payload, device_name });
 
-    if (response.pending) {
-      setStatus('unauthenticated');
-      return { pending: true };
-    }
-
-    const { token, user: registeredUser } = response;
-    await setToken(token);
-    setCurrentUserId(registeredUser.id);
-
-    if (medicalInfo) {
-      const interimId = registeredUser.medical_information?.id;
-      try {
-        if (interimId == null) {
-          throw new Error('Registration response is missing the interim medical_information id');
-        }
-        // Registration only creates a bare-bones "interim" medical_information record
-        // server-side (name/dob/gender). Fill in the rest (address, religion, etc.) via
-        // update so it isn't wiped out by the next sync pull before it's ever uploaded.
-        const record = await updateMedicalInformation(interimId, medicalInfo);
-        await medicalInformationRepo.saveFromServer(record);
-      } catch {
-        // Offline or request failure: keep the data locally as pending so the normal
-        // sync push flow uploads it later, instead of silently marking it synced.
-        await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
+      if (response.pending) {
+        setStatus('unauthenticated');
+        return { pending: true };
       }
-      queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-    }
 
-    setUser(registeredUser);
-    setStatus('authenticated');
-    void backfillUserId(registeredUser.id);
-    await saveUser(registeredUser);
-    return { pending: false };
+      const { token, user: registeredUser } = response;
+      await setToken(token);
+      setCurrentUserId(registeredUser.id);
+
+      if (medicalInfo) {
+        const interimId = registeredUser.medical_information?.id;
+        try {
+          if (interimId == null) {
+            throw new Error('Registration response is missing the interim medical_information id');
+          }
+          const record = await updateMedicalInformation(interimId, medicalInfo);
+          await medicalInformationRepo.saveFromServer(record);
+        } catch {
+          await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
+        }
+        queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+      }
+
+      setUser(registeredUser);
+      setStatus('authenticated');
+      void backfillUserId(registeredUser.id);
+      await saveUser(registeredUser);
+      return { pending: false };
+    } finally {
+      isRegistering = false;
+    }
   }, []);
 
   const logout = useCallback(async () => {
