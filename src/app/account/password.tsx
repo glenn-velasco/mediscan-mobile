@@ -36,7 +36,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       {!isConnected ? (
         <ConflictBanner message="Changing your password requires an internet connection." className="mb-4" />
       ) : null}

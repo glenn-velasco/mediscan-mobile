@@ -9,6 +9,7 @@ import {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 
+import { useAuth } from '@/auth/useAuth';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/primary-button';
 import { DiagnosisSeverityBadge } from '@/components/diagnosis-severity-badge';
@@ -64,22 +65,27 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
   function DiagnosesBottomSheet(_props, ref) {
     const sheetRef = useRef<BottomSheetModal>(null);
     const theme = useTheme();
+    const { user } = useAuth();
+    const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
     const { data: diagnoses = [], isLoading } = useDiagnoses();
     const { mutateAsync: createDiagnosis, isPending } = useCreateDiagnosis();
     const { mutateAsync: updateDiagnosis, isPending: isSaving } = useUpdateDiagnosis();
     const { mutateAsync: deleteDiagnosis, isPending: isDeleting } = useDeleteDiagnosis();
     const [mode, setMode] = useState<Mode>('list');
     const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
+    const readOnly = mode === 'view' && !isVerifiedProfessional;
 
     // Add/view form state
     const [condition, setCondition] = useState('');
     const [dateOfDiagnosis, setDateOfDiagnosis] = useState('');
     const [severity, setSeverity] = useState<DiagnosisSeverity>('chronic');
+    const [diagnosedByName, setDiagnosedByName] = useState<string | null>(null);
 
     const resetForm = useCallback(() => {
       setCondition('');
       setDateOfDiagnosis('');
       setSeverity('chronic');
+      setDiagnosedByName(null);
     }, []);
 
     const loadItem = useCallback(
@@ -89,6 +95,7 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
         setCondition(item.condition);
         setDateOfDiagnosis(item.date_of_diagnosis ?? '');
         setSeverity(item.severity);
+        setDiagnosedByName(item.diagnosed_by_name);
         setSelectedUuid(localUuid);
         return true;
       },
@@ -101,6 +108,7 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
         sheetRef.current?.present();
       },
       presentAdd: () => {
+        if (!isVerifiedProfessional) return;
         resetForm();
         setMode('add');
         sheetRef.current?.present();
@@ -124,9 +132,10 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
     );
 
     const handleAdd = useCallback(() => {
+      if (!isVerifiedProfessional) return;
       resetForm();
       setMode('add');
-    }, [resetForm]);
+    }, [resetForm, isVerifiedProfessional]);
 
     const handleSubmit = useCallback(async () => {
       if (!condition.trim()) return;
@@ -167,6 +176,8 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
         handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
         backdropComponent={renderBackdrop}
         onDismiss={() => setMode('list')}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
       >
         {mode === 'list' ? (
           isLoading ? (
@@ -197,14 +208,16 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
               <DiagnosisSheetRow item={item} onPress={handlePress} theme={theme} />
             )}
             ListFooterComponent={
-              <Pressable
-                onPress={handleAdd}
-                className="mt-4 flex-row items-center justify-center gap-2 rounded-md py-3"
-                style={{ backgroundColor: theme.primary }}
-              >
-                <Ionicons name="add" size={18} color={theme.primaryForeground} />
-                <ThemedText style={{ fontWeight: '600', color: theme.primaryForeground }}>Add diagnosis</ThemedText>
-              </Pressable>
+              isVerifiedProfessional ? (
+                <Pressable
+                  onPress={handleAdd}
+                  className="mt-4 flex-row items-center justify-center gap-2 rounded-md py-3"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  <Ionicons name="add" size={18} color={theme.primaryForeground} />
+                  <ThemedText style={{ fontWeight: '600', color: theme.primaryForeground }}>Add diagnosis</ThemedText>
+                </Pressable>
+              ) : null
             }
           />
           )
@@ -217,6 +230,12 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
               </Pressable>
             </View>
 
+            {mode === 'view' && diagnosedByName ? (
+              <ThemedText type="small" color="mutedForeground" className="mb-3">
+                Diagnosed by {diagnosedByName}
+              </ThemedText>
+            ) : null}
+
             <View className="gap-3">
               <View>
                 <ThemedText type="label" className="mb-1.5">
@@ -225,6 +244,7 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
                 <BottomSheetTextInput
                   value={condition}
                   onChangeText={setCondition}
+                  editable={!readOnly}
                   placeholder="e.g. Type 2 diabetes"
                   placeholderTextColor={theme.mutedForeground}
                   style={{
@@ -246,6 +266,7 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
                 value={dateOfDiagnosis}
                 onChange={setDateOfDiagnosis}
                 maximumDate={new Date()}
+                disabled={readOnly}
               />
 
               <View className="mb-2">
@@ -258,7 +279,8 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
                     return (
                       <Pressable
                         key={option}
-                        onPress={() => setSeverity(option)}
+                        onPress={() => !readOnly && setSeverity(option)}
+                        disabled={readOnly}
                         style={{
                           borderRadius: 999,
                           borderWidth: 1,
@@ -278,14 +300,16 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
               </View>
             </View>
 
-            <PrimaryButton
-              label="Save"
-              loading={mode === 'view' ? isSaving : isPending}
-              disabled={!condition.trim()}
-              onPress={mode === 'view' ? handleSave : handleSubmit}
-              className="mt-2"
-            />
-            {mode === 'view' ? (
+            {readOnly ? null : (
+              <PrimaryButton
+                label="Save"
+                loading={mode === 'view' ? isSaving : isPending}
+                disabled={!condition.trim()}
+                onPress={mode === 'view' ? handleSave : handleSubmit}
+                className="mt-2"
+              />
+            )}
+            {mode === 'view' && !readOnly ? (
               <PrimaryButton
                 label="Delete diagnosis"
                 variant="danger"

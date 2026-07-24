@@ -24,7 +24,7 @@ export default function NewAllergyScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <TextField label="Allergen" value={allergen} onChangeText={setAllergen} placeholder="e.g. Peanuts" />
       <TextField label="Reaction (optional)" value={reaction} onChangeText={setReaction} placeholder="e.g. Hives" />
       <PickerField label="Severity" options={SEVERITIES} value={severity} onChange={setSeverity} />

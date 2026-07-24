@@ -59,7 +59,7 @@ export default function EditMedicationScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       {existing.sync_status === 'conflict' || existing.sync_status === 'failed' ? (
         <ConflictBanner message="This couldn't be saved. Check sync status for details." className="mb-4" />
       ) : null}

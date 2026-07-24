@@ -108,7 +108,7 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <View className="mb-6 items-center gap-2">
         <Avatar name={existing?.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} size={80} />
         <Link href="/profile/avatar">

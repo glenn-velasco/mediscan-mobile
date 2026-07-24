@@ -5,6 +5,7 @@ import type { EmergencyContactRow } from '@/db/schema';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import { useAllergies } from '@/features/allergies/useAllergies';
+import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useMedications } from '@/features/medications/useMedications';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
@@ -24,6 +25,7 @@ export function useQrWidget(userId: number) {
   const { enabled } = useQrWidgetToggle();
   const { data: medicalInformation } = useMedicalInformation();
   const { data: allergies } = useAllergies();
+  const { data: conditions } = useConditions();
   const { data: diagnoses } = useDiagnoses();
   const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
@@ -44,6 +46,7 @@ export function useQrWidget(userId: number) {
       emergencyContacts ?? EMPTY_CONTACTS,
       diagnoses,
       medications,
+      conditions,
     );
 
     encryptQrPayload(plaintext)
@@ -89,7 +92,7 @@ export function useQrWidget(userId: number) {
     return () => {
       cancelled = true;
     };
-  }, [userId, enabled, medicalInformation, allergies, diagnoses, medications, emergencyContacts]);
+  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
 
   useEffect(() => {
     const hide = () => {

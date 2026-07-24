@@ -60,7 +60,7 @@ function ContactForm({ localUuid, contact }: { localUuid: string; contact: Conta
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <TextField label="Name *" value={name} onChangeText={setName} />
       <SelectField
         placeholder="Relationship"

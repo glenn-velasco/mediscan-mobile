@@ -195,6 +195,8 @@ export const EmergencyContactsBottomSheet = forwardRef<EmergencyContactsBottomSh
         handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
         backdropComponent={renderBackdrop}
         onDismiss={() => setMode('list')}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
       >
         {mode === 'list' ? (
           isLoading ? (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import { useAuth } from '@/auth/useAuth';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
@@ -20,6 +21,8 @@ import { DIAGNOSIS_SEVERITY_OPTIONS, type DiagnosisSeverity } from '@/constants/
 export default function EditDiagnosisScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { data: diagnoses = [] } = useDiagnoses();
   const { mutateAsync: updateDiagnosis, isPending: isSaving } = useUpdateDiagnosis();
   const { mutateAsync: deleteDiagnosis, isPending: isDeleting } = useDeleteDiagnosis();
@@ -68,14 +71,20 @@ export default function EditDiagnosisScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       {existing.sync_status === 'conflict' || existing.sync_status === 'failed' ? (
         <ConflictBanner message="This couldn't be saved. Check sync status for details." className="mb-4" />
       ) : null}
 
-      <TextField label="Condition" value={condition} onChangeText={setCondition} />
-      <DateField label="Date of diagnosis" value={dateOfDiagnosis} onChange={setDateOfDiagnosis} maximumDate={new Date()} />
-      <PickerField label="Severity" options={DIAGNOSIS_SEVERITY_OPTIONS} value={severity} onChange={setSeverity} />
+      {existing.diagnosed_by_name ? (
+        <ThemedText type="small" color="mutedForeground" className="mb-2">
+          Diagnosed by {existing.diagnosed_by_name}
+        </ThemedText>
+      ) : null}
+
+      <TextField label="Condition" value={condition} onChangeText={setCondition} editable={isVerifiedProfessional} />
+      <DateField label="Date of diagnosis" value={dateOfDiagnosis} onChange={setDateOfDiagnosis} maximumDate={new Date()} disabled={!isVerifiedProfessional} />
+      <PickerField label="Severity" options={DIAGNOSIS_SEVERITY_OPTIONS} value={severity} onChange={setSeverity} disabled={!isVerifiedProfessional} />
 
       <Card className="mb-6 flex-row items-center justify-between">
         <ThemedText type="smallBold" color="mutedForeground">
@@ -84,8 +93,12 @@ export default function EditDiagnosisScreen() {
         <VerifiedCountBadge count={verifiedCount} />
       </Card>
 
-      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
-      <PrimaryButton label="Delete diagnosis" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
+      {isVerifiedProfessional ? (
+        <>
+          <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
+          <PrimaryButton label="Delete diagnosis" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
+        </>
+      ) : null}
     </AppLayout>
   );
 }

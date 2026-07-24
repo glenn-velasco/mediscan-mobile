@@ -30,6 +30,7 @@ import { scanForPatient, connectAndSubmit } from '@/services/ble-central.service
 import { seal } from '@/services/sealed-box.service';
 import type {
   AllergyVerificationEnvelope,
+  ConditionVerificationEnvelope,
   DiagnosisVerificationEnvelope,
   MedicationVerificationEnvelope,
   TransfusionWitnessEnvelope,
@@ -57,6 +58,16 @@ type ManageAllergy = {
   allergen: string;
   reaction: string;
   severity: AllergyVerificationEnvelope['severity'];
+  isNew: boolean;
+  deleted: boolean;
+  editing: boolean;
+  verifyToggle: boolean;
+  verifyTouched: boolean;
+};
+
+type ManageCondition = {
+  key: string;
+  description: string;
   isNew: boolean;
   deleted: boolean;
   editing: boolean;
@@ -123,6 +134,7 @@ type Change = {
   type: 'create' | 'update' | 'delete';
   envelope:
     | AllergyVerificationEnvelope
+    | ConditionVerificationEnvelope
     | DiagnosisVerificationEnvelope
     | MedicationVerificationEnvelope
     | TransfusionWitnessEnvelope
@@ -150,6 +162,18 @@ function initAllergies(info: ScannedEmergencyInfo): ManageAllergy[] {
     allergen: a.allergen,
     reaction: a.reaction ?? '',
     severity: normaliseSeverity(a.severity),
+    isNew: false,
+    deleted: false,
+    editing: false,
+    verifyToggle: true,
+    verifyTouched: false,
+  }));
+}
+
+function initConditions(info: ScannedEmergencyInfo): ManageCondition[] {
+  return info.conditions.map((c, i) => ({
+    key: `c:${i}`,
+    description: c.description,
     isNew: false,
     deleted: false,
     editing: false,
@@ -231,9 +255,11 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
   const [parseError, setParseError] = useState(false);
 
   const [allergies, setAllergies] = useState<ManageAllergy[]>([]);
+  const [conditions, setConditions] = useState<ManageCondition[]>([]);
   const [diagnoses, setDiagnoses] = useState<ManageDiagnosis[]>([]);
   const [medications, setMedications] = useState<ManageMedication[]>([]);
   const [originalAllergies, setOriginalAllergies] = useState<ScannedEmergencyInfo['allergies']>([]);
+  const [originalConditions, setOriginalConditions] = useState<ScannedEmergencyInfo['conditions']>([]);
   const [originalDiagnoses, setOriginalDiagnoses] = useState<ScannedEmergencyInfo['diagnoses']>([]);
   const [originalMedications, setOriginalMedications] = useState<ScannedEmergencyInfo['medications']>([]);
 
@@ -255,9 +281,11 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
     setInfo(null);
     setParseError(false);
     setAllergies([]);
+    setConditions([]);
     setDiagnoses([]);
     setMedications([]);
     setOriginalAllergies([]);
+    setOriginalConditions([]);
     setOriginalDiagnoses([]);
     setOriginalMedications([]);
     setMedInfoForm(EMPTY_MED_INFO_FORM);
@@ -278,9 +306,11 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       }
       setInfo(parsed);
       setAllergies(initAllergies(parsed));
+      setConditions(initConditions(parsed));
       setDiagnoses(initDiagnoses(parsed));
       setMedications(initMedications(parsed));
       setOriginalAllergies(parsed.allergies);
+      setOriginalConditions(parsed.conditions);
       setOriginalDiagnoses(parsed.diagnoses);
       setOriginalMedications(parsed.medications);
       const prefilled = medInfoFromScanned(parsed);
@@ -305,6 +335,10 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
     setAllergies((prev) => prev.map((a) => (a.key === key ? { ...a, ...patch } : a)));
   }, []);
 
+  const setCondition = useCallback((key: string, patch: Partial<ManageCondition>) => {
+    setConditions((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+  }, []);
+
   const setDiagnosis = useCallback((key: string, patch: Partial<ManageDiagnosis>) => {
     setDiagnoses((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   }, []);
@@ -317,6 +351,14 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
     const key = `a:new:${Date.now()}`;
     setAllergies((prev) => [
       { key, allergen: '', reaction: '', severity: 'mild', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
+      ...prev,
+    ]);
+  }, []);
+
+  const handleAddCondition = useCallback(() => {
+    const key = `c:new:${Date.now()}`;
+    setConditions((prev) => [
+      { key, description: '', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
       ...prev,
     ]);
   }, []);
@@ -337,25 +379,28 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
     ]);
   }, []);
 
-  const handleEdit = useCallback((type: 'allergy' | 'diagnosis' | 'medication', key: string) => {
+  const handleEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
     if (type === 'allergy') setAllergy(key, { editing: true });
+    else if (type === 'condition') setCondition(key, { editing: true });
     else if (type === 'diagnosis') setDiagnosis(key, { editing: true });
     else setMedication(key, { editing: true });
-  }, [setAllergy, setDiagnosis, setMedication]);
+  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
 
-  const handleCancelEdit = useCallback((type: 'allergy' | 'diagnosis' | 'medication', key: string) => {
+  const handleCancelEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
     if (type === 'allergy') setAllergy(key, { editing: false });
+    else if (type === 'condition') setCondition(key, { editing: false });
     else if (type === 'diagnosis') setDiagnosis(key, { editing: false });
     else setMedication(key, { editing: false });
-  }, [setAllergy, setDiagnosis, setMedication]);
+  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
 
-  const handleSaveEdit = useCallback((type: 'allergy' | 'diagnosis' | 'medication', key: string) => {
+  const handleSaveEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
     if (type === 'allergy') setAllergy(key, { editing: false });
+    else if (type === 'condition') setCondition(key, { editing: false });
     else if (type === 'diagnosis') setDiagnosis(key, { editing: false });
     else setMedication(key, { editing: false });
-  }, [setAllergy, setDiagnosis, setMedication]);
+  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
 
-  const handleDelete = useCallback((type: 'allergy' | 'diagnosis' | 'medication', key: string, label: string) => {
+  const handleDelete = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string, label: string) => {
     Alert.alert(
       `Remove ${label}?`,
       `This will mark "${label}" for removal from the patient's record when you sync.`,
@@ -366,15 +411,17 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
           style: 'destructive',
           onPress: () => {
             if (type === 'allergy') setAllergy(key, { deleted: true, editing: false });
+            else if (type === 'condition') setCondition(key, { deleted: true, editing: false });
             else if (type === 'diagnosis') setDiagnosis(key, { deleted: true, editing: false });
             else setMedication(key, { deleted: true, editing: false });
           },
         },
       ],
     );
-  }, [setAllergy, setDiagnosis, setMedication]);
+  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
 
   const visibleAllergies = useMemo(() => allergies.filter((a) => !a.deleted), [allergies]);
+  const visibleConditions = useMemo(() => conditions.filter((c) => !c.deleted), [conditions]);
   const visibleDiagnoses = useMemo(() => diagnoses.filter((d) => !d.deleted), [diagnoses]);
   const visibleMedications = useMemo(() => medications.filter((m) => !m.deleted), [medications]);
 
@@ -387,6 +434,23 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
         allergen: item.allergen,
         reaction: item.reaction || null,
         severity: item.severity,
+        verified_by: { user_id: user.id, name: user.fullname },
+        verified_at: new Date().toISOString(),
+      };
+      if (action === 'delete') return { ...base, note: '__delete__' };
+      if (action === 'revoke') return { ...base, note: '__unverify__' };
+      return base;
+    },
+    [user],
+  );
+
+  const buildConditionEnvelope = useCallback(
+    (item: ManageCondition, action: 'create' | 'update' | 'delete' | 'revoke'): ConditionVerificationEnvelope => {
+      if (!user) throw new Error('Not authenticated');
+      const base = {
+        type: 'condition_verification' as const,
+        version: 1 as const,
+        description: item.description,
         verified_by: { user_id: user.id, name: user.fullname },
         verified_at: new Date().toISOString(),
       };
@@ -475,6 +539,22 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       }
     }
 
+    for (const item of conditions) {
+      const orig = originalConditions.find((c) => c.description === item.description);
+      if (item.deleted) {
+        if (orig) changes.push({ type: 'delete', envelope: buildConditionEnvelope(item, 'delete'), envelopeType: 'condition_verification', label: item.description });
+      } else if (item.isNew) {
+        changes.push({ type: 'create', envelope: buildConditionEnvelope(item, 'create'), envelopeType: 'condition_verification', label: item.description });
+      } else if (item.verifyTouched) {
+        changes.push({
+          type: 'update',
+          envelope: buildConditionEnvelope(item, item.verifyToggle ? 'update' : 'revoke'),
+          envelopeType: 'condition_verification',
+          label: item.description,
+        });
+      }
+    }
+
     for (const item of diagnoses) {
       const orig = originalDiagnoses.find((d) => d.condition === item.condition);
       if (item.deleted) {
@@ -556,12 +636,15 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
   }, [
     user,
     allergies,
+    conditions,
     diagnoses,
     medications,
     originalAllergies,
+    originalConditions,
     originalDiagnoses,
     originalMedications,
     buildAllergyEnvelope,
+    buildConditionEnvelope,
     buildDiagnosisEnvelope,
     buildMedicationEnvelope,
     buildMedInfoPatch,
@@ -808,6 +891,76 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
                       <View className="flex-row items-center justify-between">
                         <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
                         <Switch value={item.verifyToggle} onValueChange={(v) => setAllergy(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
+                      </View>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </Card>
+          )}
+        </View>
+
+        {/* Conditions */}
+        <View className="mb-6 gap-2">
+          <View className="flex-row items-center justify-between">
+            <ThemedText type="overline">Conditions</ThemedText>
+            <Pressable onPress={handleAddCondition} hitSlop={8} disabled={sending}>
+              <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+                <Ionicons name="add" size={16} color={theme.primaryForeground} />
+              </View>
+            </Pressable>
+          </View>
+
+          {visibleConditions.length === 0 ? (
+            <Card>
+              <ThemedText type="label" color="mutedForeground">No conditions recorded for this patient.</ThemedText>
+            </Card>
+          ) : (
+            <Card className="p-0">
+              {visibleConditions.map((item, i) => (
+                <View
+                  key={item.key}
+                  className="px-4 py-3"
+                  style={i < visibleConditions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+                >
+                  {item.editing ? (
+                    <View className="gap-2">
+                      {item.isNew ? (
+                        <BottomSheetTextInput
+                          className="rounded-lg border px-3 py-2 text-base"
+                          style={{ borderColor: theme.input, color: theme.foreground }}
+                          placeholder="Condition description"
+                          placeholderTextColor={theme.mutedForeground}
+                          value={item.description}
+                          onChangeText={(v) => setCondition(item.key, { description: v })}
+                          multiline
+                        />
+                      ) : null}
+                      <View className="flex-row items-center justify-between">
+                        <ThemedText type="small">Mark as verified</ThemedText>
+                        <Switch value={item.verifyToggle} onValueChange={(v) => setCondition(item.key, { verifyToggle: v, verifyTouched: true })} />
+                      </View>
+                      <View className="flex-row gap-2">
+                        <PrimaryButton label="Save" onPress={() => handleSaveEdit('condition', item.key)} className="flex-1" />
+                        <PrimaryButton label="Cancel" variant="ghost" onPress={() => handleCancelEdit('condition', item.key)} className="flex-1" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View className="gap-2">
+                      <View className="flex-row items-center gap-3">
+                        <View className="flex-1 shrink">
+                          <ThemedText className="font-semibold">{item.description}</ThemedText>
+                        </View>
+                        <Pressable onPress={() => handleEdit('condition', item.key)} hitSlop={6} disabled={sending}>
+                          <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                        </Pressable>
+                        <Pressable onPress={() => handleDelete('condition', item.key, item.description)} hitSlop={6} disabled={sending}>
+                          <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                        </Pressable>
+                      </View>
+                      <View className="flex-row items-center justify-between">
+                        <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
+                        <Switch value={item.verifyToggle} onValueChange={(v) => setCondition(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
                       </View>
                     </View>
                   )}

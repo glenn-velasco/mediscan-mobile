@@ -9,6 +9,7 @@ export function PickerField<T extends string>({
   value,
   onChange,
   getLabel = (v) => v,
+  disabled,
 }: {
   label: string;
   options: readonly T[];
@@ -16,10 +17,11 @@ export function PickerField<T extends string>({
   onChange: (value: T) => void;
   /** Maps an option value to its display label. Defaults to the raw value. */
   getLabel?: (value: T) => string;
+  disabled?: boolean;
 }) {
   const theme = useTheme();
   return (
-    <View className="mb-6">
+    <View className="mb-6" style={disabled ? { opacity: 0.6 } : undefined}>
       <ThemedText type="small" color="mutedForeground" className="mb-1.5">
         {label}
       </ThemedText>
@@ -29,7 +31,8 @@ export function PickerField<T extends string>({
           return (
             <Pressable
               key={option}
-              onPress={() => onChange(option)}
+              onPress={() => !disabled && onChange(option)}
+              disabled={disabled}
               className="rounded-full border px-3.5 py-1.5"
               style={{
                 borderColor: selected ? theme.primary : theme.input,

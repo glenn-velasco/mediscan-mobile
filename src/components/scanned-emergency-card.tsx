@@ -112,6 +112,28 @@ export function ScannedEmergencyCard({
       {showMedicalDetails && (
         <View className="gap-2">
           <ThemedText type="smallBold" color="mutedForeground">
+            Conditions
+          </ThemedText>
+          {info.conditions.length === 0 ? (
+            <ThemedText color="mutedForeground">None recorded.</ThemedText>
+          ) : (
+            <Card>
+              {info.conditions.map((condition, i) => (
+                <View
+                  key={`${condition.description}-${i}`}
+                  className={i < info.conditions.length - 1 ? 'border-b border-border py-3' : 'py-3'}
+                >
+                  <ThemedText className="shrink">{condition.description}</ThemedText>
+                </View>
+              ))}
+            </Card>
+          )}
+        </View>
+      )}
+
+      {showMedicalDetails && (
+        <View className="gap-2">
+          <ThemedText type="smallBold" color="mutedForeground">
             Medications
           </ThemedText>
           {info.medications.length === 0 ? (

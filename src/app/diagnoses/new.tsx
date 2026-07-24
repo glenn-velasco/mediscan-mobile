@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 
+import { useAuth } from '@/auth/useAuth';
+import { ThemedView } from '@/components/themed-view';
+import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { TextField } from '@/components/form/text-field';
 import { PickerField } from '@/components/form/picker-field';
@@ -11,6 +14,8 @@ import { DIAGNOSIS_SEVERITY_OPTIONS, type DiagnosisSeverity } from '@/constants/
 
 export default function NewDiagnosisScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { mutateAsync: createDiagnosis, isPending } = useCreateDiagnosis();
   const [condition, setCondition] = useState('');
   const [dateOfDiagnosis, setDateOfDiagnosis] = useState('');
@@ -22,8 +27,16 @@ export default function NewDiagnosisScreen() {
     router.back();
   };
 
+  if (!isVerifiedProfessional) {
+    return (
+      <ThemedView className="flex-1 items-center justify-center px-6">
+        <ThemedText>Only a verified professional can add a diagnosis.</ThemedText>
+      </ThemedView>
+    );
+  }
+
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <TextField label="Condition" value={condition} onChangeText={setCondition} placeholder="e.g. Type 2 diabetes" />
       <DateField label="Date of diagnosis" value={dateOfDiagnosis} onChange={setDateOfDiagnosis} maximumDate={new Date()} />
       <PickerField label="Severity" options={DIAGNOSIS_SEVERITY_OPTIONS} value={severity} onChange={setSeverity} />

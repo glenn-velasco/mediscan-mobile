@@ -27,6 +27,7 @@ type DateFieldProps = {
   error?: string;
   /** Background painted behind the floated label where it overlaps the border, so it blends into whatever the field sits on. Defaults to the screen background — override when nesting inside a Card or other surface using `theme.card`. */
   floatingLabelBackground?: string;
+  disabled?: boolean;
 };
 
 function parseIsoDate(value: string): Date {
@@ -48,7 +49,7 @@ function formatDisplay(value: string): string {
 }
 
 /** Date input styled to match TextField — label floats to the top edge of the box once a date is picked, same as TextField/SelectField. */
-export function DateField({ label, value, onChange, minimumDate, maximumDate, error, floatingLabelBackground }: DateFieldProps) {
+export function DateField({ label, value, onChange, minimumDate, maximumDate, error, floatingLabelBackground, disabled }: DateFieldProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -80,14 +81,16 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
     <View className="mb-4">
       <Pressable
         onPress={() => {
+          if (disabled) return;
           if (Platform.OS === 'android') {
             setOpen(true);
           } else {
             sheetRef.current?.present();
           }
         }}
+        disabled={disabled}
         className="relative rounded-xl px-4 py-3"
-        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input }}
+        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input, opacity: disabled ? 0.6 : 1 }}
       >
         <Animated.View
           pointerEvents="none"

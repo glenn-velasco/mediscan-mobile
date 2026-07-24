@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
+import { useAuth } from '@/auth/useAuth';
 import { EmptyState } from '@/components/empty-state';
 import { ManageInfoBottomSheet, type ManageInfoBottomSheetHandle } from '@/components/manage-info-bottom-sheet';
 import { PrimaryButton } from '@/components/primary-button';
@@ -11,20 +13,19 @@ import { QrCodeView } from '@/components/qr-code-view';
 import { QrScannerView } from '@/components/qr-scanner-view';
 import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
 import { ThemedText } from '@/components/themed-text';
-import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
-import { useAuth } from '@/auth/useAuth';
 import { useAllergies } from '@/features/allergies/useAllergies';
+import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useMedications } from '@/features/medications/useMedications';
-import { useBiometricAuth } from '@/lib/use-biometric-auth';
+import { useTheme } from '@/hooks/use-theme';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { useLightweightMode } from '@/lib/lightweight-mode-context';
+import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
-import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
-import { useTheme } from '@/hooks/use-theme';
+import { useBiometricAuth } from '@/lib/use-biometric-auth';
 
 type Mode = 'show' | 'scan';
 
@@ -56,6 +57,7 @@ export default function QuickScanScreen() {
 
   const { data: medicalInformation } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
+  const { data: conditions = [] } = useConditions();
   const { data: diagnoses = [] } = useDiagnoses();
   const { data: medications = [] } = useMedications();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
@@ -73,7 +75,7 @@ export default function QuickScanScreen() {
   useEffect(() => {
     if (!user || !medicalInformation) return;
     let cancelled = false;
-    encryptQrPayload(buildEmergencySummary(user.id, new Date(), medicalInformation, allergies, emergencyContacts, diagnoses, medications)).then(
+    encryptQrPayload(buildEmergencySummary(user.id, new Date(), medicalInformation, allergies, emergencyContacts, diagnoses, medications, conditions)).then(
       (encrypted) => {
         if (!cancelled) setSummary(encrypted);
       },
@@ -81,7 +83,7 @@ export default function QuickScanScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user, medicalInformation, allergies, diagnoses, medications, emergencyContacts]);
+  }, [user, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
 
   const displaySummary = user && medicalInformation ? summary : null;
 
@@ -203,78 +205,84 @@ export default function QuickScanScreen() {
 
   return (
     <>
-      <View className="flex-1 px-6 pt-16" style={{ backgroundColor: theme.background }}>
-        <View className="mb-4 items-end">{closeButton}</View>
+      <View className="flex-1" style={{ backgroundColor: theme.background }}>
+        <ScrollView
+          className="flex-1 px-6 pt-16"
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="mb-4 items-end">{closeButton}</View>
 
-        {mode === 'show' ? (
-          <View className="items-center gap-4">
-            {displaySummary ? (
-              <>
-                <View className="rounded-2xl p-6" style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
-                  <QrCodeView value={displaySummary} size={280} />
-                </View>
+          {mode === 'show' ? (
+            <View className="items-center gap-4">
+              {displaySummary ? (
+                <>
+                  <View className="rounded-2xl p-6" style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
+                    <QrCodeView value={displaySummary} size={280} />
+                  </View>
+                  <Pressable
+                    onPress={() => switchMode('scan')}
+                    className="flex-row items-center justify-center gap-2 rounded-xl px-6 py-3"
+                    style={{ backgroundColor: theme.muted }}
+                  >
+                    <Ionicons name="camera" size={18} color={theme.foreground} />
+                    <ThemedText style={{ fontWeight: '600' }}>Scan</ThemedText>
+                  </Pressable>
+                </>
+              ) : (
+                <EmptyState
+                  title="No medical profile yet"
+                  body="Add your medical information first so it can be shared in an emergency."
+                />
+              )}
+            </View>
+          ) : scanError ? (
+            <View className="items-center gap-4 py-8">
+              <ThemedText style={{ textAlign: 'center', color: theme.mutedForeground }}>
+                That doesn&apos;t look like a MediScan QR code.
+              </ThemedText>
+              <PrimaryButton label="Try again" onPress={() => setScanError(false)} />
+            </View>
+          ) : biometric.status === 'authenticated' && scanned ? (
+            <View className="gap-4">
+              {isVerifiedProfessional && scanned.patientId !== null ? (
                 <Pressable
-                  onPress={() => switchMode('scan')}
-                  className="flex-row items-center justify-center gap-2 rounded-xl px-6 py-3"
-                  style={{ backgroundColor: theme.muted }}
+                  onPress={handleManageInfo}
+                  className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
+                  style={{ backgroundColor: theme.primary + '15', borderWidth: 1, borderColor: theme.primary + '30' }}
                 >
-                  <Ionicons name="camera" size={18} color={theme.foreground} />
-                  <ThemedText style={{ fontWeight: '600' }}>Scan</ThemedText>
+                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '20' }}>
+                    <Ionicons name="medkit" size={18} color={theme.primary} />
+                  </View>
+                  <View className="flex-1">
+                    <ThemedText style={{ fontWeight: '600', color: theme.primary }}>Manage info</ThemedText>
+                    <ThemedText type="small" color="mutedForeground">
+                      Verify allergies, witness consent, or leave a note as a professional.
+                    </ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.primary} />
                 </Pressable>
-              </>
-            ) : (
-              <EmptyState
-                title="No medical profile yet"
-                body="Add your medical information first so it can be shared in an emergency."
-              />
-            )}
-          </View>
-        ) : scanError ? (
-          <View className="items-center gap-4 py-8">
-            <ThemedText style={{ textAlign: 'center', color: theme.mutedForeground }}>
-              That doesn&apos;t look like a MediScan QR code.
-            </ThemedText>
-            <PrimaryButton label="Try again" onPress={() => setScanError(false)} />
-          </View>
-        ) : biometric.status === 'authenticated' && scanned ? (
-          <View className="gap-4">
-            {isVerifiedProfessional && scanned.patientId !== null ? (
-              <Pressable
-                onPress={handleManageInfo}
-                className="flex-row items-center gap-3 rounded-xl px-4 py-3.5"
-                style={{ backgroundColor: theme.primary + '15', borderWidth: 1, borderColor: theme.primary + '30' }}
-              >
-                <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '20' }}>
-                  <Ionicons name="medkit" size={18} color={theme.primary} />
-                </View>
-                <View className="flex-1">
-                  <ThemedText style={{ fontWeight: '600', color: theme.primary }}>Manage info</ThemedText>
-                  <ThemedText type="small" color="mutedForeground">
-                    Verify allergies, witness consent, or leave a note as a professional.
-                  </ThemedText>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.primary} />
-              </Pressable>
-            ) : null}
-            <ScannedEmergencyCard info={scanned} onScanAnother={resetScan} showMedicalDetails />
-          </View>
-        ) : (
-          <View className="items-center gap-4 py-8">
-            <Ionicons name="lock-closed" size={32} color={theme.mutedForeground} />
-            <ThemedText type="heading" className="text-center">
-              Authenticate to view
-            </ThemedText>
-            <ThemedText style={{ textAlign: 'center', color: theme.mutedForeground }}>
-              {biometric.status === 'unavailable'
-                ? 'No biometrics or passcode set up on this device, so scanned info can’t be shown here.'
-                : biometric.status === 'failed'
-                  ? 'Authentication failed or was cancelled.'
-                  : 'Waiting for authentication…'}
-            </ThemedText>
-            {biometric.status === 'failed' ? <PrimaryButton label="Try again" onPress={() => void biometric.authenticate()} /> : null}
-            <PrimaryButton label="Cancel" variant="ghost" onPress={() => switchMode('show')} />
-          </View>
-        )}
+              ) : null}
+              <ScannedEmergencyCard info={scanned} onScanAnother={resetScan} showMedicalDetails />
+            </View>
+          ) : (
+            <View className="items-center gap-4 py-8">
+              <Ionicons name="lock-closed" size={32} color={theme.mutedForeground} />
+              <ThemedText type="heading" className="text-center">
+                Authenticate to view
+              </ThemedText>
+              <ThemedText style={{ textAlign: 'center', color: theme.mutedForeground }}>
+                {biometric.status === 'unavailable'
+                  ? 'No biometrics or passcode set up on this device, so scanned info can’t be shown here.'
+                  : biometric.status === 'failed'
+                    ? 'Authentication failed or was cancelled.'
+                    : 'Waiting for authentication…'}
+              </ThemedText>
+              {biometric.status === 'failed' ? <PrimaryButton label="Try again" onPress={() => void biometric.authenticate()} /> : null}
+              <PrimaryButton label="Cancel" variant="ghost" onPress={() => switchMode('show')} />
+            </View>
+          )}
+        </ScrollView>
       </View>
       <ManageInfoBottomSheet ref={manageInfoSheetRef} />
     </>

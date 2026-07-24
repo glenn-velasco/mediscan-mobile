@@ -33,7 +33,7 @@ export default function NewEmergencyContactScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <TextField label="Name *" value={name} onChangeText={setName} placeholder="e.g. Juan Dela Cruz" />
       <SelectField
         placeholder="Relationship"

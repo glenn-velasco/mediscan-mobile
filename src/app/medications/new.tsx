@@ -21,7 +21,7 @@ export default function NewMedicationScreen() {
   };
 
   return (
-    <AppLayout>
+    <AppLayout avoidKeyboard>
       <TextField label="Name" value={name} onChangeText={setName} placeholder="e.g. Metformin" />
       <TextField label="Dosage" value={dosage} onChangeText={setDosage} placeholder="e.g. 500mg" />
       <TextField label="Frequency" value={frequency} onChangeText={setFrequency} placeholder="e.g. Twice daily" />
