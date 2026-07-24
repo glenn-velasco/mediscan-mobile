@@ -3,8 +3,23 @@ import * as Crypto from 'expo-crypto';
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
 import { encryptField, decryptField } from '@/lib/crypto';
-import type { MedicationRawRow, MedicationRow } from '@/db/schema';
+import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
+import type { MedicationRawRow, MedicationRow, VerifiedByEntry } from '@/db/schema';
 import type { MedicationPayload } from '@/api/types';
+
+function parseVerifiedBy(value: unknown): VerifiedByEntry[] | null {
+  if (value == null) return null;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
 
 async function decryptRow(row: MedicationRawRow): Promise<MedicationRow> {
   return {
@@ -18,6 +33,7 @@ async function decryptRow(row: MedicationRawRow): Promise<MedicationRow> {
     dosage: (await decryptField(row.dosage)) ?? '',
     frequency: row.frequency,
     notes: await decryptField(row.notes),
+    verified_by: parseVerifiedBy(row.verified_by),
   };
 }
 
@@ -76,12 +92,24 @@ export async function updateLocal(localUuid: string, payload: Partial<Medication
   const existing = await getByLocalUuid(localUuid);
   if (!existing) return;
 
+  const dataChanged =
+    (payload.name != null && payload.name !== existing.name) ||
+    (payload.dosage != null && payload.dosage !== existing.dosage) ||
+    (payload.frequency != null && payload.frequency !== existing.frequency) ||
+    (payload.notes !== undefined && (payload.notes ?? '') !== (existing.notes ?? ''));
+
+  if (dataChanged) {
+    await professionalAttestationRepo.removeForMedication(localUuid);
+  }
+
   await db.runAsync(
-    `UPDATE medications SET name = ?, dosage = ?, frequency = ?, notes = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
+    `UPDATE medications SET name = ?, dosage = ?, frequency = ?, notes = ?, verified_by = ?, sync_status = ?, updated_at_local = ? WHERE local_uuid = ?`,
     await encryptField(payload.name ?? existing.name),
     await encryptField(payload.dosage ?? existing.dosage),
     payload.frequency ?? existing.frequency,
     await encryptField(payload.notes !== undefined ? (payload.notes ?? null) : existing.notes),
+    dataChanged ? null : JSON.stringify(existing.verified_by ?? []),
+    dataChanged ? 'pending' : 'synced',
     new Date().toISOString(),
     localUuid,
   );
@@ -160,20 +188,22 @@ export async function upsertFromServer(record: {
   dosage: string;
   frequency: string;
   notes?: string;
+  verified_by?: string | null;
   updated_at: string;
 }): Promise<void> {
   const db = await getDb();
   const userId = getCurrentUserId();
 
   await db.runAsync(
-    `INSERT INTO medications (local_uuid, user_id, server_id, name, dosage, frequency, notes, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, 1, ?, ?, ?, ?, 'synced', 0, ?)
+    `INSERT INTO medications (local_uuid, user_id, server_id, name, dosage, frequency, notes, verified_by, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'synced', 0, ?)
      ON CONFLICT(local_uuid) DO UPDATE SET
        server_id = 1,
        name = excluded.name,
        dosage = excluded.dosage,
        frequency = excluded.frequency,
        notes = excluded.notes,
+       verified_by = excluded.verified_by,
        sync_status = 'synced',
        deleted_locally = 0,
        updated_at_local = excluded.updated_at_local`,
@@ -183,15 +213,61 @@ export async function upsertFromServer(record: {
     await encryptField(record.dosage),
     record.frequency,
     await encryptField(record.notes ?? null),
+    record.verified_by != null
+      ? (typeof record.verified_by === 'string' ? record.verified_by : JSON.stringify(record.verified_by))
+      : null,
     record.updated_at,
   );
 }
 
-export function toPayload(row: MedicationRow): MedicationPayload {
+export function toPayload(row: MedicationRow): MedicationPayload & { verified_by?: string | null } {
   return {
     name: row.name,
     dosage: row.dosage,
     frequency: row.frequency,
     notes: row.notes ?? undefined,
+    verified_by: row.verified_by != null ? JSON.stringify(row.verified_by) : null,
   };
+}
+
+/**
+ * Update the verified_by JSON column on a medication record.
+ * Adds or updates the verification entry for the given professional (idempotent).
+ */
+export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry): Promise<void> {
+  const db = await getDb();
+  const existing = await getByLocalUuid(localUuid);
+  if (!existing) return;
+
+  const current: VerifiedByEntry[] = existing.verified_by ?? [];
+  // Remove existing entry for this user (idempotent)
+  const filtered = current.filter(v => v.user_id !== entry.user_id);
+  filtered.push(entry);
+
+  await db.runAsync(
+    'UPDATE medications SET verified_by = ?, updated_at_local = ? WHERE local_uuid = ?',
+    JSON.stringify(filtered),
+    new Date().toISOString(),
+    localUuid,
+  );
+  console.debug('[MedicationRepo] Updated verified_by', { localUuid, userId: entry.user_id });
+}
+
+/**
+ * Remove a verification entry for a specific user from a medication record.
+ */
+export async function removeVerifiedBy(localUuid: string, userId: number): Promise<void> {
+  const db = await getDb();
+  const existing = await getByLocalUuid(localUuid);
+  if (!existing || !existing.verified_by) return;
+
+  const filtered = existing.verified_by.filter(v => v.user_id !== userId);
+
+  await db.runAsync(
+    'UPDATE medications SET verified_by = ?, updated_at_local = ? WHERE local_uuid = ?',
+    filtered.length > 0 ? JSON.stringify(filtered) : null,
+    new Date().toISOString(),
+    localUuid,
+  );
+  console.debug('[MedicationRepo] Removed verified_by', { localUuid, userId });
 }

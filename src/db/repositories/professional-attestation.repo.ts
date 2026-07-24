@@ -103,6 +103,17 @@ export async function getForMedication<T = unknown>(medicationLocalUuid: string)
   return Promise.all(rows.map((row) => decryptRow<T>(row)));
 }
 
+export async function getForCondition<T = unknown>(conditionLocalUuid: string): Promise<ProfessionalAttestation<T>[]> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  const rows = await db.getAllAsync<ProfessionalAttestationRow>(
+    'SELECT * FROM professional_attestations WHERE user_id = ? AND matched_condition_local_uuid = ? ORDER BY created_at DESC',
+    userId,
+    conditionLocalUuid,
+  );
+  return Promise.all(rows.map((row) => decryptRow<T>(row)));
+}
+
 /** User-driven manual confirmation for an ambiguous/no-match allergy_verification attestation — never auto-applied (see merge.service.ts). */
 export async function setMatchedAllergy(localId: string, allergyLocalUuid: string): Promise<void> {
   const db = await getDb();
@@ -130,5 +141,45 @@ export async function setMatchedMedication(localId: string, medicationLocalUuid:
     'UPDATE professional_attestations SET matched_medication_local_uuid = ? WHERE local_id = ?',
     medicationLocalUuid,
     localId,
+  );
+}
+
+export async function removeForAllergy(allergyLocalUuid: string): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  await db.runAsync(
+    'DELETE FROM professional_attestations WHERE user_id = ? AND matched_allergy_local_uuid = ?',
+    userId,
+    allergyLocalUuid,
+  );
+}
+
+export async function removeForCondition(conditionLocalUuid: string): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  await db.runAsync(
+    'DELETE FROM professional_attestations WHERE user_id = ? AND matched_condition_local_uuid = ?',
+    userId,
+    conditionLocalUuid,
+  );
+}
+
+export async function removeForDiagnosis(diagnosisLocalUuid: string): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  await db.runAsync(
+    'DELETE FROM professional_attestations WHERE user_id = ? AND matched_diagnosis_local_uuid = ?',
+    userId,
+    diagnosisLocalUuid,
+  );
+}
+
+export async function removeForMedication(medicationLocalUuid: string): Promise<void> {
+  const db = await getDb();
+  const userId = getCurrentUserId();
+  await db.runAsync(
+    'DELETE FROM professional_attestations WHERE user_id = ? AND matched_medication_local_uuid = ?',
+    userId,
+    medicationLocalUuid,
   );
 }
