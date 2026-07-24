@@ -190,11 +190,14 @@ async function createOrUpdateOrDeleteDiagnosis(diagnosis: DiagnosisVerificationE
   }
 
   console.debug(TAG, 'Creating new diagnosis', { condition: diagnosis.condition });
-  const newUuid = await diagnosesRepo.createLocal({
-    condition: diagnosis.condition,
-    date_of_diagnosis: diagnosis.date_of_diagnosis ?? undefined,
-    severity: diagnosis.severity,
-  });
+  const newUuid = await diagnosesRepo.createLocal(
+    {
+      condition: diagnosis.condition,
+      date_of_diagnosis: diagnosis.date_of_diagnosis ?? undefined,
+      severity: diagnosis.severity,
+    },
+    { diagnosed_by_id: diagnosis.verified_by.user_id, diagnosed_by_name: diagnosis.verified_by.name },
+  );
   // Update verified_by on new record
   const verifiedEntry: VerifiedByEntry = {
     user_id: diagnosis.verified_by.user_id,

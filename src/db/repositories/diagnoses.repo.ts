@@ -65,7 +65,10 @@ export async function getByLocalUuid(localUuid: string): Promise<DiagnosisRow | 
   return row ? decryptRow(row) : null;
 }
 
-export async function createLocal(payload: DiagnosisPayload): Promise<string> {
+export async function createLocal(
+  payload: DiagnosisPayload,
+  opts?: { diagnosed_by_id?: number | null; diagnosed_by_name?: string | null },
+): Promise<string> {
   const db = await getDb();
   const userId = getCurrentUserId();
   const localUuid = Crypto.randomUUID();
@@ -73,12 +76,14 @@ export async function createLocal(payload: DiagnosisPayload): Promise<string> {
 
   await db.runAsync(
     `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, diagnosed_by_id, diagnosed_by_name, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL, 'synced', 0, ?)`,
+     VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'synced', 0, ?)`,
     localUuid,
     userId,
     await encryptField(payload.condition),
     payload.date_of_diagnosis ?? null,
     payload.severity,
+    opts?.diagnosed_by_id ?? null,
+    opts?.diagnosed_by_name ?? null,
     now,
   );
   return localUuid;
@@ -217,11 +222,12 @@ export async function upsertFromServer(record: {
   );
 }
 
-export function toPayload(row: DiagnosisRow): DiagnosisPayload & { verified_by?: string | null } {
+export function toPayload(row: DiagnosisRow): DiagnosisPayload & { verified_by?: string | null; diagnosed_by?: { id: number; fullname: string } | null } {
   return {
     condition: row.condition,
-    date_of_diagnosis: row.date_of_diagnosis ?? undefined,
+    date_of_diagnosis: row.date_of_diagnosis || undefined,
     severity: row.severity,
+    diagnosed_by: row.diagnosed_by_id != null ? { id: row.diagnosed_by_id, fullname: row.diagnosed_by_name ?? '' } : null,
     verified_by: row.verified_by != null ? JSON.stringify(row.verified_by) : null,
   };
 }

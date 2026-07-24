@@ -178,25 +178,11 @@ async function pushConditions(): Promise<void> {
 }
 
 async function pushDiagnoses(): Promise<void> {
-  const rows = await diagnosesRepo.getAllForPush();
-  // Only push diagnoses that already exist on the server (have a server_id). New diagnoses
-  // created via BLE merge are authored by a verified professional whose envelope submission
-  // already created the record server-side — the patient's own sync can't create diagnoses
-  // (the server returns 404 since the patient lacks the "verified professional" permission).
-  const pushable = rows.filter((r) => r.server_id);
-  const skipped = rows.filter((r) => !r.server_id);
-  if (skipped.length > 0) {
-    console.debug(TAG, `pushDiagnoses: skipping ${skipped.length} BLE-merged diagnosis(es) without server_id (waiting for professional's push)`, {
-      uuids: skipped.map((r) => r.local_uuid),
-    });
-  }
-  if (pushable.length === 0) return;
-
   const medicalInformation = await medicalInformationRepo.getLocal();
   const medicalInformationId = medicalInformation?.server_id;
   if (!medicalInformationId) return;
 
-  for (const row of pushable) {
+  for (const row of await diagnosesRepo.getAllForPush()) {
     await pushOne(
       'diagnosis',
       () =>

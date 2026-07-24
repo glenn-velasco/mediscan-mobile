@@ -8,7 +8,7 @@ export type DiagnosisApiRecord = DiagnosisPayload & {
   updated_at: string;
 };
 
-export function createDiagnosis(medicalInformationId: number, id: string, payload: DiagnosisPayload) {
+export function createDiagnosis(medicalInformationId: number, id: string, payload: DiagnosisPayload & { diagnosed_by?: DiagnosedBy | null }) {
   return apiClient.post<DiagnosisApiRecord>(`api/v1/medical-information/${medicalInformationId}/diagnoses`, {
     id,
     ...payload,
