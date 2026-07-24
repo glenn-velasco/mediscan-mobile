@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { Pressable, Switch, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { AuthLayout } from '@/components/layouts/auth-layout';
@@ -51,8 +52,11 @@ export default function RegisterScreen() {
   const [religion, setReligion] = useState<Religion | undefined>(undefined);
   const [medicalAddress, setMedicalAddress] = useState<MedicalInformationAddress>(EMPTY_ADDRESS);
   const [noBloodTransfusion, setNoBloodTransfusion] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const friendlyMessage = message ? 'Something went wrong. Please check your details and try again.' : null;
 
   const parseFieldErrors = (issues: readonly any[]) => {
     const errors: Record<string, string> = {};
@@ -145,13 +149,18 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!acceptedTerms) {
+      setFieldErrors({ terms: 'You must accept the Terms of Service' });
+      setStep(2);
+      return;
+    }
+
     try {
       let phoneNumber = '';
       if (phoneValue.phone && phoneValue.countryCode) {
         const parsed = parsePhoneNumberFromString(phoneValue.phone, phoneValue.countryCode as any);
         phoneNumber = parsed ? parsed.number : `+${phoneValue.countryCode}${phoneValue.phone}`;
       }
-      console.warn('[register] phoneNumber constructed:', phoneNumber, '| raw phone:', phoneValue.phone, '| cc:', phoneValue.countryCode);
 
       const registerPayload = {
         email: step0Result.data.email,
@@ -167,7 +176,6 @@ export default function RegisterScreen() {
         phone_number: phoneNumber,
         phone_country_code: phoneValue.countryCode,
       };
-      console.warn('[register] payload:', registerPayload);
 
       const medicalInfo = {
         email: step0Result.data.email,
@@ -190,7 +198,6 @@ export default function RegisterScreen() {
         router.replace('/registration-pending');
       }
     } catch (err) {
-      console.warn('[register] error:', err);
       setError(err);
       const apiErrors = getFieldErrors(err, { dob: 'date_of_birth', phone_number: 'phone' });
       if (Object.keys(apiErrors).length > 0) {
@@ -258,7 +265,7 @@ export default function RegisterScreen() {
             error={fieldErrors.passwordConfirmation}
           />
 
-          <FormError message={message} />
+          <FormError message={friendlyMessage} />
           <PrimaryButton label="Next" onPress={onNext} />
         </>
       )}
@@ -285,7 +292,7 @@ export default function RegisterScreen() {
           />
           <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
 
-          <FormError message={message} />
+          <FormError message={friendlyMessage} />
           <PrimaryButton label="Next" onPress={onNext} />
           <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
         </>
@@ -321,7 +328,38 @@ export default function RegisterScreen() {
             <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} />
           </View>
 
-          <FormError message={message} />
+          <Pressable
+            className="mb-2 flex-row items-start gap-3"
+            onPress={() => setAcceptedTerms((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: acceptedTerms }}
+          >
+            <Ionicons
+              name={acceptedTerms ? 'checkmark-circle' : 'checkmark-circle-outline'}
+              size={22}
+              color={acceptedTerms ? theme.primary : theme.mutedForeground}
+              style={{ marginTop: 1 }}
+            />
+            <ThemedText type="body" color="mutedForeground" className="flex-1">
+              I have read and agree to the{' '}
+              <ThemedText
+                type="linkPrimary"
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  router.push('/terms');
+                }}
+              >
+                Terms of Service
+              </ThemedText>
+            </ThemedText>
+          </Pressable>
+          {fieldErrors.terms ? (
+            <ThemedText type="small" color="destructive" className="mb-2 pl-8">
+              {fieldErrors.terms}
+            </ThemedText>
+          ) : null}
+
+          <FormError message={friendlyMessage} />
           <PrimaryButton label="Create account" loading={isPending} onPress={onSubmit} />
           <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
         </>

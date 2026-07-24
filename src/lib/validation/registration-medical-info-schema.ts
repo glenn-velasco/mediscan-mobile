@@ -21,8 +21,8 @@ export const registrationMedicalInfoSchema = z.object({
 });
 
 export const registrationAddressSchema = z.object({
-  street: z.string().trim().min(1, 'Street is required'),
-  city: z.string().trim().min(1, 'City is required'),
+  street: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Street is required')),
+  city: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'City is required')),
   unit: z.string().nullable().optional(),
   province: z.string().nullable().optional(),
   postal_code: z.string().nullable().optional(),
