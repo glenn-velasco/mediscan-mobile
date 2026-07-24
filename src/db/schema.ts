@@ -63,6 +63,12 @@ export type AllergyEncryptedFields = {
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
 };
 
+export type VerifiedByEntry = {
+  user_id: number;
+  name: string;
+  verified_at: string;
+};
+
 /** `allergen`/`reaction` hold ciphertext at rest; `severity` is a bounded enum, stored plaintext (see migration 011's table comment). */
 export type AllergyRawRow = {
   local_uuid: string;
@@ -71,6 +77,7 @@ export type AllergyRawRow = {
   allergen: string;
   reaction: string | null;
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
+  verified_by: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -80,6 +87,7 @@ export type AllergyRow = AllergyEncryptedFields & {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
+  verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -95,6 +103,7 @@ export type ConditionRawRow = {
   user_id: number;
   server_id: number | null;
   description: string;
+  verified_by: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -104,6 +113,7 @@ export type ConditionRow = ConditionEncryptedFields & {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
+  verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -157,6 +167,7 @@ export type DiagnosisRawRow = {
   severity: DiagnosisSeverity;
   diagnosed_by_id: number | null;
   diagnosed_by_name: string | null;
+  verified_by: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -168,6 +179,7 @@ export type DiagnosisRow = DiagnosisEncryptedFields & {
   server_id: number | null;
   diagnosed_by_id: number | null;
   diagnosed_by_name: string | null;
+  verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -189,6 +201,7 @@ export type MedicationRawRow = {
   dosage: string;
   frequency: string;
   notes: string | null;
+  verified_by: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -198,6 +211,7 @@ export type MedicationRow = MedicationEncryptedFields & {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
+  verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;

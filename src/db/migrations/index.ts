@@ -14,8 +14,10 @@ import * as migration011 from '@/db/migrations/011_split_encrypted_fields';
 import * as migration012 from '@/db/migrations/012_diagnosis_authorship';
 import * as migration013 from '@/db/migrations/013_conditions';
 import * as migration014 from '@/db/migrations/014_condition_attestations';
+import * as migration015 from '@/db/migrations/015_pending_verification_syncs';
+import * as migration016 from '@/db/migrations/016_add_verified_by_to_records';
 
-const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012, migration013, migration014];
+const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012, migration013, migration014, migration015, migration016];
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`
@@ -24,6 +26,8 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
       applied_at TEXT NOT NULL
     );
   `);
+
+  let ranMigration016 = false;
 
   for (const migration of migrations) {
     const existing = await db.getFirstAsync<{ version: number }>(
@@ -40,5 +44,19 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
         new Date().toISOString(),
       );
     });
+
+    if (migration.version === 16) {
+      ranMigration016 = true;
+    }
+  }
+
+  // Backfill verified_by from existing attestations after migration 016
+  if (ranMigration016) {
+    try {
+      const { backfillVerifiedBy } = await import('@/services/backfill-verified-by.service');
+      await backfillVerifiedBy();
+    } catch (err) {
+      console.warn('[Migrations] Backfill verified_by failed (will retry on next sync)', err);
+    }
   }
 }
