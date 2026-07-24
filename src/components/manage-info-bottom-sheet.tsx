@@ -1,5 +1,5 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, Switch, View } from 'react-native';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, Switch, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -245,7 +245,7 @@ function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
-export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(function ManageInfoBottomSheet(_props, ref) {
+export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle, { onSuccess?: () => void }>(function ManageInfoBottomSheet({ onSuccess }, ref) {
   const sheetRef = useRef<BottomSheetModal>(null);
   const theme = useTheme();
   const { user } = useAuth();
@@ -276,6 +276,14 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
   const [sentSuccessfully, setSentSuccessfully] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [sendMode, setSendMode] = useState<'ble' | 'internet' | null>(null);
+
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   const resetAll = useCallback((pid: number, qrData: string) => {
     setPatientId(pid);
@@ -698,6 +706,10 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       }
 
       setSentSuccessfully(true);
+      closeTimerRef.current = setTimeout(() => {
+        sheetRef.current?.dismiss();
+        onSuccess?.();
+      }, 1500);
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Bluetooth sync failed.');
     } finally {
@@ -723,6 +735,10 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       }
 
       setSentSuccessfully(true);
+      closeTimerRef.current = setTimeout(() => {
+        sheetRef.current?.dismiss();
+        onSuccess?.();
+      }, 1500);
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Internet sync failed.');
     } finally {
@@ -753,6 +769,15 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
         </View>
         <ThemedText type="heading" className="text-center">Update sent</ThemedText>
         <ThemedText type="caption" className="text-center">The patient will see this the next time their device syncs.</ThemedText>
+      </View>
+    );
+  } else if (sending) {
+    body = (
+      <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
+        <ActivityIndicator size="large" color={theme.primary} />
+        <ThemedText type="heading" className="text-center">
+          {sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Sending update…'}
+        </ThemedText>
       </View>
     );
   } else {

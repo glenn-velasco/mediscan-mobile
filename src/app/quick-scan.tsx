@@ -198,7 +198,7 @@ export default function QuickScanScreen() {
             </View>
           </View>
         </View>
-        <ManageInfoBottomSheet ref={manageInfoSheetRef} />
+        <ManageInfoBottomSheet ref={manageInfoSheetRef} onSuccess={handleClose} />
       </>
     );
   }
@@ -284,7 +284,7 @@ export default function QuickScanScreen() {
           )}
         </ScrollView>
       </View>
-      <ManageInfoBottomSheet ref={manageInfoSheetRef} />
+      <ManageInfoBottomSheet ref={manageInfoSheetRef} onSuccess={handleClose} />
     </>
   );
 }
