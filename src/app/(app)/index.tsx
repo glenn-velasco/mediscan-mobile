@@ -126,15 +126,14 @@ export default function HomeScreen() {
   }, [checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
 
   useEffect(() => {
-    if (!checklist.loaded || checklist.complete) return;
+    if (checklist.complete) return;
     checklist.markPrompted().then((shouldPrompt) => {
       if (shouldPrompt) router.push('/onboarding-tasks');
     });
-  }, [checklist.loaded, checklist.complete, checklist.markPrompted, router]);
+  }, [checklist.complete, checklist.markPrompted, router]);
 
   const prevTaskDoneRef = useRef<Map<OnboardingTaskId, boolean> | null>(null);
   useEffect(() => {
-    if (!checklist.loaded) return;
     const prev = prevTaskDoneRef.current;
     if (prev) {
       const justCompleted = checklist.tasks.find((task) => task.done && prev.get(task.id) === false);
@@ -147,7 +146,7 @@ export default function HomeScreen() {
       }
     }
     prevTaskDoneRef.current = new Map(checklist.tasks.map((task) => [task.id, task.done]));
-  }, [checklist.loaded, checklist.tasks, checklist.total]);
+  }, [checklist.tasks, checklist.total]);
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
   const age = profile ? user?.age : null;
@@ -305,7 +304,6 @@ export default function HomeScreen() {
             doneCount={checklist.doneCount}
             total={checklist.total}
             onPress={() => onboardingChecklistSheetRef.current?.present()}
-            onDismiss={() => void checklist.dismiss()}
           />
         ) : null}
         <View className="mb-6 gap-2">

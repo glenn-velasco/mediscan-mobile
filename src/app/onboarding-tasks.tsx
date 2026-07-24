@@ -7,6 +7,7 @@ import { useAuth } from '@/auth/useAuth';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/card';
 import { useAllergies } from '@/features/allergies/useAllergies';
+import { useConditions } from '@/features/conditions/useConditions';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { useMedications } from '@/features/medications/useMedications';
@@ -17,6 +18,7 @@ import { useOnboardingChecklist, type OnboardingTaskId } from '@/onboarding/useO
 const TASK_ROUTE: Partial<Record<OnboardingTaskId, string>> = {
   emergency_contacts: '/emergency-contacts/new',
   allergies: '/allergies/new',
+  conditions: '/conditions/new',
   medications: '/medications/new',
 };
 
@@ -25,6 +27,7 @@ export default function OnboardingTasksScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { data: allergies = [] } = useAllergies();
+  const { data: conditions = [] } = useConditions();
   const { data: medications = [] } = useMedications();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
@@ -34,6 +37,7 @@ export default function OnboardingTasksScreen() {
     emailVerified: !!user?.email_verified_at,
     hasEmergencyContacts: emergencyContacts.length > 0,
     hasAllergies: allergies.length > 0,
+    hasConditions: conditions.length > 0,
     hasMedications: medications.length > 0,
   });
 
@@ -48,7 +52,6 @@ export default function OnboardingTasksScreen() {
   };
 
   const handleClose = () => {
-    void checklist.dismiss();
     router.back();
   };
 

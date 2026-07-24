@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 export type OnboardingTaskId = 'email_verified' | 'emergency_contacts' | 'allergies' | 'conditions' | 'medications';
 
@@ -20,10 +20,6 @@ type ChecklistInput = {
   hasMedications: boolean;
 };
 
-function dismissedKey(userId: number) {
-  return `onboarding_checklist_dismissed_${userId}`;
-}
-
 function notifiedKey(userId: number) {
   return `onboarding_checklist_notified_${userId}`;
 }
@@ -34,23 +30,9 @@ function promptedKey(userId: number) {
 
 /**
  * Derives the "finish setting up your profile" checklist from data already fetched on the
- * dashboard — no extra network calls. Dismissal is persisted per-user so closing the card
- * doesn't nag again, independent of whether every task is actually complete.
+ * dashboard — no extra network calls. The card is always visible until every task is complete.
  */
 export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyContacts, hasAllergies, hasConditions, hasMedications }: ChecklistInput) {
-  const [dismissed, setDismissed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!userId) return;
-    setDismissed(null);
-    AsyncStorage.getItem(dismissedKey(userId)).then((value) => setDismissed(value === 'true'));
-  }, [userId]);
-
-  const dismiss = useCallback(async () => {
-    if (!userId) return;
-    await AsyncStorage.setItem(dismissedKey(userId), 'true');
-    setDismissed(true);
-  }, [userId]);
 
   const tasks = useMemo<OnboardingTask[]>(
     () => [
@@ -65,7 +47,7 @@ export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyCont
 
   const doneCount = tasks.filter((t) => t.done).length;
   const complete = doneCount === tasks.length;
-  const visible = dismissed === false && !complete;
+  const visible = !complete;
 
   const markNotified = useCallback(async (): Promise<boolean> => {
     if (!userId) return false;
@@ -86,5 +68,5 @@ export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyCont
     return true;
   }, [userId]);
 
-  return { tasks, doneCount, total: tasks.length, complete, visible, loaded: dismissed !== null, dismiss, markNotified, markPrompted };
+  return { tasks, doneCount, total: tasks.length, complete, visible, markNotified, markPrompted };
 }
