@@ -9,6 +9,7 @@ export type ProfessionalAttestation<T = unknown> = {
   envelope_type: string;
   payload: T;
   matched_allergy_local_uuid: string | null;
+  matched_condition_local_uuid: string | null;
   matched_diagnosis_local_uuid: string | null;
   matched_medication_local_uuid: string | null;
   created_at: string;
@@ -22,6 +23,7 @@ async function decryptRow<T>(row: ProfessionalAttestationRow): Promise<Professio
     envelope_type: row.envelope_type,
     payload,
     matched_allergy_local_uuid: row.matched_allergy_local_uuid,
+    matched_condition_local_uuid: row.matched_condition_local_uuid,
     matched_diagnosis_local_uuid: row.matched_diagnosis_local_uuid,
     matched_medication_local_uuid: row.matched_medication_local_uuid,
     created_at: row.created_at,
@@ -34,6 +36,7 @@ export async function insert(params: {
   envelopeType: string;
   payload: unknown;
   matchedAllergyLocalUuid: string | null;
+  matchedConditionLocalUuid: string | null;
   matchedDiagnosisLocalUuid: string | null;
   matchedMedicationLocalUuid: string | null;
 }): Promise<void> {
@@ -42,14 +45,15 @@ export async function insert(params: {
   const encryptedPayload = await encryptJson(params.payload);
   await db.runAsync(
     `INSERT INTO professional_attestations
-       (local_id, user_id, source_envelope_local_id, envelope_type, encrypted_payload, matched_allergy_local_uuid, matched_diagnosis_local_uuid, matched_medication_local_uuid, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (local_id, user_id, source_envelope_local_id, envelope_type, encrypted_payload, matched_allergy_local_uuid, matched_condition_local_uuid, matched_diagnosis_local_uuid, matched_medication_local_uuid, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params.localId,
     userId,
     params.sourceEnvelopeLocalId,
     params.envelopeType,
     encryptedPayload,
     params.matchedAllergyLocalUuid,
+    params.matchedConditionLocalUuid,
     params.matchedDiagnosisLocalUuid,
     params.matchedMedicationLocalUuid,
     new Date().toISOString(),

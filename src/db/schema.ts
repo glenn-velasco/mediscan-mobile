@@ -85,6 +85,30 @@ export type AllergyRow = AllergyEncryptedFields & {
   updated_at_local: string;
 };
 
+export type ConditionEncryptedFields = {
+  description: string;
+};
+
+/** `description` holds ciphertext at rest. */
+export type ConditionRawRow = {
+  local_uuid: string;
+  user_id: number;
+  server_id: number | null;
+  description: string;
+  sync_status: AllergySyncStatus;
+  deleted_locally: 0 | 1;
+  updated_at_local: string;
+};
+
+export type ConditionRow = ConditionEncryptedFields & {
+  local_uuid: string;
+  user_id: number;
+  server_id: number | null;
+  sync_status: AllergySyncStatus;
+  deleted_locally: 0 | 1;
+  updated_at_local: string;
+};
+
 export type EmergencyContactEncryptedFields = {
   name: string;
   relationship: string | null;
@@ -131,6 +155,8 @@ export type DiagnosisRawRow = {
   condition: string;
   date_of_diagnosis: string | null;
   severity: DiagnosisSeverity;
+  diagnosed_by_id: number | null;
+  diagnosed_by_name: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -140,6 +166,8 @@ export type DiagnosisRow = DiagnosisEncryptedFields & {
   local_uuid: string;
   user_id: number;
   server_id: number | null;
+  diagnosed_by_id: number | null;
+  diagnosed_by_name: string | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
   updated_at_local: string;
@@ -218,6 +246,7 @@ export type ProfessionalAttestationRow = {
   envelope_type: string;
   encrypted_payload: string;
   matched_allergy_local_uuid: string | null;
+  matched_condition_local_uuid: string | null;
   matched_diagnosis_local_uuid: string | null;
   matched_medication_local_uuid: string | null;
   created_at: string;

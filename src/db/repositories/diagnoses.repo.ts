@@ -17,6 +17,8 @@ async function decryptRow(row: DiagnosisRawRow): Promise<DiagnosisRow> {
     condition: (await decryptField(row.condition)) ?? '',
     date_of_diagnosis: row.date_of_diagnosis,
     severity: row.severity,
+    diagnosed_by_id: row.diagnosed_by_id,
+    diagnosed_by_name: row.diagnosed_by_name,
   };
 }
 
@@ -54,8 +56,8 @@ export async function createLocal(payload: DiagnosisPayload): Promise<string> {
   const now = new Date().toISOString();
 
   await db.runAsync(
-    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, NULL, ?, ?, ?, 'synced', 0, ?)`,
+    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, diagnosed_by_id, diagnosed_by_name, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, NULL, ?, ?, ?, NULL, NULL, 'synced', 0, ?)`,
     localUuid,
     userId,
     await encryptField(payload.condition),
@@ -153,19 +155,22 @@ export async function upsertFromServer(record: {
   condition: string;
   date_of_diagnosis?: string;
   severity: DiagnosisRow['severity'];
+  diagnosed_by?: { id: number; fullname: string } | null;
   updated_at: string;
 }): Promise<void> {
   const db = await getDb();
   const userId = getCurrentUserId();
 
   await db.runAsync(
-    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, sync_status, deleted_locally, updated_at_local)
-     VALUES (?, ?, 1, ?, ?, ?, 'synced', 0, ?)
+    `INSERT INTO diagnoses (local_uuid, user_id, server_id, condition, date_of_diagnosis, severity, diagnosed_by_id, diagnosed_by_name, sync_status, deleted_locally, updated_at_local)
+     VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'synced', 0, ?)
      ON CONFLICT(local_uuid) DO UPDATE SET
        server_id = 1,
        condition = excluded.condition,
        date_of_diagnosis = excluded.date_of_diagnosis,
        severity = excluded.severity,
+       diagnosed_by_id = excluded.diagnosed_by_id,
+       diagnosed_by_name = excluded.diagnosed_by_name,
        sync_status = 'synced',
        deleted_locally = 0,
        updated_at_local = excluded.updated_at_local`,
@@ -174,6 +179,8 @@ export async function upsertFromServer(record: {
     await encryptField(record.condition),
     record.date_of_diagnosis ?? null,
     record.severity,
+    record.diagnosed_by?.id ?? null,
+    record.diagnosed_by?.fullname ?? null,
     record.updated_at,
   );
 }

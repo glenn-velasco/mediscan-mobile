@@ -11,8 +11,11 @@ import * as migration008 from '@/db/migrations/008_diagnoses';
 import * as migration009 from '@/db/migrations/009_add_user_id';
 import * as migration010 from '@/db/migrations/010_medications';
 import * as migration011 from '@/db/migrations/011_split_encrypted_fields';
+import * as migration012 from '@/db/migrations/012_diagnosis_authorship';
+import * as migration013 from '@/db/migrations/013_conditions';
+import * as migration014 from '@/db/migrations/014_condition_attestations';
 
-const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011];
+const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012, migration013, migration014];
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`

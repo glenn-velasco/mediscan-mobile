@@ -22,6 +22,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'allergy_verification',
       payload: { type: 'allergy_verification', allergen: 'Penicillin', severity: 'severe' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -51,6 +52,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'allergy_verification',
       payload: { allergen: 'Peanuts' },
       matchedAllergyLocalUuid: 'allergy-a',
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -60,6 +62,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'allergy_verification',
       payload: { allergen: 'Shellfish' },
       matchedAllergyLocalUuid: 'allergy-b',
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -69,6 +72,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'allergy_verification',
       payload: { allergen: 'Ambiguous' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -84,6 +88,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'allergy_verification',
       payload: { allergen: 'Latex' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -102,6 +107,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'diagnosis_verification',
       payload: { condition: 'Hypertension' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: 'diagnosis-a',
       matchedMedicationLocalUuid: null,
     });
@@ -111,6 +117,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'diagnosis_verification',
       payload: { condition: 'Flu' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: 'diagnosis-b',
       matchedMedicationLocalUuid: null,
     });
@@ -126,6 +133,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'diagnosis_verification',
       payload: { condition: 'Asthma' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
@@ -144,6 +152,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'medication_verification',
       payload: { name: 'Aspirin' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: 'medication-a',
     });
@@ -153,6 +162,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'medication_verification',
       payload: { name: 'Ibuprofen' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: 'medication-b',
     });
@@ -168,6 +178,7 @@ describe('professional-attestation.repo', () => {
       envelopeType: 'medication_verification',
       payload: { name: 'Metformin' },
       matchedAllergyLocalUuid: null,
+      matchedConditionLocalUuid: null,
       matchedDiagnosisLocalUuid: null,
       matchedMedicationLocalUuid: null,
     });
