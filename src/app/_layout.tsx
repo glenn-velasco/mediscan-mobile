@@ -6,8 +6,8 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
-import { router, Stack } from 'expo-router';
 import * as Notifications from 'expo-notifications';
+import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -114,6 +114,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
         <Stack.Screen name="diagnoses" />
         <Stack.Screen name="medications" />
         <Stack.Screen name="emergency-contacts" />
+        <Stack.Screen name="conditions" />
         <Stack.Screen name="account" />
         <Stack.Screen name="professional-application" />
         <Stack.Screen name="registration-match" />

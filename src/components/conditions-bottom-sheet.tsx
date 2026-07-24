@@ -225,6 +225,21 @@ export const ConditionsBottomSheet = forwardRef<ConditionsBottomSheetHandle>(
               </View>
             </View>
 
+            {mode === 'view' && (() => {
+              const existing = conditions.find((c) => c.local_uuid === selectedUuid);
+              const verifiedBy = existing?.verified_by;
+              if (!verifiedBy || verifiedBy.length === 0) return null;
+              return (
+                <View className="mt-4 mb-2 gap-1.5">
+                  <ThemedText type="label" color="mutedForeground">Verified by</ThemedText>
+                  {verifiedBy.map((v) => (
+                    <ThemedText key={v.user_id} type="small">
+                      {v.name} · {new Date(v.verified_at).toLocaleDateString()}
+                    </ThemedText>
+                  ))}
+                </View>
+              );
+            })()}
             <PrimaryButton
               label="Save"
               loading={mode === 'view' ? isSaving : isPending}

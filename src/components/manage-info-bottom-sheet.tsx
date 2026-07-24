@@ -28,6 +28,7 @@ import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-em
 import { formatIsoDate } from '@/lib/format-date';
 import { scanForPatient, connectAndSubmit } from '@/services/ble-central.service';
 import { seal } from '@/services/sealed-box.service';
+import { getEffectiveVerificationSets, queueVerificationSync } from '@/services/verification-sync.service';
 import type {
   AllergyVerificationEnvelope,
   ConditionVerificationEnvelope,
@@ -156,7 +157,7 @@ function normaliseDiagnosisSeverity(raw: string): DiagnosisSeverity {
   return 'chronic';
 }
 
-function initAllergies(info: ScannedEmergencyInfo): ManageAllergy[] {
+function initAllergies(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageAllergy[] {
   return info.allergies.map((a, i) => ({
     key: `a:${i}`,
     allergen: a.allergen,
@@ -165,24 +166,24 @@ function initAllergies(info: ScannedEmergencyInfo): ManageAllergy[] {
     isNew: false,
     deleted: false,
     editing: false,
-    verifyToggle: true,
+    verifyToggle: verified.has(a.allergen.toLowerCase()),
     verifyTouched: false,
   }));
 }
 
-function initConditions(info: ScannedEmergencyInfo): ManageCondition[] {
+function initConditions(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageCondition[] {
   return info.conditions.map((c, i) => ({
     key: `c:${i}`,
     description: c.description,
     isNew: false,
     deleted: false,
     editing: false,
-    verifyToggle: true,
+    verifyToggle: verified.has(c.description.toLowerCase()),
     verifyTouched: false,
   }));
 }
 
-function initDiagnoses(info: ScannedEmergencyInfo): ManageDiagnosis[] {
+function initDiagnoses(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageDiagnosis[] {
   return info.diagnoses.map((d, i) => ({
     key: `d:${i}`,
     condition: d.condition,
@@ -191,12 +192,12 @@ function initDiagnoses(info: ScannedEmergencyInfo): ManageDiagnosis[] {
     isNew: false,
     deleted: false,
     editing: false,
-    verifyToggle: true,
+    verifyToggle: verified.has(d.condition.toLowerCase()),
     verifyTouched: false,
   }));
 }
 
-function initMedications(info: ScannedEmergencyInfo): ManageMedication[] {
+function initMedications(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageMedication[] {
   return info.medications.map((m, i) => ({
     key: `m:${i}`,
     name: m.name,
@@ -206,7 +207,7 @@ function initMedications(info: ScannedEmergencyInfo): ManageMedication[] {
     isNew: false,
     deleted: false,
     editing: false,
-    verifyToggle: true,
+    verifyToggle: verified.has(m.name.toLowerCase()),
     verifyTouched: false,
   }));
 }
@@ -305,10 +306,6 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
         return;
       }
       setInfo(parsed);
-      setAllergies(initAllergies(parsed));
-      setConditions(initConditions(parsed));
-      setDiagnoses(initDiagnoses(parsed));
-      setMedications(initMedications(parsed));
       setOriginalAllergies(parsed.allergies);
       setOriginalConditions(parsed.conditions);
       setOriginalDiagnoses(parsed.diagnoses);
@@ -316,6 +313,22 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       const prefilled = medInfoFromScanned(parsed);
       setMedInfoForm(prefilled);
       setMedInfoInitial(prefilled);
+
+      // Fetch verification status (server + local pending, offline-aware)
+      getEffectiveVerificationSets(pid)
+        .then(({ verifiedAllergens, verifiedConditions, verifiedDiagnoses, verifiedMedications }) => {
+          setAllergies(initAllergies(parsed, verifiedAllergens));
+          setConditions(initConditions(parsed, verifiedConditions));
+          setDiagnoses(initDiagnoses(parsed, verifiedDiagnoses));
+          setMedications(initMedications(parsed, verifiedMedications));
+        })
+        .catch(() => {
+          // Fallback: initialize with empty verified sets
+          setAllergies(initAllergies(parsed));
+          setConditions(initConditions(parsed));
+          setDiagnoses(initDiagnoses(parsed));
+          setMedications(initMedications(parsed));
+        });
     });
   }, []);
 
@@ -706,7 +719,7 @@ export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle>(fun
       }
 
       for (const change of pending) {
-        await submitEnvelope({ patientId, envelopeType: change.envelopeType, payload: change.envelope });
+        await submitEnvelope({ patientId, envelopeType: change.envelopeType, payload: change.envelope, itemIdentifier: change.label });
       }
 
       setSentSuccessfully(true);

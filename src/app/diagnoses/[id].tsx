@@ -93,6 +93,55 @@ export default function EditDiagnosisScreen() {
         <VerifiedCountBadge count={verifiedCount} />
       </Card>
 
+      {attestations.length > 0 ? (
+        <Card className="mb-6 gap-3">
+          <ThemedText type="smallBold" color="mutedForeground">
+            Verification history
+          </ThemedText>
+          {(() => {
+            const attestationMap = new Map<number, { name: string; verified_at: string; note?: string }>();
+            attestations.forEach((a) => {
+              if (a.payload.type === 'diagnosis_verification') {
+                attestationMap.set(a.payload.verified_by.user_id, {
+                  name: a.payload.verified_by.name,
+                  verified_at: a.payload.verified_at,
+                  note: a.payload.note,
+                });
+              }
+            });
+            const recordEntries = (existing.verified_by ?? []).filter((v) => !attestationMap.has(v.user_id));
+            const merged = [...attestationMap.entries(), ...recordEntries.map((v) => [v.user_id, { name: v.name, verified_at: v.verified_at, note: undefined }] as const)];
+            return merged.map(([userId, info]) => (
+              <View key={userId}>
+                <ThemedText type="small">
+                  {info.name} · {new Date(info.verified_at).toLocaleDateString()}
+                </ThemedText>
+                {info.note ? (
+                  <ThemedText type="small" color="mutedForeground">
+                    {info.note}
+                  </ThemedText>
+                ) : null}
+              </View>
+            ));
+          })()}
+        </Card>
+      ) : null}
+
+      {attestations.length === 0 && existing.verified_by && existing.verified_by.length > 0 ? (
+        <Card className="mb-6 gap-3">
+          <ThemedText type="smallBold" color="mutedForeground">
+            Verified by professionals
+          </ThemedText>
+          {existing.verified_by.map((v) => (
+            <View key={v.user_id}>
+              <ThemedText type="small">
+                {v.name} · {new Date(v.verified_at).toLocaleDateString()}
+              </ThemedText>
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
       {isVerifiedProfessional ? (
         <>
           <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />

@@ -70,25 +70,37 @@ export default function EditAllergyScreen() {
       <TextField label="Reaction" value={reaction} onChangeText={setReaction} />
       <PickerField label="Severity" options={SEVERITIES} value={severity} onChange={setSeverity} />
 
-      {attestations.length > 0 ? (
+      {(attestations.length > 0 || (existing.verified_by && existing.verified_by.length > 0)) ? (
         <Card className="mb-6 gap-3">
           <ThemedText type="smallBold" color="mutedForeground">
             Verified by professionals
           </ThemedText>
-          {attestations.map((attestation) =>
-            attestation.payload.type === 'allergy_verification' ? (
-              <View key={attestation.local_id}>
+          {(() => {
+            const attestationMap = new Map<number, { name: string; verified_at: string; note?: string }>();
+            attestations.forEach((a) => {
+              if (a.payload.type === 'allergy_verification') {
+                attestationMap.set(a.payload.verified_by.user_id, {
+                  name: a.payload.verified_by.name,
+                  verified_at: a.payload.verified_at,
+                  note: a.payload.note,
+                });
+              }
+            });
+            const recordEntries = (existing.verified_by ?? []).filter((v) => !attestationMap.has(v.user_id));
+            const merged = [...attestationMap.entries(), ...recordEntries.map((v) => [v.user_id, { name: v.name, verified_at: v.verified_at, note: undefined }] as const)];
+            return merged.map(([userId, info]) => (
+              <View key={userId}>
                 <ThemedText type="small">
-                  {attestation.payload.verified_by.name} · {new Date(attestation.payload.verified_at).toLocaleDateString()}
+                  {info.name} · {new Date(info.verified_at).toLocaleDateString()}
                 </ThemedText>
-                {attestation.payload.note ? (
+                {info.note ? (
                   <ThemedText type="small" color="mutedForeground">
-                    {attestation.payload.note}
+                    {info.note}
                   </ThemedText>
                 ) : null}
               </View>
-            ) : null,
-          )}
+            ));
+          })()}
         </Card>
       ) : null}
 

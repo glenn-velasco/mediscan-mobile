@@ -300,6 +300,21 @@ export const DiagnosesBottomSheet = forwardRef<DiagnosesBottomSheetHandle>(
               </View>
             </View>
 
+            {mode === 'view' && (() => {
+              const existing = diagnoses.find((d) => d.local_uuid === selectedUuid);
+              const verifiedBy = existing?.verified_by;
+              if (!verifiedBy || verifiedBy.length === 0) return null;
+              return (
+                <View className="mt-4 mb-2 gap-1.5">
+                  <ThemedText type="label" color="mutedForeground">Verified by</ThemedText>
+                  {verifiedBy.map((v) => (
+                    <ThemedText key={v.user_id} type="small">
+                      {v.name} · {new Date(v.verified_at).toLocaleDateString()}
+                    </ThemedText>
+                  ))}
+                </View>
+              );
+            })()}
             {readOnly ? null : (
               <PrimaryButton
                 label="Save"
