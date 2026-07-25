@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
-import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/card';
+import { ThemedText } from '@/components/themed-text';
+import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
-import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { useMedications } from '@/features/medications/useMedications';
 import { addNotification } from '@/features/notifications/notifications.store';
@@ -21,6 +23,99 @@ const TASK_ROUTE: Partial<Record<OnboardingTaskId, string>> = {
   conditions: '/conditions/new',
   medications: '/medications/new',
 };
+
+function AnimatedProgressBar({ progress, color, backgroundColor }: { progress: number; color: string; backgroundColor: string }) {
+  const width = useSharedValue(0);
+
+  useEffect(() => {
+    width.value = withSpring(progress * 100, { damping: 15, stiffness: 120 });
+  }, [progress, width]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    width: `${width.value}%`,
+  }));
+
+  return (
+    <View className="h-2.5 overflow-hidden rounded-full" style={{ backgroundColor }}>
+      <Animated.View className="h-full rounded-full" style={[{ backgroundColor: color }, animatedStyle]} />
+    </View>
+  );
+}
+
+function TaskCard({
+  task,
+  theme,
+  disabled,
+  onPress,
+  onSkip,
+}: {
+  task: { id: OnboardingTaskId; title: string; body: string; icon: 'mail' | 'people' | 'medical' | 'medkit' | 'bandage' | 'fitness'; done: boolean; skippable: boolean };
+  theme: ReturnType<typeof useTheme>;
+  disabled: boolean;
+  onPress: () => void;
+  onSkip: () => void;
+}) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+    opacity.value = withTiming(0.7, { duration: 100 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+    opacity.value = withTiming(1, { duration: 100 });
+  };
+
+  return (
+    <View>
+      <Pressable
+        disabled={task.done || disabled}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <Animated.View style={animatedStyle}>
+          <Card className="flex-row items-center gap-3">
+            <View
+              className="h-10 w-10 items-center justify-center rounded-xl"
+              style={{ backgroundColor: task.done ? theme.success + '15' : theme.primary + '15' }}
+            >
+              <Ionicons name={task.done ? 'checkmark' : task.icon} size={20} color={task.done ? theme.success : theme.primary} />
+            </View>
+            <View className="flex-1">
+              <ThemedText
+                className="font-semibold"
+                style={task.done ? { textDecorationLine: 'line-through', color: theme.mutedForeground } : undefined}
+              >
+                {task.title}
+              </ThemedText>
+              <ThemedText type="small" color="mutedForeground">
+                {task.body}
+              </ThemedText>
+            </View>
+            {!task.done ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
+          </Card>
+        </Animated.View>
+      </Pressable>
+      {!task.done && task.skippable ? (
+        <Pressable onPress={onSkip} className="self-end py-1 pr-1" hitSlop={8}>
+          {({ pressed }) => (
+            <ThemedText type="small" color="mutedForeground" style={pressed ? { opacity: 0.5 } : undefined}>
+              Skip
+            </ThemedText>
+          )}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
 
 export default function OnboardingTasksScreen() {
   const theme = useTheme();
@@ -40,6 +135,23 @@ export default function OnboardingTasksScreen() {
     hasConditions: conditions.length > 0,
     hasMedications: medications.length > 0,
   });
+
+  useEffect(() => {
+    if (checklist.complete) {
+      const timer = setTimeout(() => router.back(), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [checklist.complete]);
+
+  const handleSkipTask = (id: OnboardingTaskId) => {
+    void checklist.skipTask(id);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      void checklist.refreshSkipped();
+    }, [checklist.refreshSkipped])
+  );
 
   const handleSelectTask = async (id: OnboardingTaskId) => {
     if (id === 'email_verified') {
@@ -86,9 +198,7 @@ export default function OnboardingTasksScreen() {
             {Math.round(progress * 100)}%
           </ThemedText>
         </View>
-        <View className="h-2.5 overflow-hidden rounded-full" style={{ backgroundColor: theme.muted }}>
-          <View className="h-full rounded-full" style={{ width: `${progress * 100}%`, backgroundColor: theme.primary }} />
-        </View>
+        <AnimatedProgressBar progress={progress} color={theme.primary} backgroundColor={theme.muted} />
       </View>
 
       <ScrollView
@@ -97,32 +207,14 @@ export default function OnboardingTasksScreen() {
         showsVerticalScrollIndicator={false}
       >
         {checklist.tasks.map((task) => (
-          <Pressable
+          <TaskCard
             key={task.id}
-            disabled={task.done || (task.id === 'email_verified' && isSendingVerification)}
+            task={task}
+            theme={theme}
+            disabled={task.id === 'email_verified' && isSendingVerification}
             onPress={() => void handleSelectTask(task.id)}
-          >
-            <Card className="flex-row items-center gap-3">
-              <View
-                className="h-10 w-10 items-center justify-center rounded-xl"
-                style={{ backgroundColor: task.done ? theme.success + '15' : theme.primary + '15' }}
-              >
-                <Ionicons name={task.done ? 'checkmark' : task.icon} size={20} color={task.done ? theme.success : theme.primary} />
-              </View>
-              <View className="flex-1">
-                <ThemedText
-                  className="font-semibold"
-                  style={task.done ? { textDecorationLine: 'line-through', color: theme.mutedForeground } : undefined}
-                >
-                  {task.title}
-                </ThemedText>
-                <ThemedText type="small" color="mutedForeground">
-                  {task.body}
-                </ThemedText>
-              </View>
-              {!task.done ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
-            </Card>
-          </Pressable>
+            onSkip={() => handleSkipTask(task.id)}
+          />
         ))}
       </ScrollView>
     </View>

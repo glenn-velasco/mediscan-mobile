@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -147,6 +147,12 @@ export default function HomeScreen() {
     }
     prevTaskDoneRef.current = new Map(checklist.tasks.map((task) => [task.id, task.done]));
   }, [checklist.tasks, checklist.total]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void checklist.refreshSkipped();
+    }, [checklist.refreshSkipped])
+  );
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
   const age = profile ? user?.age : null;
@@ -731,7 +737,7 @@ export default function HomeScreen() {
       <ConditionsBottomSheet ref={conditionsSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />
       <MedicationsBottomSheet ref={medicationsSheetRef} />
-      <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} />
+      <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} onSkipTask={(id) => void checklist.skipTask(id)} />
     </View>
   );
 }
