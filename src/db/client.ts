@@ -1,4 +1,4 @@
-import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { openDatabaseAsync, deleteDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { runMigrations } from '@/db/migrations';
 
@@ -20,6 +20,16 @@ export function getDb(): Promise<SQLiteDatabase> {
     });
   }
   return dbPromise;
+}
+
+/** Closes the current connection and deletes the database file. The next getDb() call re-creates it. */
+export async function resetDb(): Promise<void> {
+  if (dbPromise) {
+    const db = await dbPromise;
+    await db.closeAsync();
+  }
+  dbPromise = null;
+  await deleteDatabaseAsync('mediscan.db');
 }
 
 // Metro Fast Refresh re-evaluates this module on edit, resetting `dbPromise` to null — but the

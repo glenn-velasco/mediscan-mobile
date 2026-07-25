@@ -1,17 +1,19 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
+import { registerUnauthenticatedHandler } from '@/api/client';
 import { login as apiLogin, logout as apiLogout, me as apiMe, register as apiRegister } from '@/api/endpoints/auth';
 import { updateMedicalInformation } from '@/api/endpoints/medical-information';
-import { registerUnauthenticatedHandler } from '@/api/client';
+import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
 import { getDeviceName } from '@/auth/device-name';
 import { clearToken, loadToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
+import { resetDb } from '@/db/client';
 import { setCurrentUserId } from '@/db/context';
-import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
-import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
+import { clearPrivateKey } from '@/services/device-key-storage';
+import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
 
@@ -68,6 +70,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   const [user, setUser] = useState<User | null>(null);
 
   const handleUnauthenticated = useCallback(async () => {
+    await clearPrivateKey();
+    await resetDb();
     setCurrentUserId(null);
     await clearToken();
     resetPendingSyncBackoff();
@@ -89,8 +93,9 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         return;
       }
 
+      const cached = await loadUser();
+
       if (skipNetworkRefresh) {
-        const cached = await loadUser();
         if (cached) {
           setCurrentUserId(cached.id);
           setUser(cached);
@@ -101,23 +106,22 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         return;
       }
 
+      if (cached) {
+        setCurrentUserId(cached.id);
+        setUser(cached);
+        setStatus('authenticated');
+        void backfillUserId(cached.id);
+      }
+
       try {
         const { user: fetchedUser } = await apiMe();
         setCurrentUserId(fetchedUser.id);
         setUser(fetchedUser);
-        setStatus('authenticated');
+        if (!cached) setStatus('authenticated');
         void backfillUserId(fetchedUser.id);
         await saveUser(fetchedUser);
       } catch {
-        const cached = await loadUser();
-        if (cached) {
-          setCurrentUserId(cached.id);
-          setUser(cached);
-          setStatus('authenticated');
-          void backfillUserId(cached.id);
-        } else {
-          await handleUnauthenticated();
-        }
+        if (!cached) await handleUnauthenticated();
       }
     })();
   }, [handleUnauthenticated, skipNetworkRefresh]);
@@ -180,6 +184,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     } catch {
       // Best-effort: the user's intent is to log out locally regardless of connectivity.
     }
+    await clearPrivateKey();
+    await resetDb();
     setCurrentUserId(null);
     queryClient.clear();
     await queryPersister.removeClient();
