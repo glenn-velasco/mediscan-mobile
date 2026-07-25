@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { Keyboard, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -63,7 +63,10 @@ export function SelectField<T extends string>({
     opacity: progress.value,
   }));
 
-  const handleOpen = useCallback(() => sheetRef.current?.present(), []);
+  const handleOpen = useCallback(() => {
+    Keyboard.dismiss();
+    sheetRef.current?.present();
+  }, []);
 
   const handleSelect = useCallback(
     (next: T | undefined) => {

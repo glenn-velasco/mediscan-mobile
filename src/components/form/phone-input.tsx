@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, InteractionManager, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import {
@@ -163,16 +163,17 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
 
   const loadCountries = useCallback(() => {
     setLoading(true);
-    InteractionManager.runAfterInteractions(() => {
+    setTimeout(() => {
       const list = buildCountryList();
       if (mountedRef.current) {
         setCountries(list);
         setLoading(false);
       }
-    });
+    }, 0);
   }, []);
 
   const handleOpen = useCallback(() => {
+    Keyboard.dismiss();
     sheetRef.current?.present();
     loadCountries();
   }, [loadCountries]);

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import {
   BottomSheetModal,
@@ -82,6 +82,7 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
       <Pressable
         onPress={() => {
           if (disabled) return;
+          Keyboard.dismiss();
           if (Platform.OS === 'android') {
             setOpen(true);
           } else {
