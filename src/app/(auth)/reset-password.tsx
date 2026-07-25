@@ -9,6 +9,7 @@ import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useResetPassword } from '@/features/auth/useResetPassword';
 import { useApiError } from '@/api/use-api-error';
+import { passwordWithConfirmation } from '@/lib/validation/password-schema';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function ResetPasswordScreen() {
   const [email, setEmail] = useState(params.email ?? '');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const onSubmit = async () => {
     if (!params.token) {
@@ -25,6 +27,17 @@ export default function ResetPasswordScreen() {
       return;
     }
     clearErrors();
+    setValidationErrors({});
+    const result = passwordWithConfirmation.safeParse({ password, passwordConfirmation });
+    if (!result.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as string;
+        if (key && !errors[key]) errors[key] = issue.message;
+      }
+      setValidationErrors(errors);
+      return;
+    }
     try {
       await resetPassword({
         token: params.token,
@@ -43,8 +56,8 @@ export default function ResetPasswordScreen() {
       <ThemedText className="mb-8 text-center text-2xl font-semibold">Choose a new password</ThemedText>
 
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-      <PasswordField label="New password" value={password} onChangeText={setPassword} />
-      <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} />
+      <PasswordField label="New password" value={password} onChangeText={setPassword} error={validationErrors.password} />
+      <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} error={validationErrors.passwordConfirmation} />
 
       <FormError message={message} />
 

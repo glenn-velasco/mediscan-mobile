@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useAuth } from '@/auth/useAuth';
@@ -58,6 +59,7 @@ export default function EditDiagnosisScreen() {
   }
 
   const onSave = async () => {
+    if (!condition.trim()) return;
     await updateDiagnosis({
       localUuid: existing.local_uuid,
       payload: { condition, date_of_diagnosis: dateOfDiagnosis || undefined, severity },
@@ -144,7 +146,7 @@ export default function EditDiagnosisScreen() {
 
       {isVerifiedProfessional ? (
         <>
-          <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
+          <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !condition.trim()} className="mb-2" />
           <PrimaryButton label="Delete diagnosis" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
         </>
       ) : null}

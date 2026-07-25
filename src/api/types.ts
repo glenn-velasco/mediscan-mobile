@@ -85,6 +85,7 @@ export type MedicalInformation = {
   date_of_birth: string | null;
   gender: Gender | null;
   phone: string;
+  phone_country_code?: string | null;
   address: MedicalInformationAddress | null;
   blood_type: BloodType | null;
   religion: Religion | null;

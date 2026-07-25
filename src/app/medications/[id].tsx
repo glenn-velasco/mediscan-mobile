@@ -49,6 +49,7 @@ export default function EditMedicationScreen() {
   }
 
   const onSave = async () => {
+    if (!name.trim()) return;
     await updateMedication({ localUuid: existing.local_uuid, payload: { name, dosage, frequency, notes: notes || undefined } });
     router.back();
   };
@@ -103,7 +104,7 @@ export default function EditMedicationScreen() {
         </Card>
       ) : null}
 
-      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
+      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !name.trim()} className="mb-2" />
       <PrimaryButton label="Delete medication" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
     </AppLayout>
   );

@@ -44,6 +44,7 @@ export default function EditConditionScreen() {
   }
 
   const onSave = async () => {
+    if (!description.trim()) return;
     await updateCondition({ localUuid: existing.local_uuid, payload: { description } });
     router.back();
   };
@@ -95,7 +96,7 @@ export default function EditConditionScreen() {
         </Card>
       ) : null}
 
-      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
+      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !description.trim()} className="mb-2" />
       <PrimaryButton label="Delete condition" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
     </AppLayout>
   );

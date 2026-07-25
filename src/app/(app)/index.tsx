@@ -7,10 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
 import { AllergiesBottomSheet, type AllergiesBottomSheetHandle } from '@/components/allergies-bottom-sheet';
-import { ConditionsBottomSheet, type ConditionsBottomSheetHandle } from '@/components/conditions-bottom-sheet';
 import { Avatar } from '@/components/avatar';
 import { AvatarPreviewSheet, type AvatarPreviewSheetHandle } from '@/components/avatar-preview-sheet';
 import { Card } from '@/components/card';
+import { ConditionsBottomSheet, type ConditionsBottomSheetHandle } from '@/components/conditions-bottom-sheet';
 import { DiagnosesBottomSheet, type DiagnosesBottomSheetHandle } from '@/components/diagnoses-bottom-sheet';
 import { DiagnosisSeverityBadge, DiagnosisSeverityIcon } from '@/components/diagnosis-severity-badge';
 import { EmergencyContactsBottomSheet, type EmergencyContactsBottomSheetHandle } from '@/components/emergency-contacts-bottom-sheet';
@@ -33,11 +33,11 @@ import { ReligionLabel } from '@/constants/religion';
 import type { Suffix } from '@/constants/suffix';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
+import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
-import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useMedications } from '@/features/medications/useMedications';
@@ -49,8 +49,9 @@ import { buildFullName } from '@/lib/build-full-name';
 import { cn } from '@/lib/cn';
 import { formatAddress } from '@/lib/format-address';
 import { formatIsoDate } from '@/lib/format-date';
-import { useGuardedPress } from '@/lib/use-guarded-press';
+import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import { showLocalNotification } from '@/lib/notifications';
+import { useGuardedPress } from '@/lib/use-guarded-press';
 import { useOnboardingChecklist, type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
@@ -369,8 +370,10 @@ export default function HomeScreen() {
                 iconColor={theme.primary}
                 iconBgKey="primary"
                 label="Phone"
-                value={profile.phone || '—'}
+                value={profile.phone ? formatPhoneWithCountryCode(profile.phone_country_code, profile.phone) : '—'}
               />
+            </View>
+            <View className="flex-row gap-2">
               <InfoTile
                 icon="book"
                 iconColor={theme.warning}
@@ -458,7 +461,7 @@ export default function HomeScreen() {
                     </View>
                     {contact.phone ? (
                       <ThemedText type="small" color="primary">
-                        {contact.phone_country_code ? `+${contact.phone_country_code} ` : ''}{contact.phone}
+                        {formatPhoneWithCountryCode(contact.phone_country_code, contact.phone)}
                       </ThemedText>
                     ) : null}
                   </View>

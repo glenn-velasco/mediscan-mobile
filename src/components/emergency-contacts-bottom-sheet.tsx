@@ -21,6 +21,7 @@ import {
 } from '@/features/emergency-contacts';
 import { useTheme } from '@/hooks/use-theme';
 import { useGuardedPress } from '@/lib/use-guarded-press';
+import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import type { EmergencyContactRow } from '@/db/schema';
 import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 
@@ -61,8 +62,7 @@ const ContactSheetRow = memo(function ContactSheetRow({
         </View>
         {item.phone ? (
           <ThemedText type="label" color="primary">
-            {item.phone_country_code ? `+${item.phone_country_code} ` : ''}
-            {item.phone}
+            {formatPhoneWithCountryCode(item.phone_country_code, item.phone)}
           </ThemedText>
         ) : null}
       </View>

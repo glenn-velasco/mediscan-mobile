@@ -98,7 +98,8 @@ export default function EditProfileScreen() {
     }
 
     try {
-      const payload: MedicalInformationPayload = { email, ...result.data };
+      const { blood_type, ...rest } = result.data;
+      const payload: MedicalInformationPayload = { email, ...rest, ...(blood_type ? { blood_type } : {}) };
       await save(payload);
       router.back();
     } catch (err) {

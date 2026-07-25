@@ -65,6 +65,7 @@ function makeAllergy(overrides: Partial<AllergyRow> = {}): AllergyRow {
     allergen: 'Penicillin',
     reaction: null,
     severity: 'severe',
+    verified_by: null,
     ...overrides,
   };
 }
@@ -82,6 +83,7 @@ function makeDiagnosis(overrides: Partial<DiagnosisRow> = {}): DiagnosisRow {
     severity: 'ongoing',
     diagnosed_by_id: null,
     diagnosed_by_name: null,
+    verified_by: null,
     ...overrides,
   };
 }
@@ -95,6 +97,7 @@ function makeCondition(overrides: Partial<ConditionRow> = {}): ConditionRow {
     deleted_locally: 0,
     updated_at_local: '2026-01-01T00:00:00.000Z',
     description: 'Occasional migraines',
+    verified_by: null,
     ...overrides,
   };
 }

@@ -51,6 +51,7 @@ export default function EditAllergyScreen() {
   }
 
   const onSave = async () => {
+    if (!allergen.trim()) return;
     await updateAllergy({ localUuid: existing.local_uuid, payload: { allergen, reaction: reaction || undefined, severity } });
     router.back();
   };
@@ -104,7 +105,7 @@ export default function EditAllergyScreen() {
         </Card>
       ) : null}
 
-      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting} className="mb-2" />
+      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !allergen.trim()} className="mb-2" />
       <PrimaryButton label="Delete allergy" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
     </AppLayout>
   );

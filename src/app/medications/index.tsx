@@ -84,6 +84,7 @@ const MedicationRowCard = memo(function MedicationRowCard({ item }: { item: Medi
 
 export default function MedicationsScreen() {
   const { data: medications = [], isLoading } = useMedications();
+  const theme = useTheme();
 
   if (isLoading) {
     return (

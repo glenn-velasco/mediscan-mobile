@@ -89,6 +89,7 @@ export default function ProfessionalApplicationStatusScreen() {
   const { data: application, isError, error } = useProfessionalApplication(applicationId);
   const { data: myApplication } = useMyProfessionalApplication();
   const { data: broadcastStatus } = useProfessionalApplicationBroadcastStatus(applicationId);
+  const theme = useTheme();
 
   // The GET-by-id can still fail (network error, or the application was pruned days after
   // denial — see ProfessionalApplicationService::prune() on the backend) even though we have a

@@ -22,11 +22,11 @@ export const registrationMedicalInfoSchema = z.object({
 
 export const registrationAddressSchema = z.object({
   street: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Street is required')),
+  unit: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Unit/Building/House is required')),
   city: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'City is required')),
-  unit: z.string().nullable().optional(),
-  province: z.string().nullable().optional(),
-  postal_code: z.string().nullable().optional(),
-  country: z.string().nullable().optional(),
+  province: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Province is required')),
+  postal_code: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Postal code is required')),
+  country: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Country is required')),
 });
 
 export type RegistrationMedicalInfoFormValues = z.infer<typeof registrationMedicalInfoSchema>;

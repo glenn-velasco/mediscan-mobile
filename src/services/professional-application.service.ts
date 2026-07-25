@@ -22,7 +22,7 @@ function appendFile(formData: FormData, field: string, file: CapturedFile) {
   formData.append(field, new File(file.uri) as unknown as Blob);
 }
 
-export function submitProfessionalApplication(submission: ProfessionalApplicationSubmission): Promise<ProfessionalApplication> {
+export async function submitProfessionalApplication(submission: ProfessionalApplicationSubmission): Promise<ProfessionalApplication> {
   const formData = new FormData();
   formData.append('id_type', submission.idType);
   appendFile(formData, 'id_photo', submission.idPhoto);

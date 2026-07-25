@@ -20,7 +20,7 @@ import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
 import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
 import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { parsePhoneNumberFromString, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import type { MedicalInformationAddress } from '@/api/types';
 import { formatAddress } from '@/lib/format-address';
 import { registerSchema } from '@/lib/validation/register-schema';
@@ -143,14 +143,12 @@ export default function RegisterScreen() {
     }
 
     const addressResult = registrationAddressSchema.safeParse(medicalAddress);
-    if (!addressResult.success) {
-      setFieldErrors(parseFieldErrors(addressResult.error.issues));
-      setStep(2);
-      return;
-    }
-
-    if (!acceptedTerms) {
-      setFieldErrors({ terms: 'You must accept the Terms of Service' });
+    const termsError = !acceptedTerms ? 'You must accept the Terms of Service' : undefined;
+    if (!addressResult.success || termsError) {
+      setFieldErrors({
+        ...parseFieldErrors(addressResult.success ? [] : addressResult.error.issues),
+        ...(termsError ? { terms: termsError } : {}),
+      });
       setStep(2);
       return;
     }
@@ -158,8 +156,16 @@ export default function RegisterScreen() {
     try {
       let phoneNumber = '';
       if (phoneValue.phone && phoneValue.countryCode) {
-        const parsed = parsePhoneNumberFromString(phoneValue.phone, phoneValue.countryCode as any);
-        phoneNumber = parsed ? parsed.number : `+${phoneValue.countryCode}${phoneValue.phone}`;
+        const dialCode = getCountryCallingCode(phoneValue.countryCode as CountryCode);
+        const fullNumber = `+${dialCode}${phoneValue.phone}`;
+        const parsed = parsePhoneNumberFromString(fullNumber);
+        if (parsed?.isValid()) {
+          phoneNumber = parsed.number;
+        } else {
+          setFieldErrors({ phone: 'Please enter a valid phone number' });
+          setStep(1);
+          return;
+        }
       }
 
       const registerPayload = {
@@ -306,7 +312,7 @@ export default function RegisterScreen() {
           <AddressFields
             value={medicalAddress}
             onChange={setMedicalAddress}
-            errors={{ street: fieldErrors.street || fieldErrors.address, city: fieldErrors.city }}
+            errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
           />
           <SelectField
             placeholder="Blood type"

@@ -9,9 +9,9 @@ import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AvoidSoftInput } from 'react-native-avoid-softinput';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '@/auth/AuthContext';
@@ -22,8 +22,7 @@ import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { LightweightModeContext } from '@/lib/lightweight-mode-context';
 import { addQuickScanRouteListener, getPendingQuickScanRoute } from '@/lib/qr-scanner-tile-native';
 import { queryClient, queryPersister } from '@/lib/query-client';
-import { OnboardingProvider } from '@/onboarding/OnboardingContext';
-import { PermissionsPrimerProvider } from '@/onboarding/PermissionsPrimerContext';
+import { BootProvider } from '@/onboarding/BootProvider';
 import { useOnboarding } from '@/onboarding/useOnboarding';
 import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
 import { usePrimePermissions } from '@/onboarding/usePrimePermissions';
@@ -45,6 +44,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/** Mounts after splash hides — runs sync triggers, OTA update check, etc. */
+function DeferredWork() {
+  useSyncTriggers();
+  useAppUpdates();
+  return null;
+}
+
 function RootNavigator({ onReady }: { onReady: () => void }) {
   const { status } = useAuth();
   const { seen } = useOnboarding();
@@ -52,8 +58,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
   usePrimePermissions(seen === true && primed === false);
   const screenOptions = useStackScreenOptions();
   const [dbReady, setDbReady] = useState(false);
-  useSyncTriggers();
-  useAppUpdates();
+  const [showDeferred, setShowDeferred] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'PlusJakartaSans-Regular': require('../../assets/fonts/PlusJakartaSans-Regular.ttf'),
@@ -81,6 +86,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     if (ready) {
       void SplashScreen.hideAsync();
       onReady();
+      requestAnimationFrame(() => setShowDeferred(true));
     }
   }, [ready, onReady]);
 
@@ -105,7 +111,9 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
   }, []);
 
   return (
-    <Stack screenOptions={{ ...screenOptions, headerShown: false }}>
+    <>
+      {showDeferred && <DeferredWork />}
+      <Stack screenOptions={{ ...screenOptions, headerShown: false }}>
       <Stack.Protected guard={ready && seen === false}>
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
       </Stack.Protected>
@@ -129,7 +137,8 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
       <Stack.Protected guard={ready}>
         <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
       </Stack.Protected>
-    </Stack>
+      </Stack>
+    </>
   );
 }
 
@@ -166,7 +175,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
-    AvoidSoftInput.setShouldMimicIOSBehavior(true);
     return () => AvoidSoftInput.setEnabled(false);
   }, []);
 
@@ -207,18 +215,16 @@ export default function RootLayout() {
       ) : (
         <GestureHandlerRootView style={{ flex: 1 }}>
           <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
-            <OnboardingProvider>
-              <PermissionsPrimerProvider>
-                <AuthProvider>
-                  <BroadcastProvider>
-                    <BottomSheetModalProvider>
-                      <SystemBars style="auto" />
-                      <RootNavigator onReady={handleFullTreeReady} />
-                    </BottomSheetModalProvider>
-                  </BroadcastProvider>
-                </AuthProvider>
-              </PermissionsPrimerProvider>
-            </OnboardingProvider>
+            <BootProvider>
+              <AuthProvider>
+                <BroadcastProvider>
+                  <BottomSheetModalProvider>
+                    <SystemBars style="auto" />
+                    <RootNavigator onReady={handleFullTreeReady} />
+                  </BottomSheetModalProvider>
+                </BroadcastProvider>
+              </AuthProvider>
+            </BootProvider>
           </PersistQueryClientProvider>
         </GestureHandlerRootView>
       )}

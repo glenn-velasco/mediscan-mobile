@@ -334,7 +334,7 @@ export async function pullPatientChanges(): Promise<void> {
         console.debug(TAG, `pull: deleting diagnosis ${record.id}`);
         await diagnosesRepo.hardDelete(record.id);
       } else {
-        console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition, verified_by: record.verified_by });
+        console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition });
         await diagnosesRepo.upsertFromServer(record);
       }
     }

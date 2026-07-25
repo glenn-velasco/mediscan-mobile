@@ -9,16 +9,8 @@ export const diagnosesQueryKey = ['diagnoses'] as const;
 export const medicationsQueryKey = ['medications'] as const;
 export const emergencyContactsQueryKey = ['emergency-contacts'] as const;
 export const medicalInformationQueryKey = ['medical-information'] as const;
-// Server-only (not persisted to the offline SQLite store like the rest of medical-information):
-// the avatar is a network-required capture (live camera + liveness check) with no offline path,
-// so it's plain react-query cache rather than going through db/repositories/medical-information.repo.ts.
 export const medicalInformationAvatarQueryKey = ['medical-information', 'avatar'] as const;
 export const attestationsQueryKey = ['professional-attestations'] as const;
 export const professionalApplicationQueryKey = ['professional-application'] as const;
-// The authenticated user's latest application (any status), used to decide whether the account
-// screen should route into "create" or straight to the existing application's status screen.
 export const myProfessionalApplicationQueryKey = ['professional-application', 'mine'] as const;
-// Separate from professionalApplicationQueryKey: holds just the last status seen over the
-// realtime broadcast, so the status screen has something to show even when the GET-by-id 404s
-// (e.g. the backend removes/relocates the record once an application is denied).
 export const professionalApplicationBroadcastStatusQueryKey = ['professional-application-broadcast-status'] as const;

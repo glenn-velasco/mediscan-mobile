@@ -10,11 +10,17 @@ export const medicalInformationSchema = z.object({
   middle_name: z.string().trim().optional(),
   last_name: z.string().trim().min(1, 'Last name is required'),
   suffix: z.enum(SUFFIX_OPTIONS).optional(),
-  date_of_birth: z.string().trim().min(1, 'Date of birth is required'),
+  date_of_birth: z.string().trim().min(1, 'Date of birth is required').refine((val) => {
+    const [year, month, day] = val.split('-').map(Number);
+    const d = new Date(year, month - 1, day);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return !isNaN(d.getTime()) && d.getTime() < today.getTime();
+  }, 'Date of birth must be before today'),
   gender: z.enum(GENDER_OPTIONS, { message: 'Gender is required' }),
   phone_country_code: z.string().trim().min(1, 'Country code is required'),
   phone: z.string().trim().min(1, 'Phone number is required'),
-  blood_type: z.enum(BLOOD_TYPE_OPTIONS, { message: 'Blood type is required' }),
+  blood_type: z.enum(BLOOD_TYPE_OPTIONS).nullable(),
   religion: z.enum(RELIGION_OPTIONS).optional(),
   address: z.object({
     street: z.string().trim().max(255).nullable(),

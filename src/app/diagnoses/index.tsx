@@ -91,6 +91,7 @@ const DiagnosisRowCard = memo(function DiagnosisRowCard({ item, verifiedCount }:
 
 export default function DiagnosesScreen() {
   const { data: diagnoses = [], isLoading } = useDiagnoses();
+  const theme = useTheme();
   const { data: attestations = [] } = useAttestations();
 
   const verifiedCountByUuid = useMemo(() => {

@@ -86,6 +86,7 @@ const AllergyRowCard = memo(function AllergyRowCard({ item }: { item: AllergyRow
 
 export default function AllergiesScreen() {
   const { data: allergies = [], isLoading } = useAllergies();
+  const theme = useTheme();
 
   if (isLoading) {
     return (

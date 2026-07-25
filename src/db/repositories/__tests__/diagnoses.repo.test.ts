@@ -89,6 +89,9 @@ describe('diagnoses.repo', () => {
         condition: 'Flu',
         date_of_diagnosis: '2026-01-01',
         severity: 'acute',
+        diagnosed_by_id: null,
+        diagnosed_by_name: null,
+        verified_by: null,
       }),
     ).toEqual({ condition: 'Flu', date_of_diagnosis: '2026-01-01', severity: 'acute' });
   });

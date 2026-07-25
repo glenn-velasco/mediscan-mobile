@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { EmptyState } from '@/components/empty-state';
 import { useEmergencyContacts, useDeleteEmergencyContact } from '@/features/emergency-contacts';
 import { useTheme } from '@/hooks/use-theme';
+import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import type { EmergencyContactRow } from '@/db/schema';
 
 const ContactRow = memo(function ContactRow({
@@ -32,7 +33,7 @@ const ContactRow = memo(function ContactRow({
           <View className="flex-1">
             <ThemedText type="smallBold">{item.name}</ThemedText>
             {item.relationship ? <ThemedText type="small" color="mutedForeground">{item.relationship}</ThemedText> : null}
-            {item.phone ? <ThemedText type="small" color="mutedForeground">{item.phone}</ThemedText> : null}
+            {item.phone ? <ThemedText type="small" color="mutedForeground">{formatPhoneWithCountryCode(item.phone_country_code, item.phone)}</ThemedText> : null}
           </View>
           <Pressable
             hitSlop={12}
