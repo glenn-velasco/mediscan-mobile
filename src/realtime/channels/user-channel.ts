@@ -6,6 +6,14 @@ export function subscribeToUserChannel(pusher: Pusher, userId: number, handlers:
   console.log('[UserChannel] subscribing to', { channelName, eventCount: Object.keys(handlers).length });
   const channel = pusher.subscribe(channelName);
 
+  channel.bind('pusher:subscription_succeeded', () => {
+    console.log('[UserChannel] subscription succeeded', { channelName });
+  });
+
+  channel.bind('pusher:subscription_error', (status: any) => {
+    console.error('[UserChannel] subscription FAILED', { channelName, status });
+  });
+
   for (const eventName of Object.keys(handlers) as (keyof UserChannelEventMap)[]) {
     const handler = handlers[eventName];
     if (!handler) continue;

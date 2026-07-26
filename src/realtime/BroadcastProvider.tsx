@@ -1,23 +1,25 @@
-import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type Pusher from 'pusher-js';
+import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
 
 import { useAuth } from '@/auth/useAuth';
-import { createReverbClient } from '@/realtime/reverb-client';
-import { subscribeToUserChannel } from '@/realtime/channels/user-channel';
 import { subscribeToPresenceChannel } from '@/realtime/channels/presence-channel';
+import { subscribeToUserChannel } from '@/realtime/channels/user-channel';
 import { createUserChannelHandlers } from '@/realtime/events/handlers';
 import type { PresenceMember } from '@/realtime/events/types';
+import { createReverbClient } from '@/realtime/reverb-client';
 
 export function BroadcastProvider({ children }: PropsWithChildren) {
   const { status, user, refreshUser, logout } = useAuth();
   const queryClient = useQueryClient();
   const pusherRef = useRef<Pusher | null>(null);
   const logoutRef = useRef(logout);
+  const refreshUserRef = useRef(refreshUser);
   const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
 
   useEffect(() => {
     logoutRef.current = logout;
+    refreshUserRef.current = refreshUser;
   });
 
   useEffect(() => {
@@ -35,9 +37,17 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    pusher.connection.bind('state_change', ({ current }: { current: string }) => {
+      console.log('[BroadcastProvider] connection state:', current);
+    });
+
     console.log('[BroadcastProvider] Pusher client created, subscribing to channels');
     pusherRef.current = pusher;
-    subscribeToUserChannel(pusher, user.id, createUserChannelHandlers({ refreshUser, logout: () => logoutRef.current(), queryClient }));
+    subscribeToUserChannel(pusher, user.id, createUserChannelHandlers({
+      refreshUser: () => refreshUserRef.current(),
+      logout: () => logoutRef.current(),
+      queryClient,
+    }));
 
     subscribeToPresenceChannel(pusher, 'family', {
       onHere: (members) => {
@@ -60,10 +70,7 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
       pusherRef.current = null;
       setPresenceMembers([]);
     };
-    // Depend on user?.id rather than user: refreshUser() replaces user with a new object
-    // on every periodic sync, and reconnecting on that no-op change caused a connect/disconnect loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, user?.id, refreshUser]);
+  }, [status, user?.id]);
 
   return <>{children}</>;
 }

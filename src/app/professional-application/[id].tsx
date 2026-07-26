@@ -1,9 +1,13 @@
-import { ActivityIndicator, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, AppState, View } from 'react-native';
 
-import { AppLayout } from '@/components/layouts/app-layout';
+import { getErrorMessage, getErrorStatus } from '@/api/errors';
+import type { ProfessionalApplicationStatus } from '@/api/types';
 import { Card } from '@/components/card';
+import { AppLayout } from '@/components/layouts/app-layout';
 import { PrimaryButton } from '@/components/primary-button';
 import { ThemedText } from '@/components/themed-text';
 import {
@@ -12,9 +16,7 @@ import {
   useProfessionalApplicationBroadcastStatus,
 } from '@/features/professional-application/useProfessionalApplication';
 import { useTheme } from '@/hooks/use-theme';
-import { getErrorMessage, getErrorStatus } from '@/api/errors';
-import { formatIsoDate } from '@/lib/format-date';
-import type { ProfessionalApplicationStatus } from '@/api/types';
+import { professionalApplicationQueryKey } from '@/lib/query-keys';
 
 const STATUS_LABEL: Record<ProfessionalApplicationStatus, string> = {
   processing: 'Processing',
@@ -91,12 +93,18 @@ export default function ProfessionalApplicationStatusScreen() {
   const { data: broadcastStatus } = useProfessionalApplicationBroadcastStatus(applicationId);
   const theme = useTheme();
 
-  // The GET-by-id can still fail (network error, or the application was pruned days after
-  // denial — see ProfessionalApplicationService::prune() on the backend) even though we have a
-  // more durable source: the "my latest application" query, which reflects the same record
-  // regardless of whether this device was connected when any realtime event fired. Prefer that,
-  // then fall back further to the realtime broadcast (session-only, may be empty), before giving
-  // up on a generic error/loading screen.
+  const queryClient = useQueryClient();
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        void queryClient.invalidateQueries({ queryKey: [...professionalApplicationQueryKey, applicationId] });
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [queryClient, applicationId]);
+
   if (!application) {
     if (myApplication && myApplication.id === applicationId) {
       return (

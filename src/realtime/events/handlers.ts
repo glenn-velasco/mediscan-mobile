@@ -6,7 +6,7 @@ import { registrationMatchQueryKey } from '@/features/registration-match/usePend
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
 import { professionalApplicationQueryKey } from '@/features/professional-application/useProfessionalApplication';
-import { professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
+import { myProfessionalApplicationQueryKey, professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
 import { pullPatientChanges } from '@/services/patient-sync.service';
@@ -75,6 +75,7 @@ export function createUserChannelHandlers(deps: {
         void showLocalNotification({ ...content, data: { href } });
       }
       await deps.queryClient.invalidateQueries({ queryKey: [...professionalApplicationQueryKey, payload.application_id] });
+      await deps.queryClient.invalidateQueries({ queryKey: myProfessionalApplicationQueryKey });
       try {
         await deps.refreshUser();
       } catch {

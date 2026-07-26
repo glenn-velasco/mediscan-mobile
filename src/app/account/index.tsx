@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { Avatar } from '@/components/avatar';
@@ -17,6 +18,7 @@ import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-wid
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
 import { buildFullName } from '@/lib/build-full-name';
+import { myProfessionalApplicationQueryKey } from '@/lib/query-keys';
 
 export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
@@ -31,6 +33,18 @@ export default function AccountScreen() {
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
   const ble = useBleAdvertising();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
+
+  const queryClient = useQueryClient();
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        void queryClient.invalidateQueries({ queryKey: myProfessionalApplicationQueryKey });
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [queryClient]);
 
   const handleQrWidgetToggle = async (next: boolean) => {
     await setQrWidgetEnabled(next);
