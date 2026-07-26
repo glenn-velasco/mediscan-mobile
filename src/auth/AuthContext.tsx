@@ -27,6 +27,9 @@ export function getIsRegistering(): boolean {
 type AuthContextValue = {
   status: AuthStatus;
   user: User | null;
+  /** True while the initial user refresh (apiMe) is in flight after restore. Prevents the home
+   *  screen from flashing the "create profile" empty state when the cached user lacks data. */
+  isInitialLoading: boolean;
   login: (payload: Omit<LoginPayload, 'device_name'>) => Promise<void>;
   /**
    * Resolves `{ pending: true }` when the submitted name+dob matched an existing record and the
@@ -68,6 +71,7 @@ type AuthProviderProps = PropsWithChildren<{
 export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>('idle');
   const [user, setUser] = useState<User | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const handleUnauthenticated = useCallback(async () => {
     await clearPrivateKey();
@@ -90,6 +94,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       const token = await loadToken();
       if (!token) {
         setStatus('unauthenticated');
+        setIsInitialLoading(false);
         return;
       }
 
@@ -103,6 +108,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         } else {
           setStatus('unauthenticated');
         }
+        setIsInitialLoading(false);
         return;
       }
 
@@ -122,6 +128,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         await saveUser(fetchedUser);
       } catch {
         if (!cached) await handleUnauthenticated();
+      } finally {
+        setIsInitialLoading(false);
       }
     })();
   }, [handleUnauthenticated, skipNetworkRefresh]);
@@ -204,8 +212,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const value = useMemo(
-    () => ({ status, user, login, register, logout, refreshUser }),
-    [status, user, login, register, logout, refreshUser],
+    () => ({ status, user, isInitialLoading, login, register, logout, refreshUser }),
+    [status, user, isInitialLoading, login, register, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

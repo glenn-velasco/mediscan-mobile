@@ -69,7 +69,7 @@ export default function HomeScreen() {
   const diagnosesSheetRef = useRef<DiagnosesBottomSheetHandle>(null);
   const medicationsSheetRef = useRef<MedicationsBottomSheetHandle>(null);
   const onboardingChecklistSheetRef = useRef<OnboardingChecklistSheetHandle>(null);
-  const { user, refreshUser, logout } = useAuth();
+  const { user, isInitialLoading, refreshUser, logout } = useAuth();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { data: medicalInformation, isLoading } = useMedicalInformation();
   const { data: allergies = [] } = useAllergies();
@@ -245,7 +245,7 @@ export default function HomeScreen() {
     await queryClient.invalidateQueries();
   }, [refreshUser, queryClient]);
 
-  if (isLoading || isReconciling) {
+  if (isLoading || isReconciling || isInitialLoading) {
     return (
       <ThemedView className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
         <ActivityIndicator size="large" color={theme.primary} />
