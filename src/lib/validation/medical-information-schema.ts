@@ -23,12 +23,12 @@ export const medicalInformationSchema = z.object({
   blood_type: z.enum(BLOOD_TYPE_OPTIONS).nullable(),
   religion: z.enum(RELIGION_OPTIONS).optional(),
   address: z.object({
-    street: z.string().trim().max(255).nullable(),
-    unit: z.string().trim().max(255).nullable(),
-    city: z.string().trim().max(255).nullable(),
-    province: z.string().trim().max(255).nullable(),
-    postal_code: z.string().trim().max(20).nullable(),
-    country: z.string().trim().max(255).nullable(),
+    street: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Street is required').max(255)),
+    unit: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Unit/Building/House is required').max(255)),
+    city: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'City is required').max(255)),
+    province: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Province is required').max(255)),
+    postal_code: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Postal code is required').max(20)),
+    country: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Country is required').max(255)),
   }),
   no_blood_transfusion: z.boolean(),
 });
