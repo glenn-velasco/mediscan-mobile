@@ -73,8 +73,14 @@ export default function EditProfileScreen() {
   const parseFieldErrors = (issues: readonly any[]) => {
     const errors: Record<string, string> = {};
     for (const issue of issues) {
-      const key = issue.path[0] as string;
-      if (key && !errors[key]) errors[key] = issue.message;
+      const path = issue.path as string[];
+      if (path.length === 1) {
+        const key = path[0];
+        if (key && !errors[key]) errors[key] = issue.message;
+      } else if (path.length >= 2 && path[0] === 'address') {
+        const key = path[1];
+        if (key && !errors[key]) errors[key] = issue.message;
+      }
     }
     return errors;
   };
@@ -152,7 +158,18 @@ export default function EditProfileScreen() {
         Contact
       </ThemedText>
       <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phone_country_code} />
-      <AddressFields value={form.address} onChange={(v) => setField('address', v)} />
+      <AddressFields
+        value={form.address}
+        onChange={(v) => setField('address', v)}
+        errors={{
+          street: fieldErrors.street,
+          unit: fieldErrors.unit,
+          city: fieldErrors.city,
+          province: fieldErrors.province,
+          postal_code: fieldErrors.postal_code,
+          country: fieldErrors.country,
+        }}
+      />
       <View className="my-5 border-t border-border" />
 
       <ThemedText type="overline" className="mb-2 mt-5">
@@ -191,7 +208,13 @@ export default function EditProfileScreen() {
 
       <FormError message={message} />
 
-      <PrimaryButton label="Save" loading={isPending} onPress={onSubmit} className="mb-16" />
+      <PrimaryButton
+        label="Save"
+        loading={isPending}
+        onPress={onSubmit}
+        disabled={!form.address.street?.trim() || !form.address.unit?.trim() || !form.address.city?.trim() || !form.address.province?.trim() || !form.address.postal_code?.trim() || !form.address.country?.trim()}
+        className="mb-16"
+      />
     </AppLayout>
   );
 }
