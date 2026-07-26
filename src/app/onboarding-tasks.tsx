@@ -138,7 +138,7 @@ export default function OnboardingTasksScreen() {
 
   useEffect(() => {
     if (checklist.complete) {
-      const timer = setTimeout(() => router.back(), 800);
+      const timer = setTimeout(() => router.replace('/'), 800);
       return () => clearTimeout(timer);
     }
   }, [checklist.complete]);
@@ -164,7 +164,7 @@ export default function OnboardingTasksScreen() {
   };
 
   const handleClose = () => {
-    router.back();
+    router.replace('/');
   };
 
   const progress = checklist.total > 0 ? checklist.doneCount / checklist.total : 0;

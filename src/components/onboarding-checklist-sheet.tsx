@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
@@ -17,6 +17,8 @@ type OnboardingChecklistSheetProps = {
   tasks: OnboardingTask[];
   onSelectTask: (id: OnboardingTaskId) => void;
   onSkipTask: (id: OnboardingTaskId) => void;
+  sendingVerification?: boolean;
+  emailCooldown?: number;
 };
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
@@ -28,11 +30,15 @@ function SheetTaskItem({
   theme,
   onSelect,
   onSkip,
+  loading,
+  cooldown,
 }: {
   task: OnboardingTask;
   theme: ReturnType<typeof useTheme>;
   onSelect: () => void;
   onSkip: () => void;
+  loading?: boolean;
+  cooldown?: number;
 }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
@@ -55,7 +61,7 @@ function SheetTaskItem({
   return (
     <View>
       <Pressable
-        disabled={task.done}
+        disabled={task.done || loading || (cooldown != null && cooldown > 0)}
         onPress={onSelect}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -66,17 +72,21 @@ function SheetTaskItem({
             className="h-9 w-9 items-center justify-center rounded-lg"
             style={{ backgroundColor: task.done ? theme.success + '15' : theme.muted }}
           >
-            <Ionicons name={task.done ? 'checkmark' : task.icon} size={18} color={task.done ? theme.success : theme.mutedForeground} />
+            {loading ? (
+              <ActivityIndicator size={18} color={theme.mutedForeground} />
+            ) : (
+              <Ionicons name={task.done ? 'checkmark' : task.icon} size={18} color={task.done ? theme.success : theme.mutedForeground} />
+            )}
           </View>
           <View className="flex-1">
             <ThemedText className={task.done ? 'font-semibold' : undefined} style={task.done ? { textDecorationLine: 'line-through', color: theme.mutedForeground } : undefined}>
               {task.title}
             </ThemedText>
             <ThemedText type="small" color="mutedForeground">
-              {task.body}
+              {loading ? 'Sending…' : (cooldown != null && cooldown > 0) ? `Retry in ${cooldown}s` : task.body}
             </ThemedText>
           </View>
-          {!task.done ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
+          {!task.done && !(cooldown != null && cooldown > 0) ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
         </Animated.View>
       </Pressable>
       {!task.done && task.skippable ? (
@@ -93,7 +103,7 @@ function SheetTaskItem({
 }
 
 export const OnboardingChecklistSheet = forwardRef<OnboardingChecklistSheetHandle, OnboardingChecklistSheetProps>(
-  function OnboardingChecklistSheet({ tasks, onSelectTask, onSkipTask }, ref) {
+  function OnboardingChecklistSheet({ tasks, onSelectTask, onSkipTask, sendingVerification, emailCooldown }, ref) {
     const sheetRef = useRef<BottomSheetModal>(null);
     const theme = useTheme();
 
@@ -120,6 +130,8 @@ export const OnboardingChecklistSheet = forwardRef<OnboardingChecklistSheetHandl
               theme={theme}
               onSelect={() => onSelectTask(task.id)}
               onSkip={() => onSkipTask(task.id)}
+              loading={task.id === 'email_verified' && sendingVerification}
+              cooldown={task.id === 'email_verified' ? emailCooldown : undefined}
             />
           ))}
         </BottomSheetView>

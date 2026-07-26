@@ -202,6 +202,8 @@ export default function RegisterScreen() {
       const result = await register({ payload: registerPayload, medicalInfo });
       if (result.pending) {
         router.replace('/registration-pending');
+      } else {
+        router.replace('/onboarding-tasks');
       }
     } catch (err) {
       setError(err);
@@ -313,6 +315,7 @@ export default function RegisterScreen() {
             value={medicalAddress}
             onChange={setMedicalAddress}
             errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
+            disabled={isPending}
           />
           <SelectField
             placeholder="Blood type"
@@ -320,6 +323,7 @@ export default function RegisterScreen() {
             value={bloodType}
             onChange={setBloodType}
             getLabel={(v) => BloodTypeLabel[v]}
+            disabled={isPending}
           />
           <SelectField
             placeholder="Religion"
@@ -328,17 +332,20 @@ export default function RegisterScreen() {
             onChange={setReligion}
             allowClear
             getLabel={(v) => ReligionLabel[v]}
+            disabled={isPending}
           />
           <View className="mb-4 flex-row items-center justify-between">
             <ThemedText>No blood transfusion</ThemedText>
-            <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} />
+            <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} disabled={isPending} />
           </View>
 
           <Pressable
             className="mb-2 flex-row items-start gap-3"
             onPress={() => setAcceptedTerms((v) => !v)}
+            disabled={isPending}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: acceptedTerms }}
+            style={isPending ? { opacity: 0.6 } : undefined}
           >
             <Ionicons
               name={acceptedTerms ? 'checkmark-circle' : 'checkmark-circle-outline'}
@@ -351,9 +358,11 @@ export default function RegisterScreen() {
               <ThemedText
                 type="linkPrimary"
                 onPress={(e) => {
+                  if (isPending) return;
                   e.stopPropagation?.();
                   router.push('/terms');
                 }}
+                style={isPending ? { opacity: 0.6 } : undefined}
               >
                 Terms of Service
               </ThemedText>

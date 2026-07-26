@@ -78,7 +78,15 @@ export default function HomeScreen() {
   const { data: medications = [] } = useMedications();
   const { data: attestations = [] } = useAttestations();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
-  const { mutateAsync: sendEmailVerification } = useSendEmailVerification();
+  const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const emailSendCount = useRef(0);
+
+  useEffect(() => {
+    if (emailCooldown <= 0) return;
+    const timer = setTimeout(() => setEmailCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [emailCooldown]);
   useQrWidget(user?.id ?? 0);
   const guardedPush = useGuardedPress((href: Parameters<typeof router.push>[0]) => router.push(href));
 
@@ -91,31 +99,29 @@ export default function HomeScreen() {
     hasMedications: medications.length > 0,
   });
 
-  const handleSelectOnboardingTask = useCallback((id: OnboardingTaskId) => {
+  const handleSelectOnboardingTask = useCallback(async (id: OnboardingTaskId) => {
     switch (id) {
       case 'email_verified':
-        void sendEmailVerification();
+        if (isSendingVerification || emailCooldown > 0) return;
+        await sendEmailVerification();
+        emailSendCount.current += 1;
+        setEmailCooldown(20 + (emailSendCount.current - 1) * 10);
         void addNotification({ title: 'Verification email sent', body: 'Check your inbox to confirm your email address.' });
-        onboardingChecklistSheetRef.current?.dismiss();
         break;
       case 'emergency_contacts':
-        onboardingChecklistSheetRef.current?.dismiss();
         emergencyContactsSheetRef.current?.presentAdd();
         break;
       case 'allergies':
-        onboardingChecklistSheetRef.current?.dismiss();
         allergiesSheetRef.current?.presentAdd();
         break;
       case 'conditions':
-        onboardingChecklistSheetRef.current?.dismiss();
         conditionsSheetRef.current?.presentAdd();
         break;
       case 'medications':
-        onboardingChecklistSheetRef.current?.dismiss();
         medicationsSheetRef.current?.presentAdd();
         break;
     }
-  }, [sendEmailVerification]);
+  }, [sendEmailVerification, isSendingVerification, emailCooldown]);
 
   useEffect(() => {
     if (!checklist.visible) return;
@@ -125,13 +131,6 @@ export default function HomeScreen() {
       void showLocalNotification({ title: 'Finish setting up your profile', body: 'A few optional details are still missing from your medical profile.' });
     });
   }, [checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
-
-  useEffect(() => {
-    if (checklist.complete) return;
-    checklist.markPrompted().then((shouldPrompt) => {
-      if (shouldPrompt) router.push('/onboarding-tasks');
-    });
-  }, [checklist.complete, checklist.markPrompted, router]);
 
   const prevTaskDoneRef = useRef<Map<OnboardingTaskId, boolean> | null>(null);
   useEffect(() => {
@@ -740,7 +739,7 @@ export default function HomeScreen() {
       <ConditionsBottomSheet ref={conditionsSheetRef} />
       <DiagnosesBottomSheet ref={diagnosesSheetRef} />
       <MedicationsBottomSheet ref={medicationsSheetRef} />
-      <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} onSkipTask={(id) => void checklist.skipTask(id)} />
+      <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} onSkipTask={(id) => void checklist.skipTask(id)} sendingVerification={isSendingVerification} emailCooldown={emailCooldown} />
     </View>
   );
 }

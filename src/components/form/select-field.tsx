@@ -31,6 +31,7 @@ type SelectFieldProps<T extends string> = {
   getLabel?: (value: T) => string;
   /** Background painted behind the floated label where it overlaps the border, so it blends into whatever the field sits on. Defaults to the screen background — override when nesting inside a Card or other surface using `theme.card`. */
   floatingLabelBackground?: string;
+  disabled?: boolean;
 };
 
 /** Select input styled to match TextField/DateField, opening a bottom sheet of options instead of a native picker. */
@@ -43,6 +44,7 @@ export function SelectField<T extends string>({
   error,
   getLabel = (v) => v,
   floatingLabelBackground,
+  disabled,
 }: SelectFieldProps<T>) {
   const theme = useTheme();
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -80,8 +82,9 @@ export function SelectField<T extends string>({
     <View className="mb-4">
       <Pressable
         onPress={handleOpen}
+        disabled={disabled}
         className="relative flex-row items-center justify-between rounded-xl px-4 py-3"
-        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input }}
+        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input, opacity: disabled ? 0.6 : 1 }}
       >
         <Animated.View
           pointerEvents="none"
