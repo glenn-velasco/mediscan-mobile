@@ -49,6 +49,7 @@ export type LivenessCaptureResult = {
   selfieFrames: CapturedFile[];
   flashFrames: CapturedFile[];
   flashColors: string[];
+  blinkDetected: boolean;
 };
 
 function wait(ms: number): Promise<void> {
@@ -167,7 +168,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
     }
 
     setStatus('done');
-    onCaptured({ selfieFrames: selfieFramesRef.current, flashFrames, flashColors });
+    onCaptured({ selfieFrames: selfieFramesRef.current, flashFrames, flashColors, blinkDetected: true });
   }, [captureFrame, fail, onCaptured]);
 
   const handleFacesDetected = useCallback(

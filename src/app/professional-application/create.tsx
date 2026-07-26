@@ -60,6 +60,7 @@ export default function CreateProfessionalApplicationScreen() {
         selfieFrames: liveness.selfieFrames,
         flashFrames: liveness.flashFrames,
         flashColors: liveness.flashColors,
+        blinkDetected: liveness.blinkDetected,
         dateOfBirth: result.data,
       });
       router.replace({ pathname: '/professional-application/[id]', params: { id: String(application.id) } });

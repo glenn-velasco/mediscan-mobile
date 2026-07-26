@@ -11,6 +11,7 @@ export type ProfessionalApplicationSubmission = {
   selfieFrames: CapturedFile[];
   flashFrames: CapturedFile[];
   flashColors: string[];
+  blinkDetected: boolean;
   dateOfBirth: string;
 };
 
@@ -29,6 +30,7 @@ export async function submitProfessionalApplication(submission: ProfessionalAppl
   submission.selfieFrames.forEach((frame) => appendFile(formData, 'selfie_frames[]', frame));
   submission.flashFrames.forEach((frame) => appendFile(formData, 'flash_frames[]', frame));
   submission.flashColors.forEach((color) => formData.append('flash_colors[]', color));
+  formData.append('blink_detected', submission.blinkDetected ? '1' : '0');
   formData.append('date_of_birth', submission.dateOfBirth);
 
   return submitProfessionalApplicationRequest(formData);
