@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
@@ -83,7 +83,7 @@ function SheetTaskItem({
               {task.title}
             </ThemedText>
             <ThemedText type="small" color="mutedForeground">
-              {loading ? 'Sending…' : (cooldown != null && cooldown > 0) ? `Retry in ${cooldown}s` : task.body}
+              {loading ? 'Sending…' : (cooldown != null && cooldown > 0) ? 'Email sent, check your inbox' : task.body}
             </ThemedText>
           </View>
           {!task.done && !(cooldown != null && cooldown > 0) ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}

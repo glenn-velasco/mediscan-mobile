@@ -72,12 +72,12 @@ export default function HomeScreen() {
   const { user, isInitialLoading, refreshUser, logout } = useAuth();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { data: medicalInformation, isLoading } = useMedicalInformation();
-  const { data: allergies = [] } = useAllergies();
-  const { data: conditions = [] } = useConditions();
+  const { data: allergies = [], isFetchedAfterMount: allergiesFetched } = useAllergies();
+  const { data: conditions = [], isFetchedAfterMount: conditionsFetched } = useConditions();
   const { data: diagnoses = [] } = useDiagnoses();
-  const { data: medications = [] } = useMedications();
+  const { data: medications = [], isFetchedAfterMount: medicationsFetched } = useMedications();
   const { data: attestations = [] } = useAttestations();
-  const { data: emergencyContacts = [] } = useEmergencyContacts();
+  const { data: emergencyContacts = [], isFetchedAfterMount: emergencyContactsFetched } = useEmergencyContacts();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
@@ -123,14 +123,24 @@ export default function HomeScreen() {
     }
   }, [sendEmailVerification, isSendingVerification, emailCooldown]);
 
+  const dataReady = !isInitialLoading && allergiesFetched && conditionsFetched && medicationsFetched && emergencyContactsFetched;
+
   useEffect(() => {
-    if (!checklist.visible) return;
+    if (!dataReady || !checklist.visible) return;
     checklist.markNotified().then((shouldNotify) => {
       if (!shouldNotify) return;
       void addNotification({ title: 'Finish setting up your profile', body: `${checklist.doneCount} of ${checklist.total} steps done — a few optional details left.` });
       void showLocalNotification({ title: 'Finish setting up your profile', body: 'A few optional details are still missing from your medical profile.' });
     });
-  }, [checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
+  }, [dataReady, checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
+  const hasShownOnboardingTasksRef = useRef(false);
+  useEffect(() => {
+    if (!dataReady) return;
+    if (checklist.complete || hasShownOnboardingTasksRef.current) return;
+    hasShownOnboardingTasksRef.current = true;
+    router.push('/onboarding-tasks');
+  }, [dataReady, checklist.complete]);
+
 
   const prevTaskDoneRef = useRef<Map<OnboardingTaskId, boolean> | null>(null);
   useEffect(() => {
@@ -305,7 +315,7 @@ export default function HomeScreen() {
         </GradientHeader>
       </View>
       <AppLayout onRefresh={handleRefresh} maxContentWidth={640} contentContainerStyle={{ paddingTop: 4, paddingBottom: 110 + insets.bottom }}>
-        {checklist.visible ? (
+        {checklist.visible && dataReady ? (
           <OnboardingChecklistCard
             doneCount={checklist.doneCount}
             total={checklist.total}

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
@@ -46,12 +46,16 @@ function TaskCard({
   task,
   theme,
   disabled,
+  index,
+  cooldown,
   onPress,
   onSkip,
 }: {
   task: { id: OnboardingTaskId; title: string; body: string; icon: 'mail' | 'people' | 'medical' | 'medkit' | 'bandage' | 'fitness'; done: boolean; skippable: boolean };
   theme: ReturnType<typeof useTheme>;
   disabled: boolean;
+  index: number;
+  cooldown?: number;
   onPress: () => void;
   onSkip: () => void;
 }) {
@@ -76,12 +80,13 @@ function TaskCard({
   return (
     <View>
       <Pressable
-        disabled={task.done || disabled}
+        disabled={task.done || disabled || (cooldown != null && cooldown > 0)}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
-        <Animated.View style={animatedStyle}>
+        <Animated.View entering={FadeInDown.delay(index * 80).springify().damping(15).stiffness(120)}>
+          <Animated.View style={animatedStyle}>
           <Card className="flex-row items-center gap-3">
             <View
               className="h-10 w-10 items-center justify-center rounded-xl"
@@ -97,11 +102,12 @@ function TaskCard({
                 {task.title}
               </ThemedText>
               <ThemedText type="small" color="mutedForeground">
-                {task.body}
+                {disabled ? 'Sending…' : (cooldown != null && cooldown > 0) ? 'Email sent, check your inbox' : task.body}
               </ThemedText>
             </View>
-            {!task.done ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
+            {!task.done && !(cooldown != null && cooldown > 0) ? <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /> : null}
           </Card>
+          </Animated.View>
         </Animated.View>
       </Pressable>
       {!task.done && task.skippable ? (
@@ -121,31 +127,36 @@ export default function OnboardingTasksScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { data: allergies = [] } = useAllergies();
-  const { data: conditions = [] } = useConditions();
-  const { data: medications = [] } = useMedications();
-  const { data: emergencyContacts = [] } = useEmergencyContacts();
+  const { data: allergies, isFetchedAfterMount: allergiesFetched } = useAllergies();
+  const { data: conditions, isFetchedAfterMount: conditionsFetched } = useConditions();
+  const { data: medications, isFetchedAfterMount: medicationsFetched } = useMedications();
+  const { data: emergencyContacts, isFetchedAfterMount: emergencyContactsFetched } = useEmergencyContacts();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const emailSendCount = useRef(0);
+
+  const isDataReady = allergiesFetched && conditionsFetched && medicationsFetched && emergencyContactsFetched;
 
   const checklist = useOnboardingChecklist({
     userId: user?.id,
     emailVerified: !!user?.email_verified_at,
-    hasEmergencyContacts: emergencyContacts.length > 0,
-    hasAllergies: allergies.length > 0,
-    hasConditions: conditions.length > 0,
-    hasMedications: medications.length > 0,
+    hasEmergencyContacts: (emergencyContacts?.length ?? 0) > 0,
+    hasAllergies: (allergies?.length ?? 0) > 0,
+    hasConditions: (conditions?.length ?? 0) > 0,
+    hasMedications: (medications?.length ?? 0) > 0,
   });
 
   useEffect(() => {
-    if (checklist.complete) {
-      const timer = setTimeout(() => router.replace('/'), 800);
-      return () => clearTimeout(timer);
-    }
-  }, [checklist.complete]);
+    if (emailCooldown <= 0) return;
+    const timer = setTimeout(() => setEmailCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [emailCooldown]);
 
-  const handleSkipTask = (id: OnboardingTaskId) => {
-    void checklist.skipTask(id);
-  };
+  useEffect(() => {
+    if (isDataReady && checklist.complete) {
+      router.dismissAll();
+    }
+  }, [isDataReady, checklist.complete]);
 
   useFocusEffect(
     useCallback(() => {
@@ -153,9 +164,18 @@ export default function OnboardingTasksScreen() {
     }, [checklist.refreshSkipped])
   );
 
+  if (!isDataReady || checklist.complete) return null;
+
+  const handleSkipTask = (id: OnboardingTaskId) => {
+    void checklist.skipTask(id);
+  };
+
   const handleSelectTask = async (id: OnboardingTaskId) => {
     if (id === 'email_verified') {
+      if (isSendingVerification || emailCooldown > 0) return;
       await sendEmailVerification();
+      emailSendCount.current += 1;
+      setEmailCooldown(20 + (emailSendCount.current - 1) * 10);
       await addNotification({ title: 'Verification email sent', body: 'Check your inbox to confirm your email address.' });
       return;
     }
@@ -206,12 +226,14 @@ export default function OnboardingTasksScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: insets.bottom + 24, gap: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        {checklist.tasks.map((task) => (
+        {checklist.tasks.map((task, index) => (
           <TaskCard
             key={task.id}
             task={task}
             theme={theme}
             disabled={task.id === 'email_verified' && isSendingVerification}
+            index={index}
+            cooldown={task.id === 'email_verified' ? emailCooldown : undefined}
             onPress={() => void handleSelectTask(task.id)}
             onSkip={() => handleSkipTask(task.id)}
           />
