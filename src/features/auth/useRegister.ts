@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/auth/useAuth';
 import type { MedicalInformationPayload, RegisterPayload } from '@/api/types';
@@ -10,8 +10,12 @@ type RegisterArgs = {
 
 export function useRegister() {
   const { register } = useAuth();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (args: RegisterArgs) => register(args.payload, args.medicalInfo),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
   });
 }

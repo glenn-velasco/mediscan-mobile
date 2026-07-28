@@ -12,5 +12,6 @@ export function useMedicalInformation() {
     queryKey: [...medicalInformationQueryKey, user?.id],
     queryFn: () => medicalInformationRepo.getLocal(),
     enabled: !!user,
+    placeholderData: (previousData) => previousData,
   });
 }

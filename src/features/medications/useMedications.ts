@@ -12,5 +12,6 @@ export function useMedications() {
     queryKey: [...medicationsQueryKey, user?.id],
     queryFn: () => medicationsRepo.getAll(),
     enabled: !!user,
+    placeholderData: (previousData) => previousData,
   });
 }

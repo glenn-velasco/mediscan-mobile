@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { submitToPatient } from '@/services/professional-submission.service';
 import type { EnvelopeType } from '@/api/types';
@@ -12,7 +12,12 @@ export type SubmitEnvelopeParams = {
 
 /** Scenario 2 (patient not physically present) submission over the relay — Scenario 1 goes through ble-central.service.ts directly, wired up alongside the BLE scan/submit screen in Phase 7. */
 export function useSubmitEnvelope() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ patientId, envelopeType, payload, itemIdentifier }: SubmitEnvelopeParams) => submitToPatient(patientId, envelopeType, payload, itemIdentifier),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
   });
 }

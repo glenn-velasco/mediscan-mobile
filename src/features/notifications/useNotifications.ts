@@ -1,7 +1,5 @@
-import { useSyncExternalStore } from 'react';
-
 import { useAuth } from '@/auth/useAuth';
-import { getSnapshot, subscribe, markAllRead, markRead, clearNotifications, type AppNotification } from '@/features/notifications/notifications.store';
+import { useNotificationsStore, type AppNotification } from '@/features/notifications/notifications.store';
 
 export type { AppNotification };
 
@@ -22,18 +20,22 @@ function useEmailVerificationItem(): AppNotification | null {
 
 /** React binding for the shared inbox in `notifications.store.ts` — see that file for why it's a plain module store. */
 export function useNotifications() {
-  const state = useSyncExternalStore(subscribe, getSnapshot);
+  const items = useNotificationsStore((s) => s.items);
+  const loaded = useNotificationsStore((s) => s.loaded);
+  const markAllRead = useNotificationsStore((s) => s.markAllRead);
+  const markRead = useNotificationsStore((s) => s.markRead);
+  const clearNotifications = useNotificationsStore((s) => s.clearNotifications);
   const emailVerificationItem = useEmailVerificationItem();
-  const items = emailVerificationItem ? [emailVerificationItem, ...state.items] : state.items;
-  const unreadCount = items.reduce((count, n) => count + (n.read ? 0 : 1), 0);
+  const allItems = emailVerificationItem ? [emailVerificationItem, ...items] : items;
+  const unreadCount = allItems.reduce((count, n) => count + (n.read ? 0 : 1), 0);
 
-  return { items, unreadCount, loaded: state.loaded, markAllRead, markRead, clearNotifications };
+  return { items: allItems, unreadCount, loaded, markAllRead, markRead, clearNotifications };
 }
 
 /** Lighter-weight binding for spots that only need the badge count (e.g. the Home header bell). */
 export function useUnreadNotificationCount() {
-  const state = useSyncExternalStore(subscribe, getSnapshot);
+  const items = useNotificationsStore((s) => s.items);
   const emailVerificationItem = useEmailVerificationItem();
-  const storeUnread = state.items.reduce((count, n) => count + (n.read ? 0 : 1), 0);
+  const storeUnread = items.reduce((count, n) => count + (n.read ? 0 : 1), 0);
   return storeUnread + (emailVerificationItem ? 1 : 0);
 }

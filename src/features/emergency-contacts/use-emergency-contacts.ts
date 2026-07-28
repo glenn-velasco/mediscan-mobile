@@ -11,5 +11,6 @@ export function useEmergencyContacts() {
     queryKey: [...emergencyContactsQueryKey, user?.id],
     queryFn: () => emergencyContactsRepo.getAll(),
     enabled: !!user,
+    placeholderData: (previousData) => previousData,
   });
 }

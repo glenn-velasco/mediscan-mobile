@@ -27,36 +27,40 @@ describe('qr-widget-toggle.store', () => {
 
   it('starts disabled and unloaded before anything reads storage', () => {
     const store = loadStore();
+    const state = store.useQrWidgetToggleStore.getState();
 
-    expect(store.getSnapshot()).toEqual({ enabled: false, loaded: false });
+    expect(state.enabled).toBe(false);
+    expect(state.loaded).toBe(false);
   });
 
   it('hydrates the persisted choice and marks itself loaded', async () => {
     await AsyncStorage.setItem(STORAGE_KEY, 'true');
     const store = loadStore();
 
-    await store.hydrate();
+    await store.useQrWidgetToggleStore.getState().hydrate();
 
-    expect(store.getSnapshot()).toEqual({ enabled: true, loaded: true });
+    const state = store.useQrWidgetToggleStore.getState();
+    expect(state.enabled).toBe(true);
+    expect(state.loaded).toBe(true);
   });
 
   it('treats absent storage as disabled, but still loaded', async () => {
     const store = loadStore();
 
-    await store.hydrate();
+    await store.useQrWidgetToggleStore.getState().hydrate();
 
-    expect(store.getSnapshot()).toEqual({ enabled: false, loaded: true });
+    const state = store.useQrWidgetToggleStore.getState();
+    expect(state.enabled).toBe(false);
+    expect(state.loaded).toBe(true);
   });
 
   it('reads storage only once no matter how many callers subscribe', async () => {
     const store = loadStore();
 
-    store.subscribe(() => {});
-    store.subscribe(() => {});
-
+    const hydrate = store.useQrWidgetToggleStore.getState().hydrate;
     // Every caller reuses the same in-flight read rather than hitting storage again.
-    expect(store.hydrate()).toBe(store.hydrate());
-    await store.hydrate();
+    expect(hydrate()).toBe(hydrate());
+    await hydrate();
   });
 
   /**
@@ -67,11 +71,14 @@ describe('qr-widget-toggle.store', () => {
   it('keeps a choice made while the storage read is still in flight', async () => {
     const store = loadStore();
 
-    store.subscribe(() => {}); // starts hydrate(), deliberately not awaited
-    await store.setEnabled(true);
-    await store.hydrate();
+    // starts hydrate(), deliberately not awaited
+    void store.useQrWidgetToggleStore.getState().hydrate();
+    await store.useQrWidgetToggleStore.getState().setEnabled(true);
+    await store.useQrWidgetToggleStore.getState().hydrate();
 
-    expect(store.getSnapshot()).toEqual({ enabled: true, loaded: true });
+    const state = store.useQrWidgetToggleStore.getState();
+    expect(state.enabled).toBe(true);
+    expect(state.loaded).toBe(true);
   });
 
   /**
@@ -83,44 +90,34 @@ describe('qr-widget-toggle.store', () => {
     const store = loadStore();
     const account = jest.fn();
     const home = jest.fn();
-    store.subscribe(account);
-    store.subscribe(home);
+    store.useQrWidgetToggleStore.subscribe(account);
+    store.useQrWidgetToggleStore.subscribe(home);
 
-    await store.setEnabled(true);
+    await store.useQrWidgetToggleStore.getState().setEnabled(true);
 
     expect(account).toHaveBeenCalled();
     expect(home).toHaveBeenCalled();
-    expect(store.getSnapshot().enabled).toBe(true);
+    expect(store.useQrWidgetToggleStore.getState().enabled).toBe(true);
   });
 
   it('persists the value so the choice survives a restart', async () => {
     const store = loadStore();
 
-    await store.setEnabled(true);
+    await store.useQrWidgetToggleStore.getState().setEnabled(true);
     expect(await AsyncStorage.getItem(STORAGE_KEY)).toBe('true');
 
-    await store.setEnabled(false);
+    await store.useQrWidgetToggleStore.getState().setEnabled(false);
     expect(await AsyncStorage.getItem(STORAGE_KEY)).toBe('false');
-  });
-
-  it('hands out a new snapshot object only when the value actually changes', async () => {
-    const store = loadStore();
-
-    const first = store.getSnapshot();
-    expect(store.getSnapshot()).toBe(first); // stable identity — no needless re-renders
-
-    await store.setEnabled(true);
-    expect(store.getSnapshot()).not.toBe(first);
   });
 
   it('stops notifying a caller once it unsubscribes', async () => {
     const store = loadStore();
     const listener = jest.fn();
-    const unsubscribe = store.subscribe(listener);
+    const unsubscribe = store.useQrWidgetToggleStore.subscribe(listener);
     listener.mockClear();
 
     unsubscribe();
-    await store.setEnabled(true);
+    await store.useQrWidgetToggleStore.getState().setEnabled(true);
 
     expect(listener).not.toHaveBeenCalled();
   });
