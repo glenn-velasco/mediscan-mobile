@@ -63,6 +63,7 @@ type Step0ContentProps = {
   passwordConfirmation: string;
   setPasswordConfirmation: (v: string) => void;
   fieldErrors: Record<string, string>;
+  setFieldErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   friendlyMessage: string | null;
   onNext: () => void;
 };
@@ -75,16 +76,34 @@ function Step0Content({
   email, setEmail,
   password, setPassword,
   passwordConfirmation, setPasswordConfirmation,
-  fieldErrors, friendlyMessage, onNext,
+  fieldErrors, setFieldErrors, friendlyMessage, onNext,
 }: Step0ContentProps) {
   return (
     <>
       <ThemedText type="overline" className="mb-3">
         Your name
       </ThemedText>
-      <TextField label="First name" leftIcon="person-outline" value={firstName} onChangeText={setFirstName} error={fieldErrors.firstName} />
+      <TextField
+        label="First name"
+        leftIcon="person-outline"
+        value={firstName}
+        onChangeText={(v) => {
+          setFirstName(v);
+          if (fieldErrors.firstName) setFieldErrors((prev) => ({ ...prev, firstName: '' }));
+        }}
+        error={fieldErrors.firstName}
+      />
       <TextField label="Middle name" leftIcon="person-outline" value={middleName} onChangeText={setMiddleName} />
-      <TextField label="Last name" leftIcon="person-outline" value={lastName} onChangeText={setLastName} error={fieldErrors.lastName} />
+      <TextField
+        label="Last name"
+        leftIcon="person-outline"
+        value={lastName}
+        onChangeText={(v) => {
+          setLastName(v);
+          if (fieldErrors.lastName) setFieldErrors((prev) => ({ ...prev, lastName: '' }));
+        }}
+        error={fieldErrors.lastName}
+      />
       <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={suffix} onChange={setSuffix} allowClear getLabel={(v) => SuffixLabel[v]} />
 
       <ThemedText type="overline" className="mb-3 mt-4">
@@ -94,16 +113,30 @@ function Step0Content({
         label="Email"
         leftIcon="mail-outline"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(v) => {
+          setEmail(v);
+          if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: '' }));
+        }}
         autoCapitalize="none"
         keyboardType="email-address"
         error={fieldErrors.email}
       />
-      <PasswordField label="Password" value={password} onChangeText={setPassword} error={fieldErrors.password} />
+      <PasswordField
+        label="Password"
+        value={password}
+        onChangeText={(v) => {
+          setPassword(v);
+          if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: '' }));
+        }}
+        error={fieldErrors.password}
+      />
       <PasswordField
         label="Confirm password"
         value={passwordConfirmation}
-        onChangeText={setPasswordConfirmation}
+        onChangeText={(v) => {
+          setPasswordConfirmation(v);
+          if (fieldErrors.passwordConfirmation) setFieldErrors((prev) => ({ ...prev, passwordConfirmation: '' }));
+        }}
         error={fieldErrors.passwordConfirmation}
       />
 
@@ -121,6 +154,7 @@ type Step1ContentProps = {
   phoneValue: PhoneInputValue;
   setPhoneValue: (v: PhoneInputValue) => void;
   fieldErrors: Record<string, string>;
+  setFieldErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   friendlyMessage: string | null;
   onNext: () => void;
   onBack: () => void;
@@ -130,7 +164,7 @@ function Step1Content({
   dateOfBirth, setDateOfBirth,
   gender, setGender,
   phoneValue, setPhoneValue,
-  fieldErrors, friendlyMessage, onNext, onBack,
+  fieldErrors, setFieldErrors, friendlyMessage, onNext, onBack,
 }: Step1ContentProps) {
   return (
     <>
@@ -140,7 +174,10 @@ function Step1Content({
       <DateField
         label="Date of birth"
         value={dateOfBirth}
-        onChange={setDateOfBirth}
+        onChange={(v) => {
+          setDateOfBirth(v);
+          if (fieldErrors.date_of_birth) setFieldErrors((prev) => ({ ...prev, date_of_birth: '' }));
+        }}
         maximumDate={new Date()}
         error={fieldErrors.date_of_birth}
       />
@@ -148,11 +185,23 @@ function Step1Content({
         placeholder="Gender"
         options={GENDER_OPTIONS}
         value={gender}
-        onChange={setGender}
+        onChange={(v) => {
+          setGender(v);
+          if (fieldErrors.gender) setFieldErrors((prev) => ({ ...prev, gender: '' }));
+        }}
         error={fieldErrors.gender}
         getLabel={(v) => GenderLabel[v]}
       />
-      <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
+      <PhoneInput
+        value={phoneValue}
+        onChange={(v) => {
+          setPhoneValue(v);
+          if (fieldErrors.phone || fieldErrors.phone_country_code) {
+            setFieldErrors((prev) => ({ ...prev, phone: '', phone_country_code: '' }));
+          }
+        }}
+        error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code}
+      />
 
       <FormError message={friendlyMessage} />
       <PrimaryButton label="Next" onPress={onNext} />
@@ -173,6 +222,7 @@ type Step2ContentProps = {
   acceptedTerms: boolean;
   setAcceptedTerms: (v: boolean | ((prev: boolean) => boolean)) => void;
   fieldErrors: Record<string, string>;
+  setFieldErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   friendlyMessage: string | null;
   isPending: boolean;
   onSubmit: () => void;
@@ -187,7 +237,7 @@ function Step2Content({
   religion, setReligion,
   noBloodTransfusion, setNoBloodTransfusion,
   acceptedTerms, setAcceptedTerms,
-  fieldErrors, friendlyMessage, isPending, onSubmit, onBack, router, theme,
+  fieldErrors, setFieldErrors, friendlyMessage, isPending, onSubmit, onBack, router, theme,
 }: Step2ContentProps) {
   return (
     <>
@@ -196,7 +246,13 @@ function Step2Content({
       </ThemedText>
       <AddressFields
         value={medicalAddress}
-        onChange={setMedicalAddress}
+        onChange={(v) => {
+          setMedicalAddress(v);
+          const hasAddressError = fieldErrors.street || fieldErrors.address || fieldErrors.unit || fieldErrors.city || fieldErrors.province || fieldErrors.postal_code || fieldErrors.country;
+          if (hasAddressError) {
+            setFieldErrors((prev) => ({ ...prev, street: '', address: '', unit: '', city: '', province: '', postal_code: '', country: '' }));
+          }
+        }}
         errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
         disabled={isPending}
       />
@@ -224,7 +280,10 @@ function Step2Content({
 
       <Pressable
         className="mb-2 flex-row items-start gap-3"
-        onPress={() => setAcceptedTerms((v) => !v)}
+        onPress={() => {
+          setAcceptedTerms((v) => !v);
+          if (fieldErrors.terms) setFieldErrors((prev) => ({ ...prev, terms: '' }));
+        }}
         disabled={isPending}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
@@ -482,6 +541,7 @@ export default function RegisterScreen() {
           password={password} setPassword={setPassword}
           passwordConfirmation={passwordConfirmation} setPasswordConfirmation={setPasswordConfirmation}
           fieldErrors={fieldErrors}
+          setFieldErrors={setFieldErrors}
           friendlyMessage={friendlyMessage}
           onNext={onNext}
         />
@@ -493,6 +553,7 @@ export default function RegisterScreen() {
           gender={gender} setGender={setGender}
           phoneValue={phoneValue} setPhoneValue={setPhoneValue}
           fieldErrors={fieldErrors}
+          setFieldErrors={setFieldErrors}
           friendlyMessage={friendlyMessage}
           onNext={onNext}
           onBack={onBack}
@@ -507,6 +568,7 @@ export default function RegisterScreen() {
           noBloodTransfusion={noBloodTransfusion} setNoBloodTransfusion={setNoBloodTransfusion}
           acceptedTerms={acceptedTerms} setAcceptedTerms={setAcceptedTerms}
           fieldErrors={fieldErrors}
+          setFieldErrors={setFieldErrors}
           friendlyMessage={friendlyMessage}
           isPending={isPending}
           onSubmit={onSubmit}

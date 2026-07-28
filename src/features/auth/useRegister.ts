@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/auth/useAuth';
 import type { MedicalInformationPayload, RegisterPayload } from '@/api/types';
+import { medicalInformationQueryKey, medicalInformationAvatarQueryKey } from '@/lib/query-keys';
 
 type RegisterArgs = {
   payload: Omit<RegisterPayload, 'device_name'>;
@@ -15,7 +16,8 @@ export function useRegister() {
   return useMutation({
     mutationFn: (args: RegisterArgs) => register(args.payload, args.medicalInfo),
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+      queryClient.invalidateQueries({ queryKey: medicalInformationAvatarQueryKey });
     },
   });
 }

@@ -194,11 +194,11 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       await setToken(token);
       setCurrentUserId(registeredUser.id);
 
-      if (medicalInfo) {
+      const persistMedicalInfo = async () => {
+        if (!medicalInfo) return;
         const interimId = registeredUser.medical_information?.id;
         try {
           if (interimId == null) {
-            // Registration response is missing the interim medical_information id
             await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
           } else {
             const record = await updateMedicalInformation(interimId, medicalInfo);
@@ -208,13 +208,14 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
           await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
         }
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-      }
+      };
+
+      await Promise.all([persistMedicalInfo(), saveUser(registeredUser)]);
 
       setUser(registeredUser);
       setStatus('authenticated');
       setIsInitialLoading(false);
       void backfillUserId(registeredUser.id);
-      await saveUser(registeredUser);
       return { pending: false };
     } finally {
       isRegistering = false;
