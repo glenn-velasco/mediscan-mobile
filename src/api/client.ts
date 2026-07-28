@@ -2,6 +2,7 @@ import { Config } from '@/constants/config';
 import { getCachedToken } from '@/auth/token-storage';
 import { errorFromEnvelope, NetworkError, UnauthenticatedError } from '@/api/errors';
 import type { ApiEnvelope, PaginationMeta, PaginationLinks } from '@/api/types';
+import { getIsOffline } from '@/lib/network-state';
 
 type UnauthenticatedHandler = () => void;
 let onUnauthenticated: UnauthenticatedHandler | null = null;
@@ -17,6 +18,10 @@ type RequestOptions = {
 };
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (getIsOffline()) {
+    throw new NetworkError(new Error('No internet connection'));
+  }
+
   const { method = 'GET', body, auth = true } = options;
 
   const headers: Record<string, string> = {
@@ -44,6 +49,15 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new NetworkError(cause);
   }
 
+  if (!response.ok) {
+    let envelope: ApiEnvelope<T> | null = null;
+    try { envelope = await response.json(); } catch {}
+    console.warn(`[api] ${method} ${path} → ${response.status}`, envelope?.message);
+    const error = errorFromEnvelope({ status: envelope?.status ?? response.status, message: envelope?.message ?? 'Request failed', data: envelope?.data as T ?? null, errors: envelope?.errors ?? null });
+    if (error instanceof UnauthenticatedError) onUnauthenticated?.();
+    throw error;
+  }
+
   let envelope: ApiEnvelope<T>;
   try {
     envelope = await response.json();
@@ -52,17 +66,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw new NetworkError(cause);
   }
 
-  if (!response.ok) {
-    console.warn(`[api] ${method} ${path} → ${response.status}`, envelope.message);
-    const error = errorFromEnvelope({ ...envelope, status: envelope.status ?? response.status });
-    if (error instanceof UnauthenticatedError) onUnauthenticated?.();
-    throw error;
-  }
-
   return envelope.data as T;
 }
 
-export async function requestPaginated<T>(
+async function requestPaginated<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<{ data: T[]; meta: PaginationMeta; links: PaginationLinks }> {
@@ -88,6 +95,20 @@ export async function requestPaginated<T>(
     throw new NetworkError(cause);
   }
 
+  if (!response.ok) {
+    let parsed: unknown = null;
+    try { parsed = await response.json(); } catch {}
+    const e = parsed as { status?: number; message?: string; errors?: Record<string, string[]> | null } | null;
+    const err = errorFromEnvelope({
+      status: e?.status ?? response.status,
+      message: e?.message ?? 'Request failed',
+      data: undefined,
+      errors: e?.errors ?? null,
+    });
+    if (err instanceof UnauthenticatedError) onUnauthenticated?.();
+    throw err;
+  }
+
   let envelope: unknown;
   try {
     envelope = await response.json();
@@ -95,23 +116,15 @@ export async function requestPaginated<T>(
     throw new NetworkError(cause);
   }
 
-  if (!response.ok) {
-    const e = envelope as { status?: number; message?: string; errors?: Record<string, string[]> | null };
-    const err = errorFromEnvelope({
-      status: e.status ?? response.status,
-      message: e.message ?? 'Error',
-      data: undefined,
-      errors: e.errors ?? null,
-    });
-    if (err instanceof UnauthenticatedError) onUnauthenticated?.();
-    throw err;
-  }
-
   const pe = envelope as { data: T[]; meta: PaginationMeta; links: PaginationLinks };
   return { data: pe.data, meta: pe.meta, links: pe.links };
 }
 
 export async function postMultipart<T>(path: string, formData: FormData): Promise<T> {
+  if (getIsOffline()) {
+    throw new NetworkError(new Error('No internet connection'));
+  }
+
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = getCachedToken();
   if (token) {
@@ -134,7 +147,19 @@ export async function postMultipart<T>(path: string, formData: FormData): Promis
     throw new NetworkError(cause);
   }
 
-  const rawBody = await response.text();
+  let rawBody: string;
+  if (!response.ok) {
+    rawBody = await response.text();
+    console.warn(`[api] POST ${path} → ${response.status}`, rawBody.slice(0, 200));
+    let parsed: ApiEnvelope<T> | null = null;
+    try { parsed = JSON.parse(rawBody); } catch {}
+    const error = errorFromEnvelope({ status: parsed?.status ?? response.status, message: parsed?.message ?? 'Request failed', data: parsed?.data as T ?? null, errors: parsed?.errors ?? null });
+    if (error instanceof UnauthenticatedError) onUnauthenticated?.();
+    throw error;
+  }
+
+  rawBody = await response.text();
+
   let envelope: ApiEnvelope<T>;
   try {
     envelope = JSON.parse(rawBody);
@@ -147,13 +172,6 @@ export async function postMultipart<T>(path: string, formData: FormData): Promis
       cause,
     });
     throw new NetworkError(cause);
-  }
-
-  if (!response.ok) {
-    console.warn(`[api] POST ${path} → ${response.status}`, envelope.message);
-    const error = errorFromEnvelope({ ...envelope, status: envelope.status ?? response.status });
-    if (error instanceof UnauthenticatedError) onUnauthenticated?.();
-    throw error;
   }
 
   return envelope.data as T;
