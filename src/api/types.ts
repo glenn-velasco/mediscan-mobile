@@ -222,7 +222,7 @@ export type DeviceKeyPayload = {
   label?: string;
 };
 
-export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'condition_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update';
+export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'condition_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update' | 'emergency_contact_verification';
 
 export type PendingSyncEnvelope = {
   id: number;

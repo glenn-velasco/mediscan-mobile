@@ -35,4 +35,5 @@ const EmergencyQrWidget = (props: EmergencyQrWidgetProps, environment: WidgetEnv
 };
 
 const widget = createWidget('EmergencyQrWidget', EmergencyQrWidget);
+// react-doctor-disable-next-line react-doctor/only-export-components, deslop/unused-export
 export default widget;

@@ -5,7 +5,7 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
-export const PER_PAGE = 15;
+const PER_PAGE = 15;
 
 export const Config = {
   apiUrl: requireEnv('EXPO_PUBLIC_API_URL', process.env.EXPO_PUBLIC_API_URL),
