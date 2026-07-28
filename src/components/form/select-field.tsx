@@ -11,6 +11,7 @@ import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from 'react-n
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+import { field, formTokens, sheet } from '@/components/form/tokens';
 
 const AnimatedText = Animated.createAnimatedComponent(ThemedText);
 
@@ -42,6 +43,7 @@ export function SelectField<T extends string>({
   onChange,
   allowClear,
   error,
+  // react-doctor-disable-next-line react-hooks-js/todo
   getLabel = (v) => v,
   floatingLabelBackground,
   disabled,
@@ -58,7 +60,7 @@ export function SelectField<T extends string>({
   }));
 
   const labelTextStyle = useAnimatedStyle(() => ({
-    fontSize: 16 - progress.value * 4,
+    fontSize: field.fontSize - progress.value * 4,
   }));
 
   const valueTextStyle = useAnimatedStyle(() => ({
@@ -79,37 +81,60 @@ export function SelectField<T extends string>({
   );
 
   return (
-    <View className="mb-4">
+    <View style={formTokens.container}>
       <Pressable
         onPress={handleOpen}
         disabled={disabled}
-        className="relative flex-row items-center justify-between rounded-xl px-4 py-3"
-        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input, opacity: disabled ? 0.6 : 1 }}
+        style={[
+          formTokens.field,
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: theme.card,
+            borderColor: error ? theme.destructive : theme.input,
+            opacity: disabled ? 0.6 : 1,
+          },
+        ]}
       >
         <Animated.View
           pointerEvents="none"
           style={[
-            { position: 'absolute', left: 16, paddingHorizontal: 4 },
+            formTokens.labelContainer,
+            { left: field.labelLeft },
             labelContainerStyle,
             floated ? { backgroundColor: floatingLabelBackground ?? theme.background } : null,
           ]}
         >
           <AnimatedText
             style={[
-              { color: error ? theme.destructive : theme.mutedForeground, fontFamily: 'Inter-Medium' },
+              { color: error ? theme.destructive : theme.mutedForeground, fontFamily: field.fontFamily },
               labelTextStyle,
             ]}
           >
             {placeholder}
           </AnimatedText>
         </Animated.View>
-        <AnimatedText className="text-base" style={[{ color: theme.foreground }, valueTextStyle]}>
+        <AnimatedText style={[{ fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}>
           {value ? getLabel(value) : ''}
         </AnimatedText>
-        <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
+        {value !== undefined ? (
+          <Pressable
+            onPress={(e) => {
+              e.stopPropagation();
+              onChange(undefined);
+            }}
+            hitSlop={8}
+            disabled={disabled}
+          >
+            <Ionicons name="close-circle" size={18} color={theme.mutedForeground} />
+          </Pressable>
+        ) : (
+          <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
+        )}
       </Pressable>
       {error ? (
-        <ThemedText type="small" color="destructive" className="mt-1">
+        <ThemedText type="small" color="destructive" style={formTokens.errorText}>
           {error}
         </ThemedText>
       ) : null}
@@ -118,12 +143,12 @@ export function SelectField<T extends string>({
         ref={sheetRef}
         stackBehavior="push"
         enableDynamicSizing
-        backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
-        handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
+        backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
+        handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
         backdropComponent={renderBackdrop}
       >
-        <BottomSheetView className="gap-1 px-6 pb-10 pt-2">
-          <View className="mb-3 flex-row items-center justify-between">
+        <BottomSheetView style={{ paddingHorizontal: sheet.paddingH, paddingBottom: sheet.paddingB, paddingTop: sheet.paddingT, gap: 4 }}>
+          <View style={[formTokens.sheetHeader, { borderBottomColor: theme.border }]}>
             <ThemedText type="overline">
               {placeholder}
             </ThemedText>
@@ -135,7 +160,7 @@ export function SelectField<T extends string>({
           {allowClear ? (
             <Pressable
               onPress={() => handleSelect(undefined)}
-              className="flex-row items-center justify-between rounded-md px-2 py-3 active:bg-accent"
+              style={formTokens.sheetRow}
             >
               <ThemedText color="mutedForeground">None</ThemedText>
               {value === undefined ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
@@ -148,7 +173,7 @@ export function SelectField<T extends string>({
               <Pressable
                 key={option}
                 onPress={() => handleSelect(option)}
-                className="flex-row items-center justify-between rounded-md px-2 py-3 active:bg-accent"
+                style={formTokens.sheetRow}
               >
                 <ThemedText style={{ fontWeight: selected ? '600' : '400', color: selected ? theme.primary : theme.foreground }}>{getLabel(option)}</ThemedText>
                 {selected ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}

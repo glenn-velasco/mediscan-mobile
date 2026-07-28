@@ -11,6 +11,7 @@ import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from 'react-n
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+import { field, formTokens, sheet } from '@/components/form/tokens';
 
 const AnimatedText = Animated.createAnimatedComponent(ThemedText);
 
@@ -63,7 +64,7 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
   }));
 
   const labelTextStyle = useAnimatedStyle(() => ({
-    fontSize: 16 - progress.value * 4,
+    fontSize: field.fontSize - progress.value * 4,
   }));
 
   const valueTextStyle = useAnimatedStyle(() => ({
@@ -78,7 +79,7 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
   };
 
   return (
-    <View className="mb-4">
+    <View style={formTokens.container}>
       <Pressable
         onPress={() => {
           if (disabled) return;
@@ -90,32 +91,39 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
           }
         }}
         disabled={disabled}
-        className="relative rounded-xl px-4 py-3"
-        style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: error ? theme.destructive : theme.input, opacity: disabled ? 0.6 : 1 }}
+        style={[
+          formTokens.field,
+          {
+            backgroundColor: theme.card,
+            borderColor: error ? theme.destructive : theme.input,
+            opacity: disabled ? 0.6 : 1,
+          },
+        ]}
       >
         <Animated.View
           pointerEvents="none"
           style={[
-            { position: 'absolute', left: 16, paddingHorizontal: 4 },
+            formTokens.labelContainer,
+            { left: field.labelLeft },
             labelContainerStyle,
             floated ? { backgroundColor: floatingLabelBackground ?? theme.background } : null,
           ]}
         >
           <AnimatedText
             style={[
-              { color: error ? theme.destructive : theme.mutedForeground, fontFamily: 'Inter-Medium' },
+              { color: error ? theme.destructive : theme.mutedForeground, fontFamily: field.fontFamily },
               labelTextStyle,
             ]}
           >
             {label}
           </AnimatedText>
         </Animated.View>
-        <AnimatedText className="text-base" style={[{ color: theme.foreground }, valueTextStyle]}>
+        <AnimatedText style={[{ fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}>
           {value ? formatDisplay(value) : ''}
         </AnimatedText>
       </Pressable>
       {error ? (
-        <ThemedText type="small" color="destructive" className="mt-1">
+        <ThemedText type="small" color="destructive" style={formTokens.errorText}>
           {error}
         </ThemedText>
       ) : null}
@@ -135,15 +143,15 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
           ref={sheetRef}
           stackBehavior="push"
           enableDynamicSizing
-          backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
-          handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
+          backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
+          handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
           backdropComponent={renderBackdrop}
         >
-          <BottomSheetView className="px-4 pb-10 pt-2">
-            <View className="mb-2 flex-row items-center justify-between border-b border-border pb-3">
-              <ThemedText style={{ fontWeight: '600', color: theme.foreground }}>{label}</ThemedText>
+          <BottomSheetView style={{ paddingHorizontal: 16, paddingBottom: sheet.paddingB, paddingTop: sheet.paddingT }}>
+            <View style={[formTokens.sheetHeader, { borderBottomColor: theme.border }]}>
+              <ThemedText type="bodyBold">{label}</ThemedText>
               <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={8}>
-                <ThemedText style={{ color: theme.primary }}>Done</ThemedText>
+                <ThemedText color="primary">Done</ThemedText>
               </Pressable>
             </View>
             <DateTimePicker

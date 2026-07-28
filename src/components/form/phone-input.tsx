@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import {
@@ -12,6 +12,7 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+import { field, formTokens, sheet } from '@/components/form/tokens';
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
@@ -111,9 +112,7 @@ function buildCountryList(): Country[] {
 
 const FALLBACK_COUNTRY: Country = { code: 'PH' as CountryCode, name: 'Philippines', dialCode: '+63', flag: '🇵🇭' };
 
-const SEPARATOR_STYLE = { height: 1, marginLeft: 52 };
-
-const CountryItem = memo(function CountryItem({
+function CountryItem({
   item,
   isSelected,
   onSelect,
@@ -145,9 +144,60 @@ const CountryItem = memo(function CountryItem({
       {isSelected ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
     </Pressable>
   );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: field.radius,
+    borderWidth: 1,
+    backgroundColor: 'transparent', // overridden by theme at runtime
+  },
+  countryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: field.paddingH,
+    paddingRight: 8,
+    paddingVertical: field.paddingV,
+    gap: 4,
+  },
+  divider: {
+    width: 1,
+    height: 24,
+    marginVertical: 'auto',
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: field.fontSize,
+    lineHeight: field.lineHeight,
+    fontFamily: field.fontFamily,
+    paddingVertical: field.paddingV,
+    paddingRight: field.paddingH,
+    paddingLeft: 8,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  searchInput: {
+    borderRadius: field.radius,
+    paddingHorizontal: field.paddingH,
+    paddingVertical: field.paddingV,
+    fontSize: 15,
+  },
 });
 
-export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: PhoneInputProps) {
+export function PhoneInput({ value, onChange, error }: PhoneInputProps) {
   const theme = useTheme();
   const sheetRef = useRef<BottomSheetModal>(null);
   const [search, setSearch] = useState('');
@@ -161,7 +211,7 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
     return () => { mountedRef.current = false; };
   }, []);
 
-  const loadCountries = useCallback(() => {
+  const loadCountries = () => {
     setLoading(true);
     setTimeout(() => {
       const list = buildCountryList();
@@ -170,66 +220,64 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
         setLoading(false);
       }
     }, 0);
-  }, []);
+  };
 
-  const handleOpen = useCallback(() => {
+  const handleOpen = () => {
     Keyboard.dismiss();
     sheetRef.current?.present();
     loadCountries();
-  }, [loadCountries]);
+  };
 
-  const selectedCountry = useMemo(() => {
-    return countries.find((c) => c.code === value.countryCode) ?? FALLBACK_COUNTRY;
-  }, [countries, value.countryCode]);
+  const selectedCountry = countries.find((c) => c.code === value.countryCode) ?? FALLBACK_COUNTRY;
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     if (!search.trim()) return countries;
     const q = search.toLowerCase();
     return countries.filter(
       (c) => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q),
     );
-  }, [search, countries]);
+  })();
 
-  const handleSelect = useCallback(
-    (code: CountryCode) => {
-      onChange({ countryCode: code, phone: value.phone });
-      sheetRef.current?.dismiss();
-    },
-    [onChange, value.phone],
+  const handleSelect = (code: CountryCode) => {
+    onChange({ countryCode: code, phone: value.phone });
+    sheetRef.current?.dismiss();
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const digitsOnly = text.replace(/[^0-9]/g, '');
+    onChange({ countryCode: value.countryCode, phone: digitsOnly });
+  };
+
+  const renderItem = ({ item }: { item: Country }) => (
+    <CountryItem item={item} isSelected={item.code === selectedCountry.code} onSelect={handleSelect} theme={theme} />
   );
 
-  const handlePhoneChange = useCallback(
-    (text: string) => {
-      const digitsOnly = text.replace(/[^0-9]/g, '');
-      onChange({ countryCode: value.countryCode, phone: digitsOnly });
-    },
-    [onChange, value.countryCode],
-  );
-
-  const renderItem = useCallback(
-    ({ item }: { item: Country }) => (
-      <CountryItem item={item} isSelected={item.code === selectedCountry.code} onSelect={handleSelect} theme={theme} />
-    ),
-    [selectedCountry.code, handleSelect, theme],
-  );
-
-  const renderSeparator = useCallback(
-    () => <View style={{ ...SEPARATOR_STYLE, backgroundColor: theme.mutedForeground + '20' }} />,
-    [theme.mutedForeground],
+  const renderSeparator = () => (
+    <View style={{ height: 1, marginLeft: 52, backgroundColor: theme.mutedForeground + '20' }} />
   );
 
   return (
-    <View className="mb-4">
-      <View className="flex-row gap-2">
+    <View style={styles.container}>
+      <View
+        style={[
+          styles.inputRow,
+          {
+            backgroundColor: theme.card,
+            borderColor: error ? theme.destructive : focused ? theme.primary : theme.input,
+          },
+        ]}
+      >
         <Pressable
           onPress={handleOpen}
-          className="flex-row items-center gap-1.5 rounded-xl px-4 py-3"
-          style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: theme.input }}
+          style={styles.countryButton}
         >
-          <ThemedText className="text-lg">{selectedCountry.flag}</ThemedText>
-          <ThemedText className="text-base font-medium">{selectedCountry.dialCode}</ThemedText>
-          <Ionicons name="chevron-down" size={14} color={theme.mutedForeground} />
+          <ThemedText style={{ fontSize: 18 }}>{selectedCountry.flag}</ThemedText>
+          <ThemedText style={{ fontSize: field.fontSize, fontFamily: field.fontFamily, color: theme.foreground }}>
+            {selectedCountry.dialCode}
+          </ThemedText>
+          <Ionicons name="chevron-down" size={16} color={theme.mutedForeground} />
         </Pressable>
+        <View style={[styles.divider, { backgroundColor: theme.border }]} />
         <TextInput
           value={value.phone}
           onChangeText={handlePhoneChange}
@@ -238,18 +286,11 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
           keyboardType="phone-pad"
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className="flex-1 rounded-xl px-4 py-3 text-base"
-          style={{
-            backgroundColor: theme.card,
-            borderWidth: 1,
-            borderColor: error ? theme.destructive : focused ? theme.primary : theme.input,
-            color: theme.foreground,
-            fontFamily: 'Inter-Medium',
-          }}
+          style={[styles.phoneInput, { color: theme.foreground }]}
         />
       </View>
       {error ? (
-        <ThemedText type="small" color="destructive" className="mt-1">
+        <ThemedText type="small" color="destructive" style={formTokens.errorText}>
           {error}
         </ThemedText>
       ) : null}
@@ -260,34 +301,33 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
         snapPoints={['70%']}
         index={0}
         enableDynamicSizing={false}
-        backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
-        handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
+        backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
+        handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
         backdropComponent={renderBackdrop}
         onDismiss={() => setSearch('')}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={styles.sheetHeader}>
           <ThemedText type="heading" style={{ flex: 1 }}>Select country</ThemedText>
           <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={8}>
-            <Ionicons name="close" size={22} color={theme.mutedForeground} />
+            <Ionicons name="close" size={20} color={theme.mutedForeground} />
           </Pressable>
         </View>
-        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+        <View style={styles.searchContainer}>
           <BottomSheetTextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search country..."
             placeholderTextColor={theme.mutedForeground}
-            style={{
-              backgroundColor: theme.card,
-              borderWidth: 1,
-              borderColor: theme.input,
-              borderRadius: 12,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              fontSize: 15,
-              color: theme.foreground,
-              fontFamily: 'Inter-Medium',
-            }}
+            style={[
+              styles.searchInput,
+              {
+                backgroundColor: theme.card,
+                borderWidth: 1,
+                borderColor: theme.input,
+                color: theme.foreground,
+                fontFamily: field.fontFamily,
+              },
+            ]}
           />
         </View>
         {loading ? (
@@ -310,4 +350,4 @@ export const PhoneInput = memo(function PhoneInput({ value, onChange, error }: P
       </BottomSheetModal>
     </View>
   );
-});
+}

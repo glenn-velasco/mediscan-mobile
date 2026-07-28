@@ -1,55 +1,113 @@
-import { Text, TextClassContext } from '@/components/ui/text';
+import { forwardRef } from 'react';
+import { View, type ViewProps } from 'react-native';
+
+import { Text } from '@/components/ui/text';
 import { cn } from '@/lib/cn';
-import { View } from 'react-native';
 
-function Card({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return (
-    <TextClassContext.Provider value="text-card-foreground">
-      <View
-        className={cn(
-          'bg-card border-border flex flex-col gap-6 rounded-xl border py-6 shadow-sm shadow-black/5',
-          className
-        )}
-        {...props}
-      />
-    </TextClassContext.Provider>
-  );
+interface CardProps extends ViewProps {
+  className?: string;
 }
 
-function CardHeader({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('flex flex-col gap-1.5 px-6', className)} {...props} />;
-}
-
-function CardTitle({
-  className,
-  ref,
-  ...props
-}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
-
+const Card = forwardRef<View, CardProps>(({ className, ...props }, ref) => {
   return (
-    <Text
+    <View
       ref={ref}
-      role="heading"
-      aria-level={3}
-      className={cn('font-semibold leading-none', className)}
+      className={cn(
+        'rounded-2xl border border-border bg-card p-4',
+        className
+      )}
       {...props}
     />
   );
+});
+
+Card.displayName = 'Card';
+
+interface CardHeaderProps extends ViewProps {
+  className?: string;
 }
 
-function CardDescription({
-  className,
-  ...props
-}: React.ComponentProps<typeof Text> & React.RefAttributes<typeof Text>) {
-  return <Text className={cn('text-muted-foreground text-sm', className)} {...props} />;
+const CardHeader = forwardRef<View, CardHeaderProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <View
+        ref={ref}
+        className={cn('flex-col gap-1.5 pb-3', className)}
+        {...props}
+      />
+    );
+  }
+);
+
+CardHeader.displayName = 'CardHeader';
+
+interface CardTitleProps extends ViewProps {
+  className?: string;
+  children?: React.ReactNode;
 }
 
-function CardContent({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('px-6', className)} {...props} />;
+const CardTitle = forwardRef<View, CardTitleProps>(
+  ({ className, children, ...props }, ref) => {
+    return (
+      <View ref={ref} className={cn(className)} {...props}>
+        <Text variant="h3" className="text-card-foreground">
+          {children}
+        </Text>
+      </View>
+    );
+  }
+);
+
+CardTitle.displayName = 'CardTitle';
+
+interface CardDescriptionProps extends ViewProps {
+  className?: string;
+  children?: React.ReactNode;
 }
 
-function CardFooter({ className, ...props }: React.ComponentProps<typeof View> & React.RefAttributes<View>) {
-  return <View className={cn('flex flex-row items-center px-6', className)} {...props} />;
+const CardDescription = forwardRef<View, CardDescriptionProps>(
+  ({ className, children, ...props }, ref) => {
+    return (
+      <View ref={ref} className={cn(className)} {...props}>
+        <Text variant="muted">{children}</Text>
+      </View>
+    );
+  }
+);
+
+CardDescription.displayName = 'CardDescription';
+
+interface CardContentProps extends ViewProps {
+  className?: string;
 }
+
+const CardContent = forwardRef<View, CardContentProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <View ref={ref} className={cn('pt-0', className)} {...props} />
+    );
+  }
+);
+
+CardContent.displayName = 'CardContent';
+
+interface CardFooterProps extends ViewProps {
+  className?: string;
+}
+
+const CardFooter = forwardRef<View, CardFooterProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <View
+        ref={ref}
+        className={cn('flex-row items-center pt-3', className)}
+        {...props}
+      />
+    );
+  }
+);
+
+CardFooter.displayName = 'CardFooter';
 
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };
+export type { CardProps };
