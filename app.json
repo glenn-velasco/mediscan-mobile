@@ -8,7 +8,11 @@
     "scheme": "mediscanmobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "associatedDomains": [
+        "applinks:app.mediscan.cloud",
+        "applinks:staging.mediscan.cloud"
+      ]
     },
     "android": {
       "package": "com.application.mediscanmobile",
@@ -24,7 +28,26 @@
         "VIBRATE",
         "RECORD_AUDIO"
       ],
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.mediscan.cloud",
+              "pathPrefix": "/api/v1/verify-email"
+            },
+            {
+              "scheme": "https",
+              "host": "staging.mediscan.cloud",
+              "pathPrefix": "/api/v1/verify-email"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"],
+          "autoVerify": true
+        }
+      ]
     },
     "web": {
       "output": "static",

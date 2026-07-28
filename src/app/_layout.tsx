@@ -9,13 +9,16 @@ import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AvoidSoftInput } from 'react-native-avoid-softinput';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/useAuth';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { OfflineBanner } from '@/components/offline-banner';
+import { NetworkProvider } from '@/hooks/use-network-status';
 import { getDb } from '@/db/client';
 import { useAppUpdates } from '@/hooks/use-app-updates';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
@@ -27,8 +30,10 @@ import { useOnboarding } from '@/onboarding/useOnboarding';
 import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
 import { usePrimePermissions } from '@/onboarding/usePrimePermissions';
 import { BroadcastProvider } from '@/realtime/BroadcastProvider';
-import { ensureDeviceKeyRegistered } from '@/services/device-key.service';
+import { setAppReady } from '@/lib/app-ready';
 import { useSyncTriggers } from '@/sync/triggers';
+import { usePendingAvatarUpload } from '@/features/medical-information/useMedicalInformationAvatar';
+import { useBleAdvertisingResume } from '@/features/ble-sync/useBleAdvertisingResume';
 
 type BootMode = 'pending' | 'lightweight' | 'full';
 
@@ -48,6 +53,8 @@ Notifications.setNotificationHandler({
 function DeferredWork() {
   useSyncTriggers();
   useAppUpdates();
+  usePendingAvatarUpload();
+  useBleAdvertisingResume();
   return null;
 }
 
@@ -57,8 +64,9 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
   const { primed } = usePermissionsPrimer();
   usePrimePermissions(seen === true && primed === false);
   const screenOptions = useStackScreenOptions();
-  const [dbReady, setDbReady] = useState(false);
   const [showDeferred, setShowDeferred] = useState(false);
+  const [bootTimeout, setBootTimeout] = useState(false);
+  const onReadyCalledRef = useRef(false);
 
   const [fontsLoaded] = useFonts({
     'PlusJakartaSans-Regular': require('../../assets/fonts/PlusJakartaSans-Regular.ttf'),
@@ -71,28 +79,42 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     'Inter-Bold': require('../../assets/fonts/Inter-Bold.ttf'),
   });
 
+  // Initialize database in background — don't block UI on it
   useEffect(() => {
-    getDb().then(
-      () => setDbReady(true),
-      () => setDbReady(true),
-    );
+    getDb().catch(() => {});
+  }, []);
+
+  // Safety timeout — if boot takes more than 10s, force-show the app
+  useEffect(() => {
+    const timer = setTimeout(() => setBootTimeout(true), 10_000);
+    return () => clearTimeout(timer);
   }, []);
 
   const authenticated = status === 'authenticated';
 
-  const ready = fontsLoaded && status !== 'idle' && seen !== null && primed !== null && dbReady;
+  const ready = bootTimeout || (fontsLoaded && status !== 'idle' && seen !== null && primed !== null);
 
   useEffect(() => {
-    if (ready) {
+    if (ready && !onReadyCalledRef.current) {
+      onReadyCalledRef.current = true;
+      console.log('[Splash] hiding splash screen');
       void SplashScreen.hideAsync();
       onReady();
-      requestAnimationFrame(() => setShowDeferred(true));
+      requestAnimationFrame(() => {
+        setShowDeferred(true);
+        setAppReady(true);
+      });
     }
   }, [ready, onReady]);
 
   useEffect(() => {
     if (status === 'authenticated') {
-      void ensureDeviceKeyRegistered();
+      // Lazy-import to avoid triggering Metro module bundling during initial render,
+      // which causes a module graph re-evaluation and double-init of BroadcastProvider.
+      // react-doctor-disable-next-line react-hooks-js/todo
+      import('@/services/device-key.service').then(({ ensureDeviceKeyRegistered }) => {
+        void ensureDeviceKeyRegistered();
+      });
     }
   }, [status]);
 
@@ -110,33 +132,42 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     return () => sub.remove();
   }, []);
 
+  useEffect(() => {
+    if (ready) {
+      console.log('[Stack]', { ready, seen, authenticated, onboardingGuard: seen === false, appGuard: seen === true && authenticated, authGuard: seen === true && !authenticated });
+    }
+  }, [ready, seen, authenticated]);
+
   return (
     <>
       {showDeferred && <DeferredWork />}
       <Stack screenOptions={{ ...screenOptions, headerShown: false }}>
-      <Stack.Protected guard={ready && seen === false}>
-        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={ready && seen === true && authenticated}>
-        <Stack.Screen name="(app)" />
-        <Stack.Screen name="allergies" />
-        <Stack.Screen name="diagnoses" />
-        <Stack.Screen name="medications" />
-        <Stack.Screen name="emergency-contacts" />
-        <Stack.Screen name="conditions" />
-        <Stack.Screen name="account" />
-        <Stack.Screen name="professional-application" />
-        <Stack.Screen name="registration-match" />
-        <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
-        <Stack.Screen name="onboarding-tasks" options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={ready && seen === true && !authenticated}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="registration-pending" />
-      </Stack.Protected>
-      <Stack.Protected guard={ready}>
-        <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-      </Stack.Protected>
+        <Stack.Protected guard={ready && seen === false}>
+          <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={ready && seen === true && authenticated}>
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="allergies" />
+          <Stack.Screen name="diagnoses" />
+          <Stack.Screen name="medications" />
+          <Stack.Screen name="emergency-contacts" />
+          <Stack.Screen name="conditions" />
+          <Stack.Screen name="account" />
+          <Stack.Screen name="professional-application" />
+          <Stack.Screen name="manage-info" options={{ headerShown: true, title: 'Manage info', presentation: 'modal' }} />
+          <Stack.Screen name="registration-match" />
+          <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
+          <Stack.Screen name="onboarding-tasks" options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={ready && seen === true && !authenticated}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="registration-pending" />
+        </Stack.Protected>
+        <Stack.Protected guard={ready}>
+          <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          {/* Deep link target from email verification — accessible regardless of auth state */}
+          <Stack.Screen name="email-verified" />
+        </Stack.Protected>
       </Stack>
     </>
   );
@@ -158,7 +189,7 @@ function LightweightQuickScan() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider skipNetworkRefresh>
           <BottomSheetModalProvider>
-            <SystemBars style="auto" />
+            <SystemBars style="auto" hidden={{ navigationBar: true }} />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
             </Stack>
@@ -171,7 +202,7 @@ function LightweightQuickScan() {
 
 export default function RootLayout() {
   const [mode, setMode] = useState<BootMode>('pending');
-  const promoteResolversRef = useRef<Array<() => void>>([]);
+  const promoteResolversRef = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
@@ -192,23 +223,24 @@ export default function RootLayout() {
     });
   }, []);
 
-  const promoteToFullApp = useCallback(() => {
+  const promoteToFullApp = () => {
     if (mode === 'full') return Promise.resolve();
     setMode('full');
     return new Promise<void>((resolve) => {
       promoteResolversRef.current.push(resolve);
     });
-  }, [mode]);
+  };
 
-  const handleFullTreeReady = useCallback(() => {
+  const handleFullTreeReady = () => {
     const resolvers = promoteResolversRef.current;
     promoteResolversRef.current = [];
     resolvers.forEach((resolve) => resolve());
-  }, []);
+  };
 
   if (mode === 'pending') return null;
 
   return (
+    <ErrorBoundary>
     <LightweightModeContext.Provider value={{ isLightweight: mode === 'lightweight', promoteToFullApp }}>
       {mode === 'lightweight' ? (
         <LightweightQuickScan />
@@ -217,17 +249,21 @@ export default function RootLayout() {
           <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
             <BootProvider>
               <AuthProvider>
+                <NetworkProvider>
                 <BroadcastProvider>
                   <BottomSheetModalProvider>
-                    <SystemBars style="auto" />
+                    <SystemBars style="auto" hidden={{ navigationBar: true }} />
+                    <OfflineBanner />
                     <RootNavigator onReady={handleFullTreeReady} />
                   </BottomSheetModalProvider>
                 </BroadcastProvider>
+                </NetworkProvider>
               </AuthProvider>
             </BootProvider>
           </PersistQueryClientProvider>
         </GestureHandlerRootView>
       )}
     </LightweightModeContext.Provider>
+    </ErrorBoundary>
   );
 }

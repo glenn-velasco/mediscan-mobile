@@ -24,3 +24,29 @@ Existing usages to follow as examples:
 - `src/components/*-bottom-sheet.tsx` (allergies, diagnoses, emergency-contacts, medications) — row taps
 
 This does not apply to `expo-router`'s declarative `<Link>` component, which uses `navigate` semantics by default and doesn't stack duplicate screens the same way `router.push` does.
+
+## Deep link routes
+
+The app's URL scheme is `mediscanmobile://` (defined in `app.json`). Expo Router maps deep links to file-based routes automatically — no `Linking.addEventListener` or manual URL parsing needed.
+
+When adding a new deep link target:
+
+1. **Create the route file** under `src/app/` (e.g., `src/app/email-verified.tsx`).
+2. **Register it in the `guard={ready}` block** in `src/app/_layout.tsx` so it's accessible regardless of auth state.
+3. **Call `refreshUser()` or relevant data fetches** in the route's `useEffect` to pull server-side state changes triggered by the deep link.
+
+### Existing deep link targets
+
+| Deep link | Route file | Purpose |
+|---|---|---|
+| `mediscanmobile://email-verified` | `src/app/email-verified.tsx` | Email verification — server verifies signed URL, redirects here via 302. |
+
+### Pattern: server-verified deep links
+
+For actions that require cryptographic verification (e.g., email verification, password reset):
+
+1. Email contains a signed HTTPS URL pointing to a backend API route.
+2. Backend verifies the signature, performs the action, and issues a `302` redirect to the deep link.
+3. The deep link opens the app, which calls `refreshUser()` to pull the updated state.
+
+This keeps all crypto on the server — the app never handles hashes or signatures directly.
