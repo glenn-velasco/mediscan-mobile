@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { OnboardingContext } from '@/onboarding/OnboardingContext';
@@ -26,18 +26,18 @@ export function BootProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
-  const completeOnboarding = useCallback(async () => {
+  const completeOnboarding = async () => {
     await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
     setSeen(true);
-  }, []);
+  };
 
-  const completePermissions = useCallback(async () => {
+  const completePermissions = async () => {
     await AsyncStorage.setItem(PERMISSIONS_KEY, 'true');
     setPrimed(true);
-  }, []);
+  };
 
-  const onboardingValue = useMemo(() => ({ seen, complete: completeOnboarding }), [seen, completeOnboarding]);
-  const permissionsValue = useMemo(() => ({ primed, complete: completePermissions }), [primed, completePermissions]);
+  const onboardingValue = { seen, complete: completeOnboarding };
+  const permissionsValue = { primed, complete: completePermissions };
 
   return (
     <OnboardingContext.Provider value={onboardingValue}>

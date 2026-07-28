@@ -42,7 +42,9 @@ function skippedKey(userId: number) {
 export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyContacts, hasAllergies, hasConditions, hasMedications }: ChecklistInput) {
   const [skipped, setSkipped] = useState<Set<OnboardingTaskId>>(new Set());
   const skippedRef = useRef(skipped);
-  skippedRef.current = skipped;
+  useEffect(() => {
+    skippedRef.current = skipped;
+  }, [skipped]);
 
   const loadSkipped = useCallback(async () => {
     if (!userId) return;
@@ -60,17 +62,16 @@ export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyCont
   }, [userId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSkipped();
   }, [loadSkipped]);
 
   const skipTask = useCallback(async (id: OnboardingTaskId) => {
     if (!userId || !SKIPPED_TASKS_IDS.includes(id)) return;
-    setSkipped((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      void AsyncStorage.setItem(skippedKey(userId), JSON.stringify([...next]));
-      return next;
-    });
+    const next = new Set(skippedRef.current);
+    next.add(id);
+    setSkipped(next);
+    await AsyncStorage.setItem(skippedKey(userId), JSON.stringify([...next]));
   }, [userId]);
 
   const tasks = useMemo<OnboardingTask[]>(

@@ -20,6 +20,7 @@ export function usePrimePermissions(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     (async () => {
+      // react-doctor-disable-next-line react-hooks-js/todo
       try {
         await requestCentralPermission();
         await requestPeripheralPermission();

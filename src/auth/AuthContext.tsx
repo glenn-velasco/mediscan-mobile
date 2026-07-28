@@ -7,19 +7,22 @@ import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } f
 import { getDeviceName } from '@/auth/device-name';
 import { clearToken, loadToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
-import { resetDb } from '@/db/client';
 import { setCurrentUserId } from '@/db/context';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import { getIsOffline } from '@/lib/network-state';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
 import { clearPrivateKey } from '@/services/device-key-storage';
 import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
+import { clearLastSyncedAt, forcePushBeforeLogout } from '@/services/patient-sync.service';
+import { forceSyncBeforeLogout } from '@/services/verification-sync.service';
+import { useAvatarStore } from '@/stores/avatar-store';
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
 
 let isRegistering = false;
 
-/** Returns true while a registration is in progress — used by sync triggers to avoid overwriting freshly-saved data. */
+// react-doctor-disable-next-line react-doctor/only-export-components
 export function getIsRegistering(): boolean {
   return isRegistering;
 }
@@ -45,6 +48,7 @@ type AuthContextValue = {
   refreshUser: () => Promise<void>;
 };
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function backfillUserId(userId: number): Promise<void> {
@@ -75,10 +79,10 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
   const handleUnauthenticated = useCallback(async () => {
     await clearPrivateKey();
-    await resetDb();
     setCurrentUserId(null);
     await clearToken();
     resetPendingSyncBackoff();
+    useAvatarStore.getState().clear();
     setUser(null);
     setStatus('unauthenticated');
   }, []);
@@ -89,9 +93,12 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     });
   }, [handleUnauthenticated]);
 
+  // react-doctor-disable-next-line react-hooks-js/no-set-state-after-await-in-effect, react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const token = await loadToken();
+      if (cancelled) return;
       if (!token) {
         setStatus('unauthenticated');
         setIsInitialLoading(false);
@@ -99,6 +106,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       }
 
       const cached = await loadUser();
+      if (cancelled) return;
 
       if (skipNetworkRefresh) {
         if (cached) {
@@ -116,22 +124,44 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         setCurrentUserId(cached.id);
         setUser(cached);
         setStatus('authenticated');
+        setIsInitialLoading(false);
         void backfillUserId(cached.id);
       }
 
+      // react-doctor-disable-next-line react-hooks-js/todo
+      if (getIsOffline()) {
+        if (!cached) {
+          await handleUnauthenticated();
+          setIsInitialLoading(false);
+        }
+        return;
+      }
+      // react-doctor-disable-next-line react-hooks-js/todo
       try {
-        const { user: fetchedUser } = await apiMe();
+        const ME_TIMEOUT_MS = 10_000;
+        const { user: fetchedUser } = await Promise.race([
+          apiMe(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('apiMe timeout')), ME_TIMEOUT_MS)),
+        ]);
+        if (cancelled) return;
         setCurrentUserId(fetchedUser.id);
         setUser(fetchedUser);
-        if (!cached) setStatus('authenticated');
+        if (!cached) {
+          setStatus('authenticated');
+          setIsInitialLoading(false);
+        }
         void backfillUserId(fetchedUser.id);
         await saveUser(fetchedUser);
       } catch {
-        if (!cached) await handleUnauthenticated();
+        if (!cancelled && !cached) {
+          await handleUnauthenticated();
+          setIsInitialLoading(false);
+        }
       } finally {
-        setIsInitialLoading(false);
+        if (!cancelled && !cached) setIsInitialLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [handleUnauthenticated, skipNetworkRefresh]);
 
   const login = useCallback(async (payload: Omit<LoginPayload, 'device_name'>) => {
@@ -142,12 +172,14 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     setCurrentUserId(loggedInUser.id);
     setUser(loggedInUser);
     setStatus('authenticated');
+    setIsInitialLoading(false);
     void backfillUserId(loggedInUser.id);
     await saveUser(loggedInUser);
   }, []);
 
   const register = useCallback(async (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => {
     isRegistering = true;
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       setStatus('authenticating');
       const device_name = await getDeviceName();
@@ -166,10 +198,12 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         const interimId = registeredUser.medical_information?.id;
         try {
           if (interimId == null) {
-            throw new Error('Registration response is missing the interim medical_information id');
+            // Registration response is missing the interim medical_information id
+            await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
+          } else {
+            const record = await updateMedicalInformation(interimId, medicalInfo);
+            await medicalInformationRepo.saveFromServer(record);
           }
-          const record = await updateMedicalInformation(interimId, medicalInfo);
-          await medicalInformationRepo.saveFromServer(record);
         } catch {
           await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
         }
@@ -178,6 +212,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
       setUser(registeredUser);
       setStatus('authenticated');
+      setIsInitialLoading(false);
       void backfillUserId(registeredUser.id);
       await saveUser(registeredUser);
       return { pending: false };
@@ -187,24 +222,48 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const logout = useCallback(async () => {
+    const LOGOUT_TIMEOUT_MS = 5_000;
     try {
-      await apiLogout();
+      await Promise.race([
+        apiLogout(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('logout timeout')), LOGOUT_TIMEOUT_MS)),
+      ]);
     } catch {
       // Best-effort: the user's intent is to log out locally regardless of connectivity.
     }
+
+    // Flush all pending data before clearing auth — allergies, conditions, diagnoses,
+    // medications, emergency contacts, medical information, and verification toggles.
+    // If the server is unreachable, pending changes stay in the local DB and will sync
+    // on next login via the sync triggers (offline-first architecture).
+    const SYNC_TIMEOUT_MS = 15_000;
+    try {
+      await Promise.race([
+        Promise.all([
+          forcePushBeforeLogout(),
+          forceSyncBeforeLogout(),
+        ]),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('sync timeout')), SYNC_TIMEOUT_MS)),
+      ]);
+    } catch {
+      // Best-effort: some data may not have synced if the server is unreachable.
+    }
+
     await clearPrivateKey();
-    await resetDb();
+    await clearLastSyncedAt();
     setCurrentUserId(null);
     queryClient.clear();
     await queryPersister.removeClient();
     await clearToken();
     await clearUser();
     resetPendingSyncBackoff();
+    useAvatarStore.getState().clear();
     setUser(null);
     setStatus('unauthenticated');
   }, []);
 
   const refreshUser = useCallback(async () => {
+    if (getIsOffline()) return;
     const { user: fetchedUser } = await apiMe();
     setCurrentUserId(fetchedUser.id);
     setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(fetchedUser) ? prev : fetchedUser));
