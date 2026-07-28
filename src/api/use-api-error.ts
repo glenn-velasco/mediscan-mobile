@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { getErrorMessage, getFieldErrors, getErrorStatus } from '@/api/errors';
 
 type UseApiErrorOptions = {
@@ -10,20 +10,17 @@ export function useApiError(options?: UseApiErrorOptions) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<number | null>(null);
 
-  const setError = useCallback(
-    (err: unknown) => {
-      setMessage(getErrorMessage(err));
-      setFieldErrors(getFieldErrors(err, options?.fieldMap));
-      setStatus(getErrorStatus(err));
-    },
-    [options?.fieldMap],
-  );
+  const setError = (err: unknown) => {
+    setMessage(getErrorMessage(err));
+    setFieldErrors(getFieldErrors(err, options?.fieldMap));
+    setStatus(getErrorStatus(err));
+  };
 
-  const clearErrors = useCallback(() => {
+  const clearErrors = () => {
     setMessage(null);
     setFieldErrors({});
     setStatus(null);
-  }, []);
+  };
 
   return { message, fieldErrors, status, setError, clearErrors };
 }
