@@ -3,8 +3,23 @@ import { openDatabaseAsync, deleteDatabaseAsync, type SQLiteDatabase } from 'exp
 import { runMigrations } from '@/db/migrations';
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;
+let isClosing = false;
 
 export function getDb(): Promise<SQLiteDatabase> {
+  if (isClosing) {
+    // Wait for close to finish before reopening
+    return new Promise((resolve) => {
+      const check = () => {
+        if (!isClosing) {
+          resolve(getDb());
+        } else {
+          setTimeout(check, 10);
+        }
+      };
+      check();
+    });
+  }
+
   if (!dbPromise) {
     dbPromise = openDatabaseAsync('mediscan.db').then(async (db) => {
       // Default rollback-journal mode takes an exclusive file lock per write transaction, and the
@@ -24,12 +39,26 @@ export function getDb(): Promise<SQLiteDatabase> {
 
 /** Closes the current connection and deletes the database file. The next getDb() call re-creates it. */
 export async function resetDb(): Promise<void> {
-  if (dbPromise) {
-    const db = await dbPromise;
-    await db.closeAsync();
+  if (isClosing) return;
+  isClosing = true;
+  try {
+    if (dbPromise) {
+      const db = await dbPromise;
+      await db.closeAsync();
+    }
+  } catch (err) {
+    // Database might still be in use by background sync — log and continue.
+    // The next login will overwrite the data anyway.
+    console.warn('[resetDb] Failed to close database, continuing', err);
+  } finally {
+    dbPromise = null;
+    isClosing = false;
   }
-  dbPromise = null;
-  await deleteDatabaseAsync('mediscan.db');
+  try {
+    await deleteDatabaseAsync('mediscan.db');
+  } catch {
+    // Ignore delete errors
+  }
 }
 
 // Metro Fast Refresh re-evaluates this module on edit, resetting `dbPromise` to null — but the
@@ -41,7 +70,13 @@ export async function resetDb(): Promise<void> {
 if (__DEV__) {
   const hot = (module as unknown as { hot?: { dispose: (cb: () => void) => void } }).hot;
   hot?.dispose(() => {
-    dbPromise?.then((db) => db.closeAsync()).catch(() => {});
-    dbPromise = null;
+    isClosing = true;
+    dbPromise
+      ?.then((db) => db.closeAsync())
+      .catch(() => {})
+      .finally(() => {
+        dbPromise = null;
+        isClosing = false;
+      });
   });
 }

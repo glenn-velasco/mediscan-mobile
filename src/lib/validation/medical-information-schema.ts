@@ -20,7 +20,7 @@ export const medicalInformationSchema = z.object({
   gender: z.enum(GENDER_OPTIONS, { message: 'Gender is required' }),
   phone_country_code: z.string().trim().min(1, 'Country code is required'),
   phone: z.string().trim().min(1, 'Phone number is required'),
-  blood_type: z.enum(BLOOD_TYPE_OPTIONS).nullable(),
+  blood_type: z.enum(BLOOD_TYPE_OPTIONS).nullable().optional(),
   religion: z.enum(RELIGION_OPTIONS).optional(),
   address: z.object({
     street: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Street is required').max(255)),

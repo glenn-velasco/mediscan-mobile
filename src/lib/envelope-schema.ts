@@ -4,11 +4,13 @@ import type { BloodType } from '@/constants/blood-type';
 import type { Suffix } from '@/constants/suffix';
 import type { Religion } from '@/constants/religion';
 import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
+import type { RelationToPatient } from '@/constants/relation-to-patient';
 import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
 import { SUFFIX_OPTIONS } from '@/constants/suffix';
 import { RELIGION_OPTIONS } from '@/constants/religion';
 import { DIAGNOSIS_SEVERITY_OPTIONS } from '@/constants/diagnosis-severity';
+import { RELATION_TO_PATIENT_OPTIONS } from '@/constants/relation-to-patient';
 
 /**
  * The backend treats `ciphertext` as fully opaque — it never inspects the plaintext JSON shape sealed
@@ -59,6 +61,19 @@ export type ConditionVerificationEnvelope = {
   note?: string;
 };
 
+export type EmergencyContactVerificationEnvelope = {
+  type: 'emergency_contact_verification';
+  version: 1;
+  name: string;
+  relationship: RelationToPatient | null;
+  phone_country_code: string | null;
+  phone: string | null;
+  is_primary: boolean;
+  action: 'create' | 'update' | 'delete';
+  verified_by: { user_id: number; name: string };
+  verified_at: string;
+};
+
 export type TransfusionWitnessEnvelope = {
   type: 'transfusion_witness';
   version: 1;
@@ -99,7 +114,7 @@ export type MedicalInformationUpdateEnvelope = {
   updated_at: string;
 };
 
-export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | ConditionVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope;
+export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | ConditionVerificationEnvelope | EmergencyContactVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope;
 
 const SEVERITIES = new Set(['mild', 'moderate', 'severe', 'life-threatening']);
 const DIAGNOSIS_SEVERITIES = new Set<string>(DIAGNOSIS_SEVERITY_OPTIONS);
@@ -107,6 +122,7 @@ const GENDER_SET = new Set<string>(GENDER_OPTIONS);
 const BLOOD_TYPE_SET = new Set<string>(BLOOD_TYPE_OPTIONS);
 const SUFFIX_SET = new Set<string>(SUFFIX_OPTIONS);
 const RELIGION_SET = new Set<string>(RELIGION_OPTIONS);
+const RELATION_TO_PATIENT_SET = new Set<string>(RELATION_TO_PATIENT_OPTIONS);
 const ADDRESS_KEYS = new Set(['street', 'unit', 'city', 'province', 'postal_code', 'country']);
 
 function isAddressOrNull(value: unknown): value is MedicalInformationAddress | null {
@@ -178,6 +194,22 @@ export function parseEnvelopePlaintext(envelopeType: EnvelopeType, plaintext: un
         typeof p.verified_at === 'string'
       ) {
         return p as unknown as ConditionVerificationEnvelope;
+      }
+      return null;
+
+    case 'emergency_contact_verification':
+      if (
+        typeof p.name === 'string' &&
+        (p.relationship === null || (typeof p.relationship === 'string' && RELATION_TO_PATIENT_SET.has(p.relationship))) &&
+        (p.phone_country_code === null || typeof p.phone_country_code === 'string') &&
+        (p.phone === null || typeof p.phone === 'string') &&
+        typeof p.is_primary === 'boolean' &&
+        typeof p.action === 'string' &&
+        ['create', 'update', 'delete'].includes(p.action) &&
+        isPerson(p.verified_by) &&
+        typeof p.verified_at === 'string'
+      ) {
+        return p as unknown as EmergencyContactVerificationEnvelope;
       }
       return null;
 

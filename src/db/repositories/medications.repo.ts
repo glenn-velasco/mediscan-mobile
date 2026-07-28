@@ -88,8 +88,7 @@ export async function createLocal(payload: MedicationPayload): Promise<string> {
 }
 
 export async function updateLocal(localUuid: string, payload: Partial<MedicationPayload>): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   const dataChanged =
@@ -141,8 +140,7 @@ export async function markConflict(localUuid: string): Promise<void> {
 
 /** Soft-deletes a synced medication (hidden from lists) pending confirmation from the server; hard-deletes an unsynced one immediately since nothing was ever sent. */
 export async function deleteLocal(localUuid: string): Promise<{ requiresNetworkDelete: boolean }> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return { requiresNetworkDelete: false };
 
   if (!existing.server_id) {
@@ -165,8 +163,7 @@ export async function hardDelete(localUuid: string): Promise<void> {
 
 /** Discards a conflicted local change: hard-deletes an unsynced optimistic create, or reverts a synced record back to 'synced' so the next server reconciliation overwrites it with authoritative data. */
 export async function discardConflict(localUuid: string): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   if (!existing.server_id) {
@@ -235,8 +232,7 @@ export function toPayload(row: MedicationRow): MedicationPayload & { verified_by
  * Adds or updates the verification entry for the given professional (idempotent).
  */
 export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   const current: VerifiedByEntry[] = existing.verified_by ?? [];
@@ -257,8 +253,7 @@ export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry
  * Remove a verification entry for a specific user from a medication record.
  */
 export async function removeVerifiedBy(localUuid: string, userId: number): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing || !existing.verified_by) return;
 
   const filtered = existing.verified_by.filter(v => v.user_id !== userId);

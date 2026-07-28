@@ -82,8 +82,7 @@ export async function createLocal(payload: ConditionPayload): Promise<string> {
 }
 
 export async function updateLocal(localUuid: string, payload: Partial<ConditionPayload>): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   const dataChanged = payload.description != null && payload.description !== existing.description;
@@ -128,8 +127,7 @@ export async function markConflict(localUuid: string): Promise<void> {
 
 /** Soft-deletes a synced condition (hidden from lists) pending confirmation from the server; hard-deletes an unsynced one immediately since nothing was ever sent. */
 export async function deleteLocal(localUuid: string): Promise<{ requiresNetworkDelete: boolean }> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return { requiresNetworkDelete: false };
 
   if (!existing.server_id) {
@@ -155,8 +153,7 @@ export async function hardDelete(localUuid: string): Promise<void> {
  * Adds or updates the verification entry for the given professional (idempotent).
  */
 export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   const current: VerifiedByEntry[] = existing.verified_by ?? [];
@@ -177,8 +174,7 @@ export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry
  * Remove a verification entry for a specific user from a condition record.
  */
 export async function removeVerifiedBy(localUuid: string, userId: number): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing || !existing.verified_by) return;
 
   const filtered = existing.verified_by.filter(v => v.user_id !== userId);
@@ -194,8 +190,7 @@ export async function removeVerifiedBy(localUuid: string, userId: number): Promi
 
 /** Discards a conflicted local change: hard-deletes an unsynced optimistic create, or reverts a synced record back to 'synced' so the next server reconciliation overwrites it with authoritative data. */
 export async function discardConflict(localUuid: string): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   if (!existing.server_id) {

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useRef } from 'react';
 
 /**
  * Wrap any onPress handler that triggers navigation (router.push/navigate, or opening a
@@ -14,13 +14,12 @@ import { useCallback, useRef } from 'react';
  */
 export function useGuardedPress<T extends (...args: any[]) => void>(fn: T, delay = 800): T {
   const lockedUntil = useRef(0);
-  return useCallback(
+  return (
     (...args: Parameters<T>) => {
       const now = Date.now();
       if (now < lockedUntil.current) return;
       lockedUntil.current = now + delay;
       fn(...args);
-    },
-    [fn, delay]
+    }
   ) as T;
 }

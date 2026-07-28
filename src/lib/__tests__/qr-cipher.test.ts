@@ -7,12 +7,12 @@
  * transform. Applies only to the round-trip suite below — the prefix-gating suite above never
  * touches libsodium at all.
  */
+import { decryptQrPayload, encryptQrPayload } from '@/lib/qr-cipher';
+
 jest.mock('react-native-libsodium', () => {
   const sodium = require('libsodium-wrappers');
   return { __esModule: true, default: sodium, ready: sodium.ready };
 });
-
-import { decryptQrPayload, encryptQrPayload } from '@/lib/qr-cipher';
 
 /**
  * `decryptQrPayload` checks the `MEDISCAN-ENC:v1:` prefix before it ever touches libsodium, so the

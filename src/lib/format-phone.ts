@@ -6,6 +6,8 @@ export function formatPhoneWithCountryCode(
 ): string {
   if (!phone) return '';
   if (!countryCode) return phone;
+  // If the value is already a numeric dial code (e.g. "63"), use it directly.
+  if (/^\d+$/.test(countryCode)) return `+${countryCode} ${phone}`;
   try {
     const dialCode = getCountryCallingCode(countryCode.toUpperCase() as CountryCode);
     return `+${dialCode} ${phone}`;

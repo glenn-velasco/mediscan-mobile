@@ -2,6 +2,7 @@ import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import type { ConditionRow, DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
+import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 
 /**
  * Builds the plaintext emergency summary encoded in the QR. This stays plain, testable text —
@@ -91,7 +92,8 @@ export function buildEmergencySummary(
   if (emergencyContacts.length > 0) {
     lines.push('Emergency contacts:');
     for (const contact of emergencyContacts) {
-      lines.push(`- ${contact.name}${contact.relationship ? ` (${contact.relationship})` : ''}${contact.phone ? ` — ${contact.phone_country_code ? `+${contact.phone_country_code} ` : ''}${contact.phone}` : ''}`);
+      const contactPhone = contact.phone ? formatPhoneWithCountryCode(contact.phone_country_code ?? undefined, contact.phone) : '';
+      lines.push(`- ${contact.name}${contact.relationship ? ` (${contact.relationship})` : ''}${contactPhone ? ` — ${contactPhone}` : ''}`);
     }
   }
 

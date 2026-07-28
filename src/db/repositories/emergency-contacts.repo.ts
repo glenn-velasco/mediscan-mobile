@@ -75,8 +75,7 @@ export async function createLocal(payload: EmergencyContactPayload): Promise<str
 }
 
 export async function updateLocal(localUuid: string, payload: Partial<EmergencyContactPayload>): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   await db.runAsync(
@@ -101,7 +100,7 @@ export async function markSyncedCreate(localUuid: string, serverId: number): Pro
   );
 }
 
-export async function markSynced(localUuid: string): Promise<void> {
+async function markSynced(localUuid: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE emergency_contacts SET sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
@@ -110,14 +109,13 @@ export async function markSynced(localUuid: string): Promise<void> {
   );
 }
 
-export async function markConflict(localUuid: string): Promise<void> {
+async function markConflict(localUuid: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(`UPDATE emergency_contacts SET sync_status = 'conflict' WHERE local_uuid = ?`, localUuid);
 }
 
 export async function deleteLocal(localUuid: string): Promise<{ requiresNetworkDelete: boolean }> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return { requiresNetworkDelete: false };
 
   if (!existing.server_id) {
@@ -138,9 +136,8 @@ export async function hardDelete(localUuid: string): Promise<void> {
   await db.runAsync('DELETE FROM emergency_contacts WHERE local_uuid = ?', localUuid);
 }
 
-export async function discardConflict(localUuid: string): Promise<void> {
-  const db = await getDb();
-  const existing = await getByLocalUuid(localUuid);
+async function discardConflict(localUuid: string): Promise<void> {
+  const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing) return;
 
   if (!existing.server_id) {

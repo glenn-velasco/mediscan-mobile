@@ -19,8 +19,16 @@ export function clearQuickScanLockScreenFlags() {
  */
 export async function getPendingQuickScanRoute(): Promise<string | null> {
   if (Platform.OS !== 'android') return null;
-  const route = await NativeModules.QrScannerTileModule?.consumePendingRoute?.();
-  return route ?? null;
+  try {
+    const ROUTE_TIMEOUT_MS = 3_000;
+    const route = await Promise.race([
+      NativeModules.QrScannerTileModule?.consumePendingRoute?.(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ROUTE_TIMEOUT_MS)),
+    ]);
+    return route ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

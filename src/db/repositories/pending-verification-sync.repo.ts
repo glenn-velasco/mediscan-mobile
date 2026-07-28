@@ -98,7 +98,7 @@ export async function getForPatient(patientId: number): Promise<PendingVerificat
  * Get the latest verification status for a patient from local pending records.
  * Returns a map of item_identifier -> verified status.
  */
-export async function getLatestVerificationsForPatient(
+async function getLatestVerificationsForPatient(
   patientId: number,
 ): Promise<Map<string, Map<string, boolean>>> {
   const records = await getForPatient(patientId);

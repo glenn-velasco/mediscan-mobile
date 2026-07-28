@@ -1,13 +1,13 @@
 /** See qr-cipher.test.ts: react-native-libsodium's JSI bindings aren't available under jest-expo's Node environment. */
-jest.mock('react-native-libsodium', () => {
-  const sodium = require('libsodium-wrappers');
-  return { __esModule: true, default: sodium, ready: sodium.ready };
-});
-
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { parseEmergencySummary } from '@/lib/parse-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import type { AllergyRow, ConditionRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
+
+jest.mock('react-native-libsodium', () => {
+  const sodium = require('libsodium-wrappers');
+  return { __esModule: true, default: sodium, ready: sodium.ready };
+});
 
 const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
 
