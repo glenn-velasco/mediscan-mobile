@@ -166,8 +166,13 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
         </Stack.Protected>
         <Stack.Protected guard={ready}>
           <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-          {/* Deep link target from email verification — accessible regardless of auth state */}
+          {/* Deep link targets from email verification — accessible regardless of auth state */}
           <Stack.Screen name="email-verified" />
+          <Stack.Screen name="api/v1/verify-email/[id]" />
+          {/* App Links catch routes — trigger server-side action, then navigate to existing screens */}
+          <Stack.Screen name="api/v1/registration-matches/[id]/accept" />
+          <Stack.Screen name="api/v1/registration-matches/[id]/deny" />
+          <Stack.Screen name="api/v1/account-retrieval-requests/[id]" />
         </Stack.Protected>
       </Stack>
     </>

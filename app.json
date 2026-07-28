@@ -40,8 +40,28 @@
             },
             {
               "scheme": "https",
+              "host": "app.mediscan.cloud",
+              "pathPrefix": "/api/v1/registration-matches"
+            },
+            {
+              "scheme": "https",
+              "host": "app.mediscan.cloud",
+              "pathPrefix": "/api/v1/account-retrieval-requests"
+            },
+            {
+              "scheme": "https",
               "host": "staging.mediscan.cloud",
               "pathPrefix": "/api/v1/verify-email"
+            },
+            {
+              "scheme": "https",
+              "host": "staging.mediscan.cloud",
+              "pathPrefix": "/api/v1/registration-matches"
+            },
+            {
+              "scheme": "https",
+              "host": "staging.mediscan.cloud",
+              "pathPrefix": "/api/v1/account-retrieval-requests"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"],
