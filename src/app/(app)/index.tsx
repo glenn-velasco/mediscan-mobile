@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link, useFocusEffect, useRouter } from 'expo-router';
+import { Href, Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/useAuth';
@@ -15,6 +15,7 @@ import { DiagnosesBottomSheet, type DiagnosesBottomSheetHandle } from '@/compone
 import { DiagnosisSeverityBadge, DiagnosisSeverityIcon } from '@/components/diagnosis-severity-badge';
 import { EmergencyContactsBottomSheet, type EmergencyContactsBottomSheetHandle } from '@/components/emergency-contacts-bottom-sheet';
 import { EmptyState } from '@/components/empty-state';
+import { ErrorBoundary } from '@/components/error-boundary';
 import { GradientHeader } from '@/components/gradient-header';
 import { InfoTile } from '@/components/info-tile';
 import { AppLayout } from '@/components/layouts/app-layout';
@@ -26,6 +27,7 @@ import { QrIconButton } from '@/components/qr-icon-button';
 import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Skeleton } from '@/components/ui/skeleton';
 import { VerifiedCountBadge } from '@/components/verified-count-badge';
 import { BloodTypeLabel } from '@/constants/blood-type';
 import { GenderLabel } from '@/constants/gender';
@@ -34,13 +36,8 @@ import type { Suffix } from '@/constants/suffix';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
-import { useAllergies } from '@/features/allergies/useAllergies';
-import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
-import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
-import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
-import { useMedications } from '@/features/medications/useMedications';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
@@ -52,16 +49,500 @@ import { formatIsoDate } from '@/lib/format-date';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import { showLocalNotification } from '@/lib/notifications';
 import { useGuardedPress } from '@/lib/use-guarded-press';
-import { useOnboardingChecklist, type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
+import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
+import { useOnboardingData } from '@/onboarding/useOnboardingData';
 import { pullPendingSync } from '@/services/pending-sync.service';
+
+function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () => void; topInset: number }) {
+  return (
+    <View className="flex-1" style={{ paddingTop: topInset }}>
+      <ThemedView className="flex-1 items-center justify-center gap-4 px-6">
+        <ThemedText type="authTitle" className="text-center">
+          Welcome, {user ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) : ''}
+        </ThemedText>
+        <EmptyState
+          title="Complete your profile"
+          body="Your medical information helps others help you in an emergency."
+          icon="person-add-outline"
+        />
+        <Link href="/profile/edit">
+          <ThemedText type="linkPrimary">Complete profile</ThemedText>
+        </Link>
+        <Pressable onPress={() => logout()} className="mt-6">
+          <ThemedText type="small" color="mutedForeground">Log out</ThemedText>
+        </Pressable>
+      </ThemedView>
+    </View>
+  );
+}
+
+function PersonalInfoSection({ profile, age }: { profile: Record<string, any>; age: number | null }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Personal information</ThemedText>
+        <Link href="/profile/edit">
+          <ThemedText type="smallBold" color="primary">
+            Edit
+          </ThemedText>
+        </Link>
+      </View>
+      <View className="gap-2">
+        <InfoTile
+          icon="person"
+          iconColor={theme.primary}
+          iconBgKey="primary"
+          label="Name"
+          value={profile.full_name || 'Unnamed'}
+        />
+        <View className="flex-row gap-2">
+          <InfoTile
+            icon="calendar"
+            iconColor={theme.mutedForeground}
+            iconBgKey="muted"
+            label="Date of birth"
+            value={profile.date_of_birth ? formatIsoDate(profile.date_of_birth) : '—'}
+          />
+        </View>
+        <View className="flex-row gap-2">
+          <InfoTile
+            icon="hourglass"
+            iconColor={theme.primary}
+            iconBgKey="primary"
+            label="Age"
+            value={age !== null ? `${age} yrs` : '—'}
+          />
+        </View>
+        <View className="flex-row gap-2">
+          <InfoTile
+            icon="male-female"
+            iconColor={theme.warning}
+            iconBgKey="warning"
+            label="Gender"
+                value={(profile.gender && GenderLabel[profile.gender as keyof typeof GenderLabel]) || '—'}
+          />
+          <InfoTile
+            icon="water"
+            iconColor={theme.destructive}
+            iconBgKey="destructive"
+            label="Blood type"
+                value={(profile.blood_type && BloodTypeLabel[profile.blood_type as keyof typeof BloodTypeLabel]) || '—'}
+          />
+        </View>
+        <View className="flex-row gap-2">
+          <InfoTile
+            icon="call" 
+            iconColor={theme.primary}
+            iconBgKey="primary"
+            label="Phone"
+            value={profile.phone ? profile.phone : '—'}
+          />
+        </View>
+        <View className="flex-row gap-2">
+          <InfoTile
+            icon="book"
+            iconColor={theme.warning}
+            iconBgKey="warning"
+            label="Religion"
+                value={(profile.religion && ReligionLabel[profile.religion as keyof typeof ReligionLabel]) || '—'}
+          />
+        </View>
+        <InfoTile
+          icon={profile.no_blood_transfusion ? 'shield-checkmark' : 'shield-outline'}
+          iconColor={theme.success}
+          iconBgKey="success"
+          label="No blood transfusion"
+          value={profile.no_blood_transfusion ? 'Yes' : 'No'}
+        />
+        <Card className="flex-row items-center gap-3">
+          <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
+            <Ionicons name="location" size={18} color={theme.primary} />
+          </View>
+          <View className="flex-1">
+            <ThemedText type="small" color="mutedForeground">
+              Address
+            </ThemedText>
+            <ThemedText type="bodyBold">
+              {formatAddress(typeof profile.address === 'string' ? parseStoredAddress(profile.address) : profile.address) || '—'}
+            </ThemedText>
+          </View>
+        </Card>
+      </View>
+    </View>
+  );
+}
+
+function EmergencyContactsSection({ emergencyContacts, sheetRef }: { emergencyContacts: any[]; sheetRef: React.RefObject<EmergencyContactsBottomSheetHandle | null> }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Emergency contacts</ThemedText>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => sheetRef.current?.present()} hitSlop={8}>
+            <ThemedText type="smallBold" color="primary">
+              View all
+            </ThemedText>
+          </Pressable>
+          <Pressable onPress={() => sheetRef.current?.presentAdd()} hitSlop={12}>
+            <Ionicons name="add" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      {emergencyContacts.length === 0 ? (
+        <Pressable onPress={() => sheetRef.current?.presentAdd()}>
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="person-add" size={18} color={theme.mutedForeground} />
+              </View>
+              <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first emergency contact — it takes 10 seconds.</ThemedText>
+            </View>
+          </Card>
+        </Pressable>
+      ) : (
+        <Card className="p-0">
+          {emergencyContacts.map((contact: any, i: number) => (
+            <Pressable
+              key={contact.local_uuid}
+              onPress={() => sheetRef.current?.presentView(contact.local_uuid)}
+            >
+              <View
+                className={cn(
+                  'flex-row items-center gap-3 px-4 py-3.5',
+                  i < emergencyContacts.length - 1 && 'border-b border-border',
+                )}
+              >
+                <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.destructive + '15' }}>
+                  <Ionicons name="person" size={18} color={theme.destructive} />
+                </View>
+                <View className="flex-1">
+                  <ThemedText className="font-semibold">{contact.name}</ThemedText>
+                  {contact.relationship ? (
+                    <View className="mt-1 flex-row items-center gap-1.5">
+                      <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: theme.muted }}>
+                        <ThemedText type="detail" color="mutedForeground">
+                          {contact.relationship}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+                {contact.phone ? (
+                  <ThemedText type="small" color="primary">
+                    {formatPhoneWithCountryCode(contact.phone_country_code, contact.phone)}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function AllergiesSection({ allergies, sheetRef, verifiedCount }: { allergies: any[]; sheetRef: React.RefObject<AllergiesBottomSheetHandle | null>; verifiedCount: Map<string, number> }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Allergies</ThemedText>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => sheetRef.current?.present()} hitSlop={8}>
+            <ThemedText type="smallBold" color="primary">
+              View all
+            </ThemedText>
+          </Pressable>
+          <Pressable onPress={() => sheetRef.current?.presentAdd()} hitSlop={12}>
+            <Ionicons name="add" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      {allergies.length === 0 ? (
+        <Pressable onPress={() => sheetRef.current?.presentAdd()}>
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="medical" size={18} color={theme.mutedForeground} />
+              </View>
+              <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first allergy — it takes 10 seconds.</ThemedText>
+            </View>
+          </Card>
+        </Pressable>
+      ) : (
+        <Card className="p-0">
+          {allergies.map((allergy: any, i: number) => (
+            <Pressable
+              key={allergy.local_uuid}
+              onPress={() => sheetRef.current?.presentView(allergy.local_uuid)}
+            >
+              <View
+                className={cn(
+                  'flex-row items-center gap-3 px-4 py-3.5',
+                  i < allergies.length - 1 && 'border-b border-border',
+                )}
+              >
+                <SeverityIcon severity={allergy.severity} size={36} />
+                <ThemedText className="flex-1 shrink font-semibold">{allergy.allergen}</ThemedText>
+                <View className="flex-row items-center gap-2">
+                  <VerifiedCountBadge count={verifiedCount.get(allergy.local_uuid) ?? 0} />
+                  <SeverityBadge severity={allergy.severity} />
+                </View>
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function ConditionsSection({ conditions, sheetRef, verifiedCount }: { conditions: any[]; sheetRef: React.RefObject<ConditionsBottomSheetHandle | null>; verifiedCount: Map<string, number> }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Conditions</ThemedText>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => sheetRef.current?.present()} hitSlop={8}>
+            <ThemedText type="smallBold" color="primary">
+              View all
+            </ThemedText>
+          </Pressable>
+          <Pressable onPress={() => sheetRef.current?.presentAdd()} hitSlop={12}>
+            <Ionicons name="add" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      {conditions.length === 0 ? (
+        <Pressable onPress={() => sheetRef.current?.presentAdd()}>
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="fitness" size={18} color={theme.mutedForeground} />
+              </View>
+              <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first condition — it takes 10 seconds.</ThemedText>
+            </View>
+          </Card>
+        </Pressable>
+      ) : (
+        <Card className="p-0">
+          {conditions.map((condition: any, i: number) => (
+            <Pressable
+              key={condition.local_uuid}
+              onPress={() => sheetRef.current?.presentView(condition.local_uuid)}
+            >
+              <View
+                className={cn(
+                  'flex-row items-center gap-3 px-4 py-3.5',
+                  i < conditions.length - 1 && 'border-b border-border',
+                )}
+              >
+                <ThemedText className="flex-1 shrink font-semibold">{condition.description}</ThemedText>
+                <VerifiedCountBadge count={verifiedCount.get(condition.local_uuid) ?? 0} />
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function DiagnosesSection({ diagnoses, sheetRef, verifiedCount, isVerifiedProfessional }: { diagnoses: any[]; sheetRef: React.RefObject<DiagnosesBottomSheetHandle | null>; verifiedCount: Map<string, number>; isVerifiedProfessional: boolean }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Diagnoses</ThemedText>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => sheetRef.current?.present()} hitSlop={8}>
+            <ThemedText type="smallBold" color="primary">
+              View all
+            </ThemedText>
+          </Pressable>
+          {isVerifiedProfessional ? (
+            <Pressable onPress={() => sheetRef.current?.presentAdd()} hitSlop={12}>
+              <Ionicons name="add" size={20} color={theme.primary} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      {diagnoses.length === 0 ? (
+        isVerifiedProfessional ? (
+          <Pressable onPress={() => sheetRef.current?.presentAdd()}>
+            <Card>
+              <View className="flex-row items-center gap-3">
+                <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                  <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
+                </View>
+                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first diagnosis — it takes 10 seconds.</ThemedText>
+              </View>
+            </Card>
+          </Pressable>
+        ) : (
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
+              </View>
+              <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">No diagnoses on file yet. A verified professional can add one.</ThemedText>
+            </View>
+          </Card>
+        )
+      ) : (
+        <Card className="p-0">
+          {diagnoses.map((diagnosis: any, i: number) => (
+            <Pressable
+              key={diagnosis.local_uuid}
+              onPress={() => sheetRef.current?.presentView(diagnosis.local_uuid)}
+            >
+              <View
+                className={cn(
+                  'flex-row items-center gap-3 px-4 py-3.5',
+                  i < diagnoses.length - 1 && 'border-b border-border',
+                )}
+              >
+                <DiagnosisSeverityIcon severity={diagnosis.severity} size={36} />
+                <View className="flex-1 shrink">
+                  <ThemedText className="font-semibold">{diagnosis.condition}</ThemedText>
+                  {diagnosis.date_of_diagnosis ? (
+                    <ThemedText type="small" color="mutedForeground">
+                      Diagnosed {formatIsoDate(diagnosis.date_of_diagnosis)}
+                    </ThemedText>
+                  ) : null}
+                  {diagnosis.diagnosed_by_name ? (
+                    <ThemedText type="small" color="mutedForeground">
+                      Diagnosed by {diagnosis.diagnosed_by_name}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                <VerifiedCountBadge count={verifiedCount.get(diagnosis.local_uuid) ?? 0} />
+                <DiagnosisSeverityBadge severity={diagnosis.severity} />
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function MedicationsSection({ medications, sheetRef, verifiedCount }: { medications: any[]; sheetRef: React.RefObject<MedicationsBottomSheetHandle | null>; verifiedCount: Map<string, number> }) {
+  const theme = useTheme();
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Medications</ThemedText>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => sheetRef.current?.present()} hitSlop={8}>
+            <ThemedText type="smallBold" color="primary">
+              View all
+            </ThemedText>
+          </Pressable>
+          <Pressable onPress={() => sheetRef.current?.presentAdd()} hitSlop={12}>
+            <Ionicons name="add" size={20} color={theme.primary} />
+          </Pressable>
+        </View>
+      </View>
+
+      {medications.length === 0 ? (
+        <Pressable onPress={() => sheetRef.current?.presentAdd()}>
+          <Card>
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="medical" size={18} color={theme.mutedForeground} />
+              </View>
+              <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first medication — it takes 10 seconds.</ThemedText>
+            </View>
+          </Card>
+        </Pressable>
+      ) : (
+        <Card className="p-0">
+          {medications.map((medication: any, i: number) => (
+            <Pressable
+              key={medication.local_uuid}
+              onPress={() => sheetRef.current?.presentView(medication.local_uuid)}
+            >
+              <View
+                className={cn(
+                  'flex-row items-center gap-3 px-4 py-3.5',
+                  i < medications.length - 1 && 'border-b border-border',
+                )}
+              >
+                <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
+                  <Ionicons name="medical" size={18} color={theme.primary} />
+                </View>
+                <View className="flex-1 shrink">
+                  <ThemedText className="font-semibold">{medication.name}</ThemedText>
+                  {medication.dosage || medication.frequency ? (
+                    <ThemedText type="small" color="mutedForeground">
+                      {[medication.dosage, medication.frequency].filter(Boolean).join(' · ')}
+                    </ThemedText>
+                  ) : null}
+                </View>
+                <VerifiedCountBadge count={verifiedCount.get(medication.local_uuid) ?? 0} />
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function BottomTabBar({ medicalInformation, guardedPush, bottomInset }: { medicalInformation: any; guardedPush: (href: Href) => void; bottomInset: number }) {
+  const theme = useTheme();
+
+  return (
+    <View className="absolute inset-x-0 bottom-0 items-center">
+      <View
+        className="w-full flex-row items-center justify-between rounded-t-3xl border-t px-10 pt-3"
+        style={{ backgroundColor: theme.card, borderColor: theme.border, paddingBottom: bottomInset + 12 }}
+      >
+        <Pressable hitSlop={12} accessibilityLabel="Home" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
+          <Ionicons name="home" size={24} color={theme.primary} />
+        </Pressable>
+        <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+          <Ionicons name="settings-outline" size={24} color={theme.foreground} />
+        </Pressable>
+      </View>
+      {medicalInformation && (
+        <QrIconButton
+          onPress={() => guardedPush('/quick-scan')}
+          size={60}
+          style={{
+            position: 'absolute',
+            top: -22,
+            borderWidth: 4,
+            borderColor: theme.background,
+            boxShadow: '0px 2px 6px rgba(0,0,0,0.15)',
+          }}
+        />
+      )}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const [isReconciling, setIsReconciling] = useState(true);
+  const reconcilingRef = useRef(false);
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
@@ -72,12 +553,9 @@ export default function HomeScreen() {
   const { user, isInitialLoading, refreshUser, logout } = useAuth();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { data: medicalInformation, isLoading } = useMedicalInformation();
-  const { data: allergies = [], isFetchedAfterMount: allergiesFetched } = useAllergies();
-  const { data: conditions = [], isFetchedAfterMount: conditionsFetched } = useConditions();
+  const { allergies, conditions, medications, emergencyContacts, isDataReady, checklist } = useOnboardingData();
   const { data: diagnoses = [] } = useDiagnoses();
-  const { data: medications = [], isFetchedAfterMount: medicationsFetched } = useMedications();
   const { data: attestations = [] } = useAttestations();
-  const { data: emergencyContacts = [], isFetchedAfterMount: emergencyContactsFetched } = useEmergencyContacts();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
@@ -89,15 +567,6 @@ export default function HomeScreen() {
   }, [emailCooldown]);
   useQrWidget(user?.id ?? 0);
   const guardedPush = useGuardedPress((href: Parameters<typeof router.push>[0]) => router.push(href));
-
-  const checklist = useOnboardingChecklist({
-    userId: user?.id,
-    emailVerified: !!user?.email_verified_at,
-    hasEmergencyContacts: emergencyContacts.length > 0,
-    hasAllergies: allergies.length > 0,
-    hasConditions: conditions.length > 0,
-    hasMedications: medications.length > 0,
-  });
 
   const handleSelectOnboardingTask = useCallback(async (id: OnboardingTaskId) => {
     switch (id) {
@@ -123,7 +592,7 @@ export default function HomeScreen() {
     }
   }, [sendEmailVerification, isSendingVerification, emailCooldown]);
 
-  const dataReady = !isInitialLoading && allergiesFetched && conditionsFetched && medicationsFetched && emergencyContactsFetched;
+  const dataReady = !isInitialLoading && isDataReady;
 
   useEffect(() => {
     if (!dataReady || !checklist.visible) return;
@@ -133,13 +602,16 @@ export default function HomeScreen() {
       void showLocalNotification({ title: 'Finish setting up your profile', body: 'A few optional details are still missing from your medical profile.' });
     });
   }, [dataReady, checklist.visible, checklist.doneCount, checklist.total, checklist.markNotified]);
-  const hasShownOnboardingTasksRef = useRef(false);
+
   useEffect(() => {
     if (!dataReady) return;
-    if (checklist.complete || hasShownOnboardingTasksRef.current) return;
-    hasShownOnboardingTasksRef.current = true;
-    router.push('/onboarding-tasks');
-  }, [dataReady, checklist.complete]);
+    if (checklist.complete) return;
+    checklist.markPrompted().then((isFirstTime) => {
+      if (isFirstTime) {
+        router.push('/onboarding-tasks');
+      }
+    });
+  }, [dataReady, checklist.complete, checklist.markPrompted, router]);
 
 
   const prevTaskDoneRef = useRef<Map<OnboardingTaskId, boolean> | null>(null);
@@ -165,15 +637,8 @@ export default function HomeScreen() {
   );
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
-  const age = profile ? user?.age : null;
+  const age = profile ? (user?.age ?? null) : null;
 
-  /**
-   * Counts distinct professionals currently verifying a record — not raw attestation rows, since one
-   * professional re-scanning and re-confirming shouldn't inflate the badge. `attestations` is already
-   * ordered newest-first (see professional-attestation.repo.ts), so the first row seen per
-   * (matched uuid, professional) pair is that professional's latest action; a `note: '__unverify__'`
-   * sentinel there means they've since turned their "Mark as verified" toggle off, so they're excluded.
-   */
   const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_condition_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
     const seen = new Set<string>();
     const map = new Map<string, Set<number>>();
@@ -219,7 +684,9 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
+    if (reconcilingRef.current) return;
     if (!medicalInformation && user?.medical_information && user) {
+      reconcilingRef.current = true;
       const mi = user.medical_information;
       medicalInformationRepo.saveLocalEdit({
         email: user.email,
@@ -238,9 +705,11 @@ export default function HomeScreen() {
       }).then(() => {
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
       }).finally(() => {
+        reconcilingRef.current = false;
         setIsReconciling(false);
       });
     } else if (medicalInformation || !user?.medical_information) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsReconciling(false);
     }
   }, [medicalInformation, user, queryClient]);
@@ -252,43 +721,50 @@ export default function HomeScreen() {
       // ignore — user state stays as-is
     }
     void pullPendingSync();
-    await queryClient.invalidateQueries();
-  }, [refreshUser, queryClient]);
+  }, [refreshUser]);
 
-  if (isLoading || isReconciling || isInitialLoading) {
+  // Show skeleton only on first load when no cached data exists
+  if (!profile && (isLoading || isReconciling || isInitialLoading)) {
     return (
-      <ThemedView className="flex-1 items-center justify-center" style={{ paddingTop: insets.top }}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </ThemedView>
+      <View className="flex-1">
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
+          <GradientHeader edgeToEdge topInset={insets.top}>
+            <View className="flex-row items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-full" />
+              <View className="flex-1 gap-1">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-3 w-40" />
+              </View>
+            </View>
+          </GradientHeader>
+        </View>
+        <AppLayout onRefresh={handleRefresh} maxContentWidth={640} contentContainerStyle={{ paddingTop: 4, paddingBottom: 110 + insets.bottom }}>
+          <View className="mb-6 gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </View>
+          <View className="mb-6 gap-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full" />
+          </View>
+          <View className="mb-6 gap-2">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-10 w-full" />
+          </View>
+        </AppLayout>
+      </View>
     );
   }
 
   if (!profile) {
-    return (
-      <View className="flex-1" style={{ paddingTop: insets.top }}>
-          <ThemedView className="flex-1 items-center justify-center gap-4 px-6">
-          <ThemedText className="text-center text-2xl font-semibold">
-            Welcome, {user ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) : ''}
-          </ThemedText>
-          <EmptyState
-            title="Complete your profile"
-            body="Your medical information helps others help you in an emergency."
-            icon="person-add-outline"
-          />
-          <Link href="/profile/edit">
-            <ThemedText type="linkPrimary">Complete profile</ThemedText>
-          </Link>
-          <Pressable onPress={() => logout()} className="mt-6">
-            <ThemedText type="small" color="mutedForeground">Log out</ThemedText>
-          </Pressable>
-        </ThemedView>
-      </View>
-    );
+    return <WelcomeEmptyState user={user} logout={logout} topInset={insets.top} />;
   }
 
   const firstName = profile.full_name?.split(/\s+/)[0] || user?.first_name || 'there';
 
   return (
+    <ErrorBoundary>
     <View className="flex-1">
       <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
         <GradientHeader edgeToEdge topInset={insets.top}>
@@ -296,18 +772,17 @@ export default function HomeScreen() {
             <Pressable onPress={() => avatarSheetRef.current?.present()} hitSlop={8} accessibilityLabel="View profile picture">
               <Avatar
                 name={profile.full_name || 'Unnamed'}
-                imageUrl={medicalInformationAvatar?.avatar}
                 size={48}
-                className="bg-white/20"
+                className="bg-foreground/20"
                 textColor="primaryForeground"
               />
             </Pressable>
             <View className="flex-1 gap-1">
-              <ThemedText className="text-xl font-semibold" style={{ color: theme.primaryForeground }}>
+              <ThemedText type="screenTitle" color="primaryForeground">
                 Hi, {firstName}
               </ThemedText>
-              <ThemedText type="small" style={{ color: theme.primaryForeground, opacity: 0.85 }}>
-                Here's your medical profile at a glance.
+              <ThemedText type="small" color="primaryForeground" style={{ opacity: 0.85 }}>
+                Here&apos;s your medical profile at a glance.
               </ThemedText>
             </View>
             <NotificationBellButton onPress={() => guardedPush('/notifications')} />
@@ -322,428 +797,15 @@ export default function HomeScreen() {
             onPress={() => onboardingChecklistSheetRef.current?.present()}
           />
         ) : null}
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Personal information</ThemedText>
-            <Link href="/profile/edit">
-              <ThemedText type="small" color="primary" className="font-semibold">
-                Edit
-              </ThemedText>
-            </Link>
-          </View>
-          <View className="gap-2">
-            <InfoTile
-              icon="person"
-              iconColor={theme.primary}
-              iconBgKey="primary"
-              label="Name"
-              value={profile.full_name || 'Unnamed'}
-            />
-            <View className="flex-row gap-2">
-              <InfoTile
-                icon="calendar"
-                iconColor={theme.mutedForeground}
-                iconBgKey="muted"
-                label="Date of birth"
-                value={profile.date_of_birth ? formatIsoDate(profile.date_of_birth) : '—'}
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <InfoTile
-                icon="hourglass"
-                iconColor={theme.primary}
-                iconBgKey="primary"
-                label="Age"
-                value={age !== null ? `${age} yrs` : '—'}
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <InfoTile
-                icon="male-female"
-                iconColor={theme.warning}
-                iconBgKey="warning"
-                label="Gender"
-                value={(profile.gender && GenderLabel[profile.gender]) || '—'}
-              />
-              <InfoTile
-                icon="water"
-                iconColor={theme.destructive}
-                iconBgKey="destructive"
-                label="Blood type"
-                value={(profile.blood_type && BloodTypeLabel[profile.blood_type]) || '—'}
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <InfoTile
-                icon="call"
-                iconColor={theme.primary}
-                iconBgKey="primary"
-                label="Phone"
-                value={profile.phone ? formatPhoneWithCountryCode(profile.phone_country_code, profile.phone) : '—'}
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <InfoTile
-                icon="book"
-                iconColor={theme.warning}
-                iconBgKey="warning"
-                label="Religion"
-                value={(profile.religion && ReligionLabel[profile.religion]) || '—'}
-              />
-            </View>
-            <InfoTile
-              icon={profile.no_blood_transfusion ? 'shield-checkmark' : 'shield-outline'}
-              iconColor={theme.success}
-              iconBgKey="success"
-              label="No blood transfusion"
-              value={profile.no_blood_transfusion ? 'Yes' : 'No'}
-            />
-            <Card className="flex-row items-center gap-3">
-              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
-                <Ionicons name="location" size={18} color={theme.primary} />
-              </View>
-              <View className="flex-1">
-                <ThemedText type="small" color="mutedForeground">
-                  Address
-                </ThemedText>
-                <ThemedText type="body" className="font-semibold">
-                  {formatAddress(typeof profile.address === 'string' ? parseStoredAddress(profile.address) : profile.address) || '—'}
-                </ThemedText>
-              </View>
-            </Card>
-          </View>
-        </View>
-
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Emergency contacts</ThemedText>
-            <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => emergencyContactsSheetRef.current?.present()} hitSlop={8}>
-                <ThemedText type="small" color="primary" className="font-semibold">
-                  View all
-                </ThemedText>
-              </Pressable>
-              <Pressable onPress={() => emergencyContactsSheetRef.current?.presentAdd()} hitSlop={12}>
-                <Ionicons name="add" size={20} color={theme.primary} />
-              </Pressable>
-            </View>
-          </View>
-
-          {emergencyContacts.length === 0 ? (
-            <Pressable onPress={() => emergencyContactsSheetRef.current?.presentAdd()}>
-              <Card>
-                <View className="flex-row items-center gap-3">
-                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                    <Ionicons name="person-add" size={18} color={theme.mutedForeground} />
-                  </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first emergency contact — it takes 10 seconds.</ThemedText>
-                </View>
-              </Card>
-            </Pressable>
-          ) : (
-            <Card className="p-0">
-              {emergencyContacts.map((contact, i) => (
-                <Pressable
-                  key={contact.local_uuid}
-                  onPress={() => emergencyContactsSheetRef.current?.presentView(contact.local_uuid)}
-                >
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 px-4 py-3.5',
-                      i < emergencyContacts.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.destructive + '15' }}>
-                      <Ionicons name="person" size={18} color={theme.destructive} />
-                    </View>
-                    <View className="flex-1">
-                      <ThemedText className="font-semibold">{contact.name}</ThemedText>
-                      {contact.relationship ? (
-                        <View className="mt-1 flex-row items-center gap-1.5">
-                          <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: theme.muted }}>
-                            <ThemedText type="detail" color="mutedForeground">
-                              {contact.relationship}
-                            </ThemedText>
-                          </View>
-                        </View>
-                      ) : null}
-                    </View>
-                    {contact.phone ? (
-                      <ThemedText type="small" color="primary">
-                        {formatPhoneWithCountryCode(contact.phone_country_code, contact.phone)}
-                      </ThemedText>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Allergies</ThemedText>
-            <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => allergiesSheetRef.current?.present()} hitSlop={8}>
-                <ThemedText type="small" color="primary" className="font-semibold">
-                  View all
-                </ThemedText>
-              </Pressable>
-              <Pressable onPress={() => allergiesSheetRef.current?.presentAdd()} hitSlop={12}>
-                <Ionicons name="add" size={20} color={theme.primary} />
-              </Pressable>
-            </View>
-          </View>
-
-          {allergies.length === 0 ? (
-            <Pressable onPress={() => allergiesSheetRef.current?.presentAdd()}>
-              <Card>
-                <View className="flex-row items-center gap-3">
-                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                    <Ionicons name="medical" size={18} color={theme.mutedForeground} />
-                  </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first allergy — it takes 10 seconds.</ThemedText>
-                </View>
-              </Card>
-            </Pressable>
-          ) : (
-            <Card className="p-0">
-              {allergies.map((allergy, i) => (
-                <Pressable
-                  key={allergy.local_uuid}
-                  onPress={() => allergiesSheetRef.current?.presentView(allergy.local_uuid)}
-                >
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 px-4 py-3.5',
-                      i < allergies.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <SeverityIcon severity={allergy.severity} size={36} />
-                    <ThemedText className="flex-1 shrink font-semibold">{allergy.allergen}</ThemedText>
-                    <View className="flex-row items-center gap-2">
-                      <VerifiedCountBadge count={allergyVerifiedCount.get(allergy.local_uuid) ?? 0} />
-                      <SeverityBadge severity={allergy.severity} />
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Conditions</ThemedText>
-            <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => conditionsSheetRef.current?.present()} hitSlop={8}>
-                <ThemedText type="small" color="primary" className="font-semibold">
-                  View all
-                </ThemedText>
-              </Pressable>
-              <Pressable onPress={() => conditionsSheetRef.current?.presentAdd()} hitSlop={12}>
-                <Ionicons name="add" size={20} color={theme.primary} />
-              </Pressable>
-            </View>
-          </View>
-
-          {conditions.length === 0 ? (
-            <Pressable onPress={() => conditionsSheetRef.current?.presentAdd()}>
-              <Card>
-                <View className="flex-row items-center gap-3">
-                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                    <Ionicons name="fitness" size={18} color={theme.mutedForeground} />
-                  </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first condition — it takes 10 seconds.</ThemedText>
-                </View>
-              </Card>
-            </Pressable>
-          ) : (
-            <Card className="p-0">
-              {conditions.map((condition, i) => (
-                <Pressable
-                  key={condition.local_uuid}
-                  onPress={() => conditionsSheetRef.current?.presentView(condition.local_uuid)}
-                >
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 px-4 py-3.5',
-                      i < conditions.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <ThemedText className="flex-1 shrink font-semibold">{condition.description}</ThemedText>
-                    <VerifiedCountBadge count={conditionVerifiedCount.get(condition.local_uuid) ?? 0} />
-                  </View>
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Diagnoses</ThemedText>
-            <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => diagnosesSheetRef.current?.present()} hitSlop={8}>
-                <ThemedText type="small" color="primary" className="font-semibold">
-                  View all
-                </ThemedText>
-              </Pressable>
-              {isVerifiedProfessional ? (
-                <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()} hitSlop={12}>
-                  <Ionicons name="add" size={20} color={theme.primary} />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-
-          {diagnoses.length === 0 ? (
-            isVerifiedProfessional ? (
-              <Pressable onPress={() => diagnosesSheetRef.current?.presentAdd()}>
-                <Card>
-                  <View className="flex-row items-center gap-3">
-                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                      <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
-                    </View>
-                    <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first diagnosis — it takes 10 seconds.</ThemedText>
-                  </View>
-                </Card>
-              </Pressable>
-            ) : (
-              <Card>
-                <View className="flex-row items-center gap-3">
-                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                    <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
-                  </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">No diagnoses on file yet. A verified professional can add one.</ThemedText>
-                </View>
-              </Card>
-            )
-          ) : (
-            <Card className="p-0">
-              {diagnoses.map((diagnosis, i) => (
-                <Pressable
-                  key={diagnosis.local_uuid}
-                  onPress={() => diagnosesSheetRef.current?.presentView(diagnosis.local_uuid)}
-                >
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 px-4 py-3.5',
-                      i < diagnoses.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <DiagnosisSeverityIcon severity={diagnosis.severity} size={36} />
-                    <View className="flex-1 shrink">
-                      <ThemedText className="font-semibold">{diagnosis.condition}</ThemedText>
-                      {diagnosis.date_of_diagnosis ? (
-                        <ThemedText type="small" color="mutedForeground">
-                          Diagnosed {formatIsoDate(diagnosis.date_of_diagnosis)}
-                        </ThemedText>
-                      ) : null}
-                      {diagnosis.diagnosed_by_name ? (
-                        <ThemedText type="small" color="mutedForeground">
-                          Diagnosed by {diagnosis.diagnosed_by_name}
-                        </ThemedText>
-                      ) : null}
-                    </View>
-                    <VerifiedCountBadge count={diagnosisVerifiedCount.get(diagnosis.local_uuid) ?? 0} />
-                    <DiagnosisSeverityBadge severity={diagnosis.severity} />
-                  </View>
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        <View className="mb-6 gap-2">
-          <View className="mb-1 flex-row items-center justify-between">
-            <ThemedText type="overline">Medications</ThemedText>
-            <View className="flex-row items-center gap-4">
-              <Pressable onPress={() => medicationsSheetRef.current?.present()} hitSlop={8}>
-                <ThemedText type="small" color="primary" className="font-semibold">
-                  View all
-                </ThemedText>
-              </Pressable>
-              <Pressable onPress={() => medicationsSheetRef.current?.presentAdd()} hitSlop={12}>
-                <Ionicons name="add" size={20} color={theme.primary} />
-              </Pressable>
-            </View>
-          </View>
-
-          {medications.length === 0 ? (
-            <Pressable onPress={() => medicationsSheetRef.current?.presentAdd()}>
-              <Card>
-                <View className="flex-row items-center gap-3">
-                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
-                    <Ionicons name="medical" size={18} color={theme.mutedForeground} />
-                  </View>
-                  <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">Add your first medication — it takes 10 seconds.</ThemedText>
-                </View>
-              </Card>
-            </Pressable>
-          ) : (
-            <Card className="p-0">
-              {medications.map((medication, i) => (
-                <Pressable
-                  key={medication.local_uuid}
-                  onPress={() => medicationsSheetRef.current?.presentView(medication.local_uuid)}
-                >
-                  <View
-                    className={cn(
-                      'flex-row items-center gap-3 px-4 py-3.5',
-                      i < medications.length - 1 && 'border-b border-border',
-                    )}
-                  >
-                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
-                      <Ionicons name="medical" size={18} color={theme.primary} />
-                    </View>
-                    <View className="flex-1 shrink">
-                      <ThemedText className="font-semibold">{medication.name}</ThemedText>
-                      {medication.dosage || medication.frequency ? (
-                        <ThemedText type="small" color="mutedForeground">
-                          {[medication.dosage, medication.frequency].filter(Boolean).join(' · ')}
-                        </ThemedText>
-                      ) : null}
-                    </View>
-                    <VerifiedCountBadge count={medicationVerifiedCount.get(medication.local_uuid) ?? 0} />
-                  </View>
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
+        <PersonalInfoSection profile={profile} age={age} />
+        <EmergencyContactsSection emergencyContacts={emergencyContacts} sheetRef={emergencyContactsSheetRef} />
+        <AllergiesSection allergies={allergies} sheetRef={allergiesSheetRef} verifiedCount={allergyVerifiedCount} />
+        <ConditionsSection conditions={conditions} sheetRef={conditionsSheetRef} verifiedCount={conditionVerifiedCount} />
+        <DiagnosesSection diagnoses={diagnoses} sheetRef={diagnosesSheetRef} verifiedCount={diagnosisVerifiedCount} isVerifiedProfessional={isVerifiedProfessional} />
+        <MedicationsSection medications={medications} sheetRef={medicationsSheetRef} verifiedCount={medicationVerifiedCount} />
       </AppLayout>
-      <View className="absolute inset-x-0 bottom-0 items-center">
-        <View
-          className="w-full flex-row items-center justify-between rounded-t-3xl border-t px-10 pt-3"
-          style={{ backgroundColor: theme.card, borderColor: theme.border, paddingBottom: insets.bottom + 12 }}
-        >
-          <Pressable hitSlop={12} accessibilityLabel="Home" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
-            <Ionicons name="home" size={24} color={theme.primary} />
-          </Pressable>
-          <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-            <Ionicons name="settings-outline" size={24} color={theme.foreground} />
-          </Pressable>
-        </View>
-        {medicalInformation && (
-          <QrIconButton
-            onPress={() => guardedPush('/quick-scan')}
-            size={60}
-            style={{
-              position: 'absolute',
-              top: -22,
-              borderWidth: 4,
-              borderColor: theme.background,
-              elevation: 4,
-              shadowColor: '#000',
-              shadowOpacity: 0.15,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 2 },
-            }}
-          />
-        )}
-      </View>
-      <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} />
+      <BottomTabBar medicalInformation={medicalInformation} guardedPush={guardedPush} bottomInset={insets.bottom} />
+      <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />
       <ConditionsBottomSheet ref={conditionsSheetRef} />
@@ -751,5 +813,6 @@ export default function HomeScreen() {
       <MedicationsBottomSheet ref={medicationsSheetRef} />
       <OnboardingChecklistSheet ref={onboardingChecklistSheetRef} tasks={checklist.tasks} onSelectTask={handleSelectOnboardingTask} onSkipTask={(id) => void checklist.skipTask(id)} sendingVerification={isSendingVerification} emailCooldown={emailCooldown} />
     </View>
+    </ErrorBoundary>
   );
 }
