@@ -3,7 +3,7 @@ import type Pusher from 'pusher-js';
 import { useEffect, useRef, type PropsWithChildren } from 'react';
 
 import { useAuth } from '@/auth/useAuth';
-import { getIsOffline } from '@/lib/network-state';
+import { useNetworkStatus } from '@/hooks/use-network-status';
 import { subscribeToPresenceChannel } from '@/realtime/channels/presence-channel';
 import { subscribeToUserChannel } from '@/realtime/channels/user-channel';
 import { createUserChannelHandlers } from '@/realtime/events/handlers';
@@ -11,6 +11,7 @@ import { createReverbClient } from '@/realtime/reverb-client';
 
 export function BroadcastProvider({ children }: PropsWithChildren) {
   const { status, user, refreshUser, logout } = useAuth();
+  const { isConnected } = useNetworkStatus();
   const queryClient = useQueryClient();
   const pusherRef = useRef<Pusher | null>(null);
   const logoutRef = useRef(logout);
@@ -22,9 +23,12 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
   }, [logout, refreshUser]);
 
   useEffect(() => {
-    if (status !== 'authenticated' || !user || getIsOffline()) {
-      pusherRef.current?.disconnect();
-      pusherRef.current = null;
+    if (status !== 'authenticated' || !user || !isConnected) {
+      if (pusherRef.current) {
+        console.log('[BroadcastProvider] disconnecting — offline or unauthenticated');
+        pusherRef.current.disconnect();
+        pusherRef.current = null;
+      }
       return;
     }
 
@@ -79,7 +83,7 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
       pusherRef.current = null;
     };
   // react-doctor-disable-next-line react-doctor/exhaustive-deps
-  }, [status, user?.id, queryClient]);
+  }, [status, user?.id, isConnected, queryClient]);
 
   return <>{children}</>;
 }

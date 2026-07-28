@@ -13,6 +13,8 @@ export type UserChannelEventMap = {
   ProfessionalApplicationStatusChanged: { application_id: number; status: string };
   /** A new registration matched this user's own primary-owned medical record and needs their decision. */
   MedicalInformationRegistrationMatchCreated: { medical_information_registration_match_id: number };
+  /** Admin approved or denied this user's account retrieval request. */
+  AccountRetrievalRequestStatusChanged: { account_retrieval_request_id: number; status: string };
   /**
    * A patient-authored record (allergy/diagnosis/medication/emergency_contact) changed - created,
    * updated, or deleted - on another device or via the web. Independent of PendingSyncEnvelopeCreated

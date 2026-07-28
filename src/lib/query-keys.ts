@@ -14,3 +14,4 @@ export const attestationsQueryKey = ['professional-attestations'] as const;
 export const professionalApplicationQueryKey = ['professional-application'] as const;
 export const myProfessionalApplicationQueryKey = ['professional-application', 'mine'] as const;
 export const professionalApplicationBroadcastStatusQueryKey = ['professional-application-broadcast-status'] as const;
+export const accountRetrievalRequestQueryKey = ['account-retrieval-request'] as const;

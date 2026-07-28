@@ -156,6 +156,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
           <Stack.Screen name="professional-application" />
           <Stack.Screen name="manage-info" options={{ headerShown: true, title: 'Manage info', presentation: 'modal' }} />
           <Stack.Screen name="registration-match" />
+          <Stack.Screen name="account-retrieval" />
           <Stack.Screen name="sync-status" options={{ headerShown: true, title: 'Sync status', presentation: 'modal' }} />
           <Stack.Screen name="onboarding-tasks" options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }} />
         </Stack.Protected>

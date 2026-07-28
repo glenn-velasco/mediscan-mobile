@@ -6,7 +6,7 @@ import { registrationMatchQueryKey } from '@/features/registration-match/usePend
 import { pendingSyncQueryKey } from '@/features/pending-sync/usePendingSync';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
 import { professionalApplicationQueryKey } from '@/features/professional-application/useProfessionalApplication';
-import { myProfessionalApplicationQueryKey, professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
+import { myProfessionalApplicationQueryKey, professionalApplicationBroadcastStatusQueryKey, accountRetrievalRequestQueryKey } from '@/lib/query-keys';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
 import { getAppReady } from '@/lib/app-ready';
@@ -20,6 +20,11 @@ const APPLICATION_STATUS_NOTIFICATION: Partial<Record<string, { title: string; b
   approved: { title: 'Application approved', body: 'Your professional verification was approved.' },
   denied: { title: 'Application denied', body: 'Your professional verification was not approved. Tap for details.' },
   auto_rejected: { title: 'Application rejected', body: 'Your professional verification was rejected during automatic checks. Tap for details.' },
+};
+
+const ACCOUNT_RETRIEVAL_STATUS_NOTIFICATION: Partial<Record<string, { title: string; body: string }>> = {
+  approved: { title: 'Medical information recovered', body: 'Your medical information is now linked to your account. Tap to view.' },
+  denied: { title: 'Request denied', body: 'Your account retrieval request was denied. Tap for details.' },
 };
 
 export function createUserChannelHandlers(deps: {
@@ -100,6 +105,22 @@ export function createUserChannelHandlers(deps: {
         href: `/registration-match/${payload.medical_information_registration_match_id}`,
       });
       await deps.queryClient.invalidateQueries({ queryKey: registrationMatchQueryKey });
+    },
+
+    AccountRetrievalRequestStatusChanged: async (payload) => {
+      console.log(TAG, 'AccountRetrievalRequestStatusChanged received', { id: payload.account_retrieval_request_id, status: payload.status });
+      const content = ACCOUNT_RETRIEVAL_STATUS_NOTIFICATION[payload.status];
+      if (content) {
+        const href = `/account-retrieval/${payload.account_retrieval_request_id}?status=${payload.status}`;
+        void addNotification({ ...content, href });
+        void showLocalNotification({ ...content, data: { href } });
+      }
+      await deps.queryClient.invalidateQueries({ queryKey: [...accountRetrievalRequestQueryKey, payload.account_retrieval_request_id] });
+      try {
+        await deps.refreshUser();
+      } catch {
+        console.warn(TAG, 'refreshUser failed — likely offline, will pick up changes on next online fetch');
+      }
     },
   };
 }
