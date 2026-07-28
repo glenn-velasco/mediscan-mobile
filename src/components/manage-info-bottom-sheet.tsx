@@ -1,1243 +1,888 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Switch, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  BottomSheetModal,
   BottomSheetBackdrop,
-  BottomSheetScrollView,
-  BottomSheetTextInput,
+  BottomSheetModal,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useRef } from 'react';
+import { Controller } from 'react-hook-form';
+import { ActivityIndicator, Pressable, Switch, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
+import { BottomSheetFormWrapper } from '@/components/bottom-sheet-form-wrapper';
 import { Card } from '@/components/card';
-import { InfoRow } from '@/components/info-row';
-import { PrimaryButton } from '@/components/primary-button';
-import { SeverityIcon, SeverityBadge } from '@/components/severity-badge';
-import { DiagnosisSeverityIcon, DiagnosisSeverityBadge } from '@/components/diagnosis-severity-badge';
-import { PickerField } from '@/components/form/picker-field';
-import { TextField } from '@/components/form/text-field';
+import { DiagnosisSeverityBadge, DiagnosisSeverityIcon } from '@/components/diagnosis-severity-badge';
+import { AddressFields } from '@/components/form/address-fields';
 import { DateField } from '@/components/form/date-field';
-import { SelectField } from '@/components/form/select-field';
-import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
 import { PhoneInput } from '@/components/form/phone-input';
-import { useAuth } from '@/auth/useAuth';
-import { useSubmitEnvelope } from '@/features/professional-sync/useSubmitEnvelope';
+import { SelectField } from '@/components/form/select-field';
+import { TextField } from '@/components/form/text-field';
+import { sheet } from '@/components/form/tokens';
+import {
+  ALLERGY_SEVERITIES,
+  AllergySeverityLabel,
+  DIAGNOSIS_SEVERITIES,
+  DiagnosisSeverityLabel,
+  formatPhoneWithCountryCode,
+  GENDER_OPTIONS,
+  GenderLabel,
+  RELATION_TO_PATIENT_OPTIONS,
+  RelationToPatientLabel,
+  type ManageAllergy,
+  type ManageCondition,
+  type ManageDiagnosis,
+  type ManageEmergencyContact,
+  type ManageMedication,
+} from '@/components/manage-info-helpers';
+import { PrimaryButton } from '@/components/primary-button';
+import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
+import { ThemedText } from '@/components/themed-text';
+import { useManageInfo } from '@/components/use-manage-info';
+import type { Gender } from '@/constants/gender';
 import { useTheme } from '@/hooks/use-theme';
-import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import { formatIsoDate } from '@/lib/format-date';
-import { scanForPatient, connectAndSubmit } from '@/services/ble-central.service';
-import { seal } from '@/services/sealed-box.service';
-import { getEffectiveVerificationSets, queueVerificationSync } from '@/services/verification-sync.service';
-import type {
-  AllergyVerificationEnvelope,
-  ConditionVerificationEnvelope,
-  DiagnosisVerificationEnvelope,
-  MedicationVerificationEnvelope,
-  TransfusionWitnessEnvelope,
-  GeneralNoteEnvelope,
-  MedicalInformationUpdateEnvelope,
-  MedicalInformationPatch,
-} from '@/lib/envelope-schema';
-import type { EnvelopeType, MedicalInformationAddress } from '@/api/types';
-import type { DiagnosisSeverity } from '@/constants/diagnosis-severity';
-import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
-import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
-import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
-import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
-import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
-import { DIAGNOSIS_SEVERITY_OPTIONS, DiagnosisSeverityLabel } from '@/constants/diagnosis-severity';
-import { ALLERGY_SEVERITY_OPTIONS, AllergySeverityLabel } from '@/constants/allergy-severity';
 
 export type ManageInfoBottomSheetHandle = { present: (patientId: number, qrData: string) => void; dismiss: () => void };
 
-const ALLERGY_SEVERITIES: AllergyVerificationEnvelope['severity'][] = [...ALLERGY_SEVERITY_OPTIONS];
-const DIAGNOSIS_SEVERITIES: DiagnosisSeverity[] = [...DIAGNOSIS_SEVERITY_OPTIONS];
-
-type ManageAllergy = {
-  key: string;
-  allergen: string;
-  reaction: string;
-  severity: AllergyVerificationEnvelope['severity'];
-  isNew: boolean;
-  deleted: boolean;
-  editing: boolean;
-  verifyToggle: boolean;
-  verifyTouched: boolean;
-};
-
-type ManageCondition = {
-  key: string;
-  description: string;
-  isNew: boolean;
-  deleted: boolean;
-  editing: boolean;
-  verifyToggle: boolean;
-  verifyTouched: boolean;
-};
-
-type ManageDiagnosis = {
-  key: string;
-  condition: string;
-  dateOfDiagnosis: string;
-  severity: DiagnosisSeverity;
-  isNew: boolean;
-  deleted: boolean;
-  editing: boolean;
-  verifyToggle: boolean;
-  verifyTouched: boolean;
-};
-
-type ManageMedication = {
-  key: string;
-  name: string;
-  dosage: string;
-  frequency: string;
-  notes: string;
-  isNew: boolean;
-  deleted: boolean;
-  editing: boolean;
-  verifyToggle: boolean;
-  verifyTouched: boolean;
-};
-
-type MedInfoFormState = {
-  first_name: string;
-  middle_name: string;
-  last_name: string;
-  suffix: Suffix | undefined;
-  date_of_birth: string;
-  gender: Gender | undefined;
-  blood_type: BloodType | undefined;
-  religion: Religion | undefined;
-  address: MedicalInformationAddress;
-  no_blood_transfusion: boolean;
-  phone_country_code: string;
-  phone: string;
-};
-
-const EMPTY_MED_INFO_FORM: MedInfoFormState = {
-  first_name: '',
-  middle_name: '',
-  last_name: '',
-  suffix: undefined,
-  date_of_birth: '',
-  gender: undefined,
-  blood_type: undefined,
-  religion: undefined,
-  address: EMPTY_ADDRESS,
-  no_blood_transfusion: false,
-  phone_country_code: 'PH',
-  phone: '',
-};
-
-type Change = {
-  type: 'create' | 'update' | 'delete';
-  envelope:
-    | AllergyVerificationEnvelope
-    | ConditionVerificationEnvelope
-    | DiagnosisVerificationEnvelope
-    | MedicationVerificationEnvelope
-    | TransfusionWitnessEnvelope
-    | GeneralNoteEnvelope
-    | MedicalInformationUpdateEnvelope;
-  envelopeType: EnvelopeType;
-  label: string;
-};
-
-function normaliseSeverity(raw: string): AllergyVerificationEnvelope['severity'] {
-  const lower = raw.toLowerCase();
-  if (ALLERGY_SEVERITIES.includes(lower as AllergyVerificationEnvelope['severity'])) return lower as AllergyVerificationEnvelope['severity'];
-  return 'mild';
-}
-
-function normaliseDiagnosisSeverity(raw: string): DiagnosisSeverity {
-  const lower = raw.toLowerCase();
-  if (DIAGNOSIS_SEVERITIES.includes(lower as DiagnosisSeverity)) return lower as DiagnosisSeverity;
-  return 'chronic';
-}
-
-function initAllergies(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageAllergy[] {
-  return info.allergies.map((a, i) => ({
-    key: `a:${i}`,
-    allergen: a.allergen,
-    reaction: a.reaction ?? '',
-    severity: normaliseSeverity(a.severity),
-    isNew: false,
-    deleted: false,
-    editing: false,
-    verifyToggle: verified.has(a.allergen.toLowerCase()),
-    verifyTouched: false,
-  }));
-}
-
-function initConditions(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageCondition[] {
-  return info.conditions.map((c, i) => ({
-    key: `c:${i}`,
-    description: c.description,
-    isNew: false,
-    deleted: false,
-    editing: false,
-    verifyToggle: verified.has(c.description.toLowerCase()),
-    verifyTouched: false,
-  }));
-}
-
-function initDiagnoses(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageDiagnosis[] {
-  return info.diagnoses.map((d, i) => ({
-    key: `d:${i}`,
-    condition: d.condition,
-    dateOfDiagnosis: d.dateOfDiagnosis ?? '',
-    severity: normaliseDiagnosisSeverity(d.severity),
-    isNew: false,
-    deleted: false,
-    editing: false,
-    verifyToggle: verified.has(d.condition.toLowerCase()),
-    verifyTouched: false,
-  }));
-}
-
-function initMedications(info: ScannedEmergencyInfo, verified: Set<string> = new Set()): ManageMedication[] {
-  return info.medications.map((m, i) => ({
-    key: `m:${i}`,
-    name: m.name,
-    dosage: m.dosage,
-    frequency: m.frequency ?? '',
-    notes: '',
-    isNew: false,
-    deleted: false,
-    editing: false,
-    verifyToggle: verified.has(m.name.toLowerCase()),
-    verifyTouched: false,
-  }));
-}
-
-function scannedField(value: string): string {
-  return value && value !== '—' ? value : '';
-}
-
-function medInfoFromScanned(info: ScannedEmergencyInfo): MedInfoFormState {
-  return {
-    ...EMPTY_MED_INFO_FORM,
-    first_name: scannedField(info.firstName),
-    middle_name: scannedField(info.middleName),
-    last_name: scannedField(info.lastName),
-    suffix: SUFFIX_OPTIONS.includes(info.suffix as Suffix) ? (info.suffix as Suffix) : undefined,
-    date_of_birth: scannedField(info.dateOfBirth),
-    gender: GENDER_OPTIONS.includes(info.gender as Gender) ? (info.gender as Gender) : undefined,
-    blood_type: BLOOD_TYPE_OPTIONS.includes(info.bloodType as BloodType) ? (info.bloodType as BloodType) : undefined,
-    religion: RELIGION_OPTIONS.includes(info.religion as Religion) ? (info.religion as Religion) : undefined,
-    address: {
-      street: scannedField(info.street) || null,
-      unit: scannedField(info.unit) || null,
-      city: scannedField(info.city) || null,
-      province: scannedField(info.province) || null,
-      postal_code: scannedField(info.postalCode) || null,
-      country: scannedField(info.country) || null,
-    },
-    phone: scannedField(info.phone),
-    phone_country_code: scannedField(info.phoneCountryCode) || 'PH',
-    no_blood_transfusion: info.noBloodTransfusion === 'Yes',
-  };
-}
+type ThemeColors = ReturnType<typeof useTheme>;
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
+function EmergencyContactsSection({
+  items,
+  itemErrors,
+  theme,
+  sending,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onUpdate,
+}: {
+  items: ManageEmergencyContact[];
+  itemErrors: Record<string, Record<string, string>>;
+  theme: ThemeColors;
+  sending: boolean;
+  onAdd: () => void;
+  onEdit: (key: string) => void;
+  onDelete: (key: string, label: string) => void;
+  onSave: (key: string) => void;
+  onCancel: (key: string) => void;
+  onUpdate: (key: string, patch: Partial<ManageEmergencyContact>) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <View className="flex-row items-center justify-between">
+        <ThemedText type="overline">Emergency contacts</ThemedText>
+        <Pressable onPress={onAdd} hitSlop={8} disabled={sending}>
+          <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+            <Ionicons name="add" size={16} color={theme.primaryForeground} />
+          </View>
+        </Pressable>
+      </View>
+
+      {items.length === 0 ? (
+        <Card>
+          <ThemedText type="label" color="mutedForeground">No emergency contacts recorded for this patient.</ThemedText>
+        </Card>
+      ) : (
+        <Card className="p-0">
+          {items.map((item, i) => (
+            <View
+              key={item.key}
+              className="px-4 py-3"
+              style={i < items.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+            >
+              {item.editing ? (
+                <View className="gap-2">
+                  <TextField
+                    label="Contact name"
+                    value={item.name}
+                    onChangeText={(v) => onUpdate(item.key, { name: v })}
+                    error={itemErrors[item.key]?.name}
+                    placeholder="e.g. Juan Dela Cruz"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <SelectField placeholder="Relationship" options={RELATION_TO_PATIENT_OPTIONS} value={item.relationship} onChange={(v) => onUpdate(item.key, { relationship: v })} getLabel={(v) => RelationToPatientLabel[v]} />
+                  <PhoneInput
+                    value={{ countryCode: item.phone_country_code || 'PH', phone: item.phone }}
+                    onChange={(v) => onUpdate(item.key, { phone_country_code: v.countryCode, phone: v.phone })}
+                    error={itemErrors[item.key]?.phone}
+                  />
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small">Primary contact</ThemedText>
+                    <Switch value={item.is_primary} onValueChange={(v) => onUpdate(item.key, { is_primary: v })} />
+                  </View>
+                  <View className="flex-row gap-2">
+                    <PrimaryButton label="Save" onPress={() => onSave(item.key)} className="flex-1" />
+                    <PrimaryButton label="Cancel" variant="ghost" onPress={() => onCancel(item.key)} className="flex-1" />
+                  </View>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-3">
+                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.destructive + '15' }}>
+                      <Ionicons name="person" size={18} color={theme.destructive} />
+                    </View>
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{item.name}</ThemedText>
+                      {item.relationship ? (
+                        <ThemedText type="small" color="mutedForeground">{RelationToPatientLabel[item.relationship]}</ThemedText>
+                      ) : null}
+                    </View>
+                    {item.phone ? (
+                      <ThemedText type="small" color="primary">
+                        {formatPhoneWithCountryCode(item.phone_country_code || undefined, item.phone)}
+                      </ThemedText>
+                    ) : null}
+                    <Pressable onPress={() => onEdit(item.key)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                    </Pressable>
+                    <Pressable onPress={() => onDelete(item.key, item.name)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function MedicalInfoFormSection({ form }: { form: any }) {
+  return (
+    <View className="mb-6 gap-1">
+      <ThemedText type="overline" className="mb-2">Medical information</ThemedText>
+      <Controller control={form.control} name="first_name" render={({ field, fieldState }) => (
+        <TextField label="First name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="middle_name" render={({ field }) => (
+        <TextField label="Middle name" value={field.value} onChangeText={field.onChange} />
+      )} />
+      <Controller control={form.control} name="last_name" render={({ field, fieldState }) => (
+        <TextField label="Last name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="suffix" render={({ field }) => (
+        <SelectField placeholder="Suffix" options={['Jr.', 'Sr.', 'I', 'II', 'III', 'IV', 'V']} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => v} />
+      )} />
+      <Controller control={form.control} name="date_of_birth" render={({ field, fieldState }) => (
+        <DateField label="Date of birth" value={field.value} onChange={field.onChange} maximumDate={new Date()} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="gender" render={({ field, fieldState }) => (
+        <SelectField placeholder="Gender" options={GENDER_OPTIONS} value={field.value} onChange={field.onChange} getLabel={(v) => GenderLabel[v as Gender]} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="phone" render={({ field }) => {
+        const phoneErr = form.formState.errors.phone?.message || form.formState.errors.phone_country_code?.message;
+        return (
+          <PhoneInput
+            value={{ countryCode: form.getValues('phone_country_code'), phone: field.value }}
+            onChange={(v) => { form.setValue('phone_country_code', v.countryCode, { shouldDirty: true }); form.setValue('phone', v.phone, { shouldDirty: true }); }}
+            error={phoneErr}
+          />
+        );
+      }} />
+      <Controller control={form.control} name="address" render={({ field }) => {
+        const addrErrs = form.formState.errors.address;
+        return (
+          <AddressFields value={field.value} onChange={field.onChange} errors={{
+            street: addrErrs?.street?.message,
+            unit: addrErrs?.unit?.message,
+            city: addrErrs?.city?.message,
+            province: addrErrs?.province?.message,
+            postal_code: addrErrs?.postal_code?.message,
+            country: addrErrs?.country?.message,
+          }} />
+        );
+      }} />
+      <Controller control={form.control} name="blood_type" render={({ field, fieldState }) => (
+        <SelectField placeholder="Blood type" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} value={field.value} onChange={field.onChange} getLabel={(v) => v} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="religion" render={({ field }) => (
+        <SelectField placeholder="Religion" options={['Catholic', 'Protestant', 'Muslim', 'Buddhist', 'Hindu', 'Jewish', 'Other']} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => v} />
+      )} />
+      <Controller control={form.control} name="no_blood_transfusion" render={({ field }) => (
+        <View className="mb-4 flex-row items-center justify-between">
+          <ThemedText>No blood transfusion</ThemedText>
+          <Switch value={field.value} onValueChange={field.onChange} />
+        </View>
+      )} />
+    </View>
+  );
+}
+
+function AllergiesSection({
+  items,
+  itemErrors,
+  theme,
+  sending,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onUpdate,
+}: {
+  items: ManageAllergy[];
+  itemErrors: Record<string, Record<string, string>>;
+  theme: ThemeColors;
+  sending: boolean;
+  onAdd: () => void;
+  onEdit: (key: string) => void;
+  onDelete: (key: string, label: string) => void;
+  onSave: (key: string) => void;
+  onCancel: (key: string) => void;
+  onUpdate: (key: string, patch: Partial<ManageAllergy>) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <View className="flex-row items-center justify-between">
+        <ThemedText type="overline">Allergies</ThemedText>
+        <Pressable onPress={onAdd} hitSlop={8} disabled={sending}>
+          <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+            <Ionicons name="add" size={16} color={theme.primaryForeground} />
+          </View>
+        </Pressable>
+      </View>
+
+      {items.length === 0 ? (
+        <Card>
+          <ThemedText type="label" color="mutedForeground">No allergies recorded for this patient.</ThemedText>
+        </Card>
+      ) : (
+        <Card className="p-0">
+          {items.map((item, i) => (
+            <View
+              key={item.key}
+              className="px-4 py-3"
+              style={i < items.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+            >
+              {item.editing ? (
+                <View className="gap-2">
+                  {item.isNew ? (
+                    <TextField
+                      label="Allergen"
+                      value={item.allergen}
+                      onChangeText={(v) => onUpdate(item.key, { allergen: v })}
+                      error={itemErrors[item.key]?.allergen}
+                      placeholder="e.g. Peanuts"
+                      floatingLabelBackground={theme.card}
+                    />
+                  ) : null}
+                  <SelectField placeholder="Severity" options={ALLERGY_SEVERITIES} value={item.severity} onChange={(v) => v && onUpdate(item.key, { severity: v })} getLabel={(v) => AllergySeverityLabel[v]} />
+                  <TextField
+                    label="Reaction (optional)"
+                    value={item.reaction}
+                    onChangeText={(v) => onUpdate(item.key, { reaction: v })}
+                    error={itemErrors[item.key]?.reaction}
+                    placeholder="e.g. Hives"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} />
+                  </View>
+                  <View className="flex-row gap-2">
+                    <PrimaryButton label="Save" onPress={() => onSave(item.key)} className="flex-1" />
+                    <PrimaryButton label="Cancel" variant="ghost" onPress={() => onCancel(item.key)} className="flex-1" />
+                  </View>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-3">
+                    <SeverityIcon severity={item.severity} size={36} />
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{item.allergen}</ThemedText>
+                      {item.reaction ? <ThemedText type="small" color="mutedForeground">{item.reaction}</ThemedText> : null}
+                    </View>
+                    <SeverityBadge severity={item.severity} />
+                    <Pressable onPress={() => onEdit(item.key)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                    </Pressable>
+                    <Pressable onPress={() => onDelete(item.key, item.allergen)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                    </Pressable>
+                  </View>
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function ConditionsSection({
+  items,
+  itemErrors,
+  theme,
+  sending,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onUpdate,
+}: {
+  items: ManageCondition[];
+  itemErrors: Record<string, Record<string, string>>;
+  theme: ThemeColors;
+  sending: boolean;
+  onAdd: () => void;
+  onEdit: (key: string) => void;
+  onDelete: (key: string, label: string) => void;
+  onSave: (key: string) => void;
+  onCancel: (key: string) => void;
+  onUpdate: (key: string, patch: Partial<ManageCondition>) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <View className="flex-row items-center justify-between">
+        <ThemedText type="overline">Conditions</ThemedText>
+        <Pressable onPress={onAdd} hitSlop={8} disabled={sending}>
+          <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+            <Ionicons name="add" size={16} color={theme.primaryForeground} />
+          </View>
+        </Pressable>
+      </View>
+
+      {items.length === 0 ? (
+        <Card>
+          <ThemedText type="label" color="mutedForeground">No conditions recorded for this patient.</ThemedText>
+        </Card>
+      ) : (
+        <Card className="p-0">
+          {items.map((item, i) => (
+            <View
+              key={item.key}
+              className="px-4 py-3"
+              style={i < items.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+            >
+              {item.editing ? (
+                <View className="gap-2">
+                  {item.isNew ? (
+                    <TextField
+                      label="Description"
+                      value={item.description}
+                      onChangeText={(v) => onUpdate(item.key, { description: v })}
+                      error={itemErrors[item.key]?.description}
+                      placeholder="e.g. Occasional migraines"
+                      multiline
+                      floatingLabelBackground={theme.card}
+                    />
+                  ) : null}
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} />
+                  </View>
+                  <View className="flex-row gap-2">
+                    <PrimaryButton label="Save" onPress={() => onSave(item.key)} className="flex-1" />
+                    <PrimaryButton label="Cancel" variant="ghost" onPress={() => onCancel(item.key)} className="flex-1" />
+                  </View>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-3">
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{item.description}</ThemedText>
+                    </View>
+                    <Pressable onPress={() => onEdit(item.key)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                    </Pressable>
+                    <Pressable onPress={() => onDelete(item.key, item.description)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                    </Pressable>
+                  </View>
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function DiagnosesSection({
+  items,
+  itemErrors,
+  theme,
+  sending,
+  isVerifiedProfessional,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onUpdate,
+}: {
+  items: ManageDiagnosis[];
+  itemErrors: Record<string, Record<string, string>>;
+  theme: ThemeColors;
+  sending: boolean;
+  isVerifiedProfessional: boolean;
+  onAdd: () => void;
+  onEdit: (key: string) => void;
+  onDelete: (key: string, label: string) => void;
+  onSave: (key: string) => void;
+  onCancel: (key: string) => void;
+  onUpdate: (key: string, patch: Partial<ManageDiagnosis>) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <View className="flex-row items-center justify-between">
+        <ThemedText type="overline">Diagnoses</ThemedText>
+        <Pressable onPress={onAdd} hitSlop={8} disabled={sending}>
+          <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+            <Ionicons name="add" size={16} color={theme.primaryForeground} />
+          </View>
+        </Pressable>
+      </View>
+
+      {items.length === 0 ? (
+        <Card>
+          <ThemedText type="label" color="mutedForeground">No diagnoses recorded for this patient.</ThemedText>
+        </Card>
+      ) : (
+        <Card className="p-0">
+          {items.map((item, i) => (
+            <View
+              key={item.key}
+              className="px-4 py-3"
+              style={i < items.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+            >
+              {item.editing ? (
+                <View className="gap-2">
+                  {item.isNew ? (
+                    <TextField
+                      label="Condition"
+                      value={item.condition}
+                      onChangeText={(v) => onUpdate(item.key, { condition: v })}
+                      error={itemErrors[item.key]?.condition}
+                      placeholder="e.g. Type 2 diabetes"
+                      floatingLabelBackground={theme.card}
+                    />
+                  ) : null}
+                  <SelectField placeholder="Severity" options={DIAGNOSIS_SEVERITIES} value={item.severity} onChange={(v) => v && onUpdate(item.key, { severity: v })} getLabel={(v) => DiagnosisSeverityLabel[v]} />
+                  <TextField
+                    label="Date of diagnosis (optional)"
+                    value={item.dateOfDiagnosis}
+                    onChangeText={(v) => onUpdate(item.key, { dateOfDiagnosis: v })}
+                    error={itemErrors[item.key]?.date_of_diagnosis}
+                    placeholder="YYYY-MM-DD"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} />
+                  </View>
+                  <View className="flex-row gap-2">
+                    <PrimaryButton label="Save" onPress={() => onSave(item.key)} className="flex-1" />
+                    <PrimaryButton label="Cancel" variant="ghost" onPress={() => onCancel(item.key)} className="flex-1" />
+                  </View>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-3">
+                    <DiagnosisSeverityIcon severity={item.severity} size={36} />
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{item.condition}</ThemedText>
+                      {item.dateOfDiagnosis ? <ThemedText type="small" color="mutedForeground">Diagnosed {formatIsoDate(item.dateOfDiagnosis)}</ThemedText> : null}
+                    </View>
+                    <DiagnosisSeverityBadge severity={item.severity} />
+                    <Pressable onPress={() => onEdit(item.key)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                    </Pressable>
+                    {isVerifiedProfessional ? (
+                      <Pressable onPress={() => onDelete(item.key, item.condition)} hitSlop={6} disabled={sending}>
+                        <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function MedicationsSection({
+  items,
+  itemErrors,
+  theme,
+  sending,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSave,
+  onCancel,
+  onUpdate,
+}: {
+  items: ManageMedication[];
+  itemErrors: Record<string, Record<string, string>>;
+  theme: ThemeColors;
+  sending: boolean;
+  onAdd: () => void;
+  onEdit: (key: string) => void;
+  onDelete: (key: string, label: string) => void;
+  onSave: (key: string) => void;
+  onCancel: (key: string) => void;
+  onUpdate: (key: string, patch: Partial<ManageMedication>) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <View className="flex-row items-center justify-between">
+        <ThemedText type="overline">Medications</ThemedText>
+        <Pressable onPress={onAdd} hitSlop={8} disabled={sending}>
+          <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
+            <Ionicons name="add" size={16} color={theme.primaryForeground} />
+          </View>
+        </Pressable>
+      </View>
+
+      {items.length === 0 ? (
+        <Card>
+          <ThemedText type="label" color="mutedForeground">No medications recorded for this patient.</ThemedText>
+        </Card>
+      ) : (
+        <Card className="p-0">
+          {items.map((item, i) => (
+            <View
+              key={item.key}
+              className="px-4 py-3"
+              style={i < items.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
+            >
+              {item.editing ? (
+                <View className="gap-2">
+                  {item.isNew ? (
+                    <TextField
+                      label="Name"
+                      value={item.name}
+                      onChangeText={(v) => onUpdate(item.key, { name: v })}
+                      error={itemErrors[item.key]?.name}
+                      placeholder="e.g. Metformin"
+                      floatingLabelBackground={theme.card}
+                    />
+                  ) : null}
+                  <TextField
+                    label="Dosage"
+                    value={item.dosage}
+                    onChangeText={(v) => onUpdate(item.key, { dosage: v })}
+                    error={itemErrors[item.key]?.dosage}
+                    placeholder="e.g. 500mg"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <TextField
+                    label="Frequency"
+                    value={item.frequency}
+                    onChangeText={(v) => onUpdate(item.key, { frequency: v })}
+                    error={itemErrors[item.key]?.frequency}
+                    placeholder="e.g. Twice daily"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <TextField
+                    label="Notes (optional)"
+                    value={item.notes}
+                    onChangeText={(v) => onUpdate(item.key, { notes: v })}
+                    error={itemErrors[item.key]?.notes}
+                    placeholder="Any additional notes"
+                    floatingLabelBackground={theme.card}
+                  />
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} />
+                  </View>
+                  <View className="flex-row gap-2">
+                    <PrimaryButton label="Save" onPress={() => onSave(item.key)} className="flex-1" />
+                    <PrimaryButton label="Cancel" variant="ghost" onPress={() => onCancel(item.key)} className="flex-1" />
+                  </View>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  <View className="flex-row items-center gap-3">
+                    <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
+                      <Ionicons name="medical" size={18} color={theme.primary} />
+                    </View>
+                    <View className="flex-1 shrink">
+                      <ThemedText className="font-semibold">{item.name}</ThemedText>
+                      {item.dosage || item.frequency ? (
+                        <ThemedText type="small" color="mutedForeground">
+                          {[item.dosage, item.frequency].filter(Boolean).join(' · ')}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    <Pressable onPress={() => onEdit(item.key)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
+                    </Pressable>
+                    <Pressable onPress={() => onDelete(item.key, item.name)} hitSlop={6} disabled={sending}>
+                      <Ionicons name="trash-outline" size={20} color={theme.destructive} />
+                    </Pressable>
+                  </View>
+                  <View className="flex-row items-center justify-between">
+                    <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
+                    <Switch value={item.verifyToggle} onValueChange={(v) => onUpdate(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
+                  </View>
+                </View>
+              )}
+            </View>
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+}
+
+function TransfusionWitnessSection({
+  witnessed,
+  note,
+  onWitnessedChange,
+  onNoteChange,
+}: {
+  witnessed: boolean;
+  note: string;
+  onWitnessedChange: (v: boolean) => void;
+  onNoteChange: (v: string) => void;
+}) {
+  return (
+    <View className="mb-6 gap-2">
+      <ThemedText type="overline">Transfusion witness</ThemedText>
+      <Card className="flex-row items-center justify-between">
+        <ThemedText>Patient consents to transfusion</ThemedText>
+        <Switch value={witnessed} onValueChange={onWitnessedChange} />
+      </Card>
+      <TextField label="Note (optional)" value={note} onChangeText={onNoteChange} multiline />
+    </View>
+  );
+}
+
+function GeneralNoteSection({
+  note,
+  onNoteChange,
+}: {
+  note: string;
+  onNoteChange: (v: string) => void;
+}) {
+  return (
+    <View className="mb-2 gap-2">
+      <ThemedText type="overline">General note</ThemedText>
+      <TextField label="Note (optional)" value={note} onChangeText={onNoteChange} multiline />
+    </View>
+  );
+}
+
+function SyncActionButtons({
+  sendMode,
+  sending,
+  hasChanges,
+  onSendBle,
+  onSendInternet,
+}: {
+  sendMode: 'ble' | 'internet' | null;
+  sending: boolean;
+  hasChanges: boolean;
+  onSendBle: () => void;
+  onSendInternet: () => void;
+}) {
+  return (
+    <View className="mt-2 gap-3">
+      <PrimaryButton
+        label={sendMode === 'ble' ? 'Syncing via Bluetooth…' : 'Send via Bluetooth'}
+        loading={sendMode === 'ble'}
+        disabled={sending || !hasChanges}
+        onPress={onSendBle}
+      />
+      <PrimaryButton
+        label={sendMode === 'internet' ? 'Sending via internet…' : 'Send via internet (beta)'}
+        variant="ghost"
+        loading={sendMode === 'internet'}
+        disabled={sending || !hasChanges}
+        onPress={onSendInternet}
+      />
+    </View>
+  );
+}
+
 export const ManageInfoBottomSheet = forwardRef<ManageInfoBottomSheetHandle, { onSuccess?: () => void }>(function ManageInfoBottomSheet({ onSuccess }, ref) {
   const sheetRef = useRef<BottomSheetModal>(null);
   const theme = useTheme();
-  const { user } = useAuth();
-  const { mutateAsync: submitEnvelope } = useSubmitEnvelope();
+  const state = useManageInfo();
+  const pendingPresentRef = useRef(false);
 
-  const [patientId, setPatientId] = useState<number | null>(null);
-  const [info, setInfo] = useState<ScannedEmergencyInfo | null>(null);
-  const [parseError, setParseError] = useState(false);
-
-  const [allergies, setAllergies] = useState<ManageAllergy[]>([]);
-  const [conditions, setConditions] = useState<ManageCondition[]>([]);
-  const [diagnoses, setDiagnoses] = useState<ManageDiagnosis[]>([]);
-  const [medications, setMedications] = useState<ManageMedication[]>([]);
-  const [originalAllergies, setOriginalAllergies] = useState<ScannedEmergencyInfo['allergies']>([]);
-  const [originalConditions, setOriginalConditions] = useState<ScannedEmergencyInfo['conditions']>([]);
-  const [originalDiagnoses, setOriginalDiagnoses] = useState<ScannedEmergencyInfo['diagnoses']>([]);
-  const [originalMedications, setOriginalMedications] = useState<ScannedEmergencyInfo['medications']>([]);
-
-  const [medInfoForm, setMedInfoForm] = useState<MedInfoFormState>(EMPTY_MED_INFO_FORM);
-  const [medInfoInitial, setMedInfoInitial] = useState<MedInfoFormState>(EMPTY_MED_INFO_FORM);
-
-  const [transfusionWitnessed, setTransfusionWitnessed] = useState(true);
-  const [transfusionTouched, setTransfusionTouched] = useState(false);
-  const [transfusionNote, setTransfusionNote] = useState('');
-  const [generalNote, setGeneralNote] = useState('');
-
-  const [sending, setSending] = useState(false);
-  const [sentSuccessfully, setSentSuccessfully] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [sendMode, setSendMode] = useState<'ble' | 'internet' | null>(null);
-
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    };
-  }, []);
-
-  const resetAll = useCallback((pid: number, qrData: string) => {
-    setPatientId(pid);
-    setInfo(null);
-    setParseError(false);
-    setAllergies([]);
-    setConditions([]);
-    setDiagnoses([]);
-    setMedications([]);
-    setOriginalAllergies([]);
-    setOriginalConditions([]);
-    setOriginalDiagnoses([]);
-    setOriginalMedications([]);
-    setMedInfoForm(EMPTY_MED_INFO_FORM);
-    setMedInfoInitial(EMPTY_MED_INFO_FORM);
-    setTransfusionWitnessed(true);
-    setTransfusionTouched(false);
-    setTransfusionNote('');
-    setGeneralNote('');
-    setSending(false);
-    setSentSuccessfully(false);
-    setSyncError(null);
-    setSendMode(null);
-
-    parseEmergencySummary(qrData).then((parsed) => {
-      if (!parsed) {
-        setParseError(true);
-        return;
-      }
-      setInfo(parsed);
-      setOriginalAllergies(parsed.allergies);
-      setOriginalConditions(parsed.conditions);
-      setOriginalDiagnoses(parsed.diagnoses);
-      setOriginalMedications(parsed.medications);
-      const prefilled = medInfoFromScanned(parsed);
-      setMedInfoForm(prefilled);
-      setMedInfoInitial(prefilled);
-
-      // Fetch verification status (server + local pending, offline-aware)
-      getEffectiveVerificationSets(pid)
-        .then(({ verifiedAllergens, verifiedConditions, verifiedDiagnoses, verifiedMedications }) => {
-          setAllergies(initAllergies(parsed, verifiedAllergens));
-          setConditions(initConditions(parsed, verifiedConditions));
-          setDiagnoses(initDiagnoses(parsed, verifiedDiagnoses));
-          setMedications(initMedications(parsed, verifiedMedications));
-        })
-        .catch(() => {
-          // Fallback: initialize with empty verified sets
-          setAllergies(initAllergies(parsed));
-          setConditions(initConditions(parsed));
-          setDiagnoses(initDiagnoses(parsed));
-          setMedications(initMedications(parsed));
-        });
-    });
-  }, []);
+  useLayoutEffect(() => {
+    if (pendingPresentRef.current) {
+      pendingPresentRef.current = false;
+      sheetRef.current?.present();
+    }
+  });
 
   useImperativeHandle(ref, () => ({
     present: (pid: number, qrData: string) => {
-      resetAll(pid, qrData);
-      sheetRef.current?.present();
+      state.resetAll(pid, qrData);
+      pendingPresentRef.current = true;
     },
     dismiss: () => sheetRef.current?.dismiss(),
   }));
 
-  const setMedInfoField = useCallback(<K extends keyof MedInfoFormState>(key: K, value: MedInfoFormState[K]) => {
-    setMedInfoForm((prev) => ({ ...prev, [key]: value }));
-  }, []);
+  const handleDismiss = () => {
+    // No-op: allow natural dismiss
+  };
 
-  const setAllergy = useCallback((key: string, patch: Partial<ManageAllergy>) => {
-    setAllergies((prev) => prev.map((a) => (a.key === key ? { ...a, ...patch } : a)));
-  }, []);
-
-  const setCondition = useCallback((key: string, patch: Partial<ManageCondition>) => {
-    setConditions((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
-  }, []);
-
-  const setDiagnosis = useCallback((key: string, patch: Partial<ManageDiagnosis>) => {
-    setDiagnoses((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
-  }, []);
-
-  const setMedication = useCallback((key: string, patch: Partial<ManageMedication>) => {
-    setMedications((prev) => prev.map((m) => (m.key === key ? { ...m, ...patch } : m)));
-  }, []);
-
-  const handleAddAllergy = useCallback(() => {
-    const key = `a:new:${Date.now()}`;
-    setAllergies((prev) => [
-      { key, allergen: '', reaction: '', severity: 'mild', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
-      ...prev,
-    ]);
-  }, []);
-
-  const handleAddCondition = useCallback(() => {
-    const key = `c:new:${Date.now()}`;
-    setConditions((prev) => [
-      { key, description: '', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
-      ...prev,
-    ]);
-  }, []);
-
-  const handleAddDiagnosis = useCallback(() => {
-    const key = `d:new:${Date.now()}`;
-    setDiagnoses((prev) => [
-      { key, condition: '', dateOfDiagnosis: '', severity: 'chronic', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
-      ...prev,
-    ]);
-  }, []);
-
-  const handleAddMedication = useCallback(() => {
-    const key = `m:new:${Date.now()}`;
-    setMedications((prev) => [
-      { key, name: '', dosage: '', frequency: '', notes: '', isNew: true, deleted: false, editing: true, verifyToggle: true, verifyTouched: false },
-      ...prev,
-    ]);
-  }, []);
-
-  const handleEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
-    if (type === 'allergy') setAllergy(key, { editing: true });
-    else if (type === 'condition') setCondition(key, { editing: true });
-    else if (type === 'diagnosis') setDiagnosis(key, { editing: true });
-    else setMedication(key, { editing: true });
-  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
-
-  const handleCancelEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
-    if (type === 'allergy') setAllergy(key, { editing: false });
-    else if (type === 'condition') setCondition(key, { editing: false });
-    else if (type === 'diagnosis') setDiagnosis(key, { editing: false });
-    else setMedication(key, { editing: false });
-  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
-
-  const handleSaveEdit = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string) => {
-    if (type === 'allergy') setAllergy(key, { editing: false });
-    else if (type === 'condition') setCondition(key, { editing: false });
-    else if (type === 'diagnosis') setDiagnosis(key, { editing: false });
-    else setMedication(key, { editing: false });
-  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
-
-  const handleDelete = useCallback((type: 'allergy' | 'condition' | 'diagnosis' | 'medication', key: string, label: string) => {
-    Alert.alert(
-      `Remove ${label}?`,
-      `This will mark "${label}" for removal from the patient's record when you sync.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            if (type === 'allergy') setAllergy(key, { deleted: true, editing: false });
-            else if (type === 'condition') setCondition(key, { deleted: true, editing: false });
-            else if (type === 'diagnosis') setDiagnosis(key, { deleted: true, editing: false });
-            else setMedication(key, { deleted: true, editing: false });
-          },
-        },
-      ],
-    );
-  }, [setAllergy, setCondition, setDiagnosis, setMedication]);
-
-  const visibleAllergies = useMemo(() => allergies.filter((a) => !a.deleted), [allergies]);
-  const visibleConditions = useMemo(() => conditions.filter((c) => !c.deleted), [conditions]);
-  const visibleDiagnoses = useMemo(() => diagnoses.filter((d) => !d.deleted), [diagnoses]);
-  const visibleMedications = useMemo(() => medications.filter((m) => !m.deleted), [medications]);
-
-  const buildAllergyEnvelope = useCallback(
-    (item: ManageAllergy, action: 'create' | 'update' | 'delete' | 'revoke'): AllergyVerificationEnvelope => {
-      if (!user) throw new Error('Not authenticated');
-      const base = {
-        type: 'allergy_verification' as const,
-        version: 1 as const,
-        allergen: item.allergen,
-        reaction: item.reaction || null,
-        severity: item.severity,
-        verified_by: { user_id: user.id, name: user.fullname },
-        verified_at: new Date().toISOString(),
-      };
-      if (action === 'delete') return { ...base, note: '__delete__' };
-      if (action === 'revoke') return { ...base, note: '__unverify__' };
-      return base;
-    },
-    [user],
-  );
-
-  const buildConditionEnvelope = useCallback(
-    (item: ManageCondition, action: 'create' | 'update' | 'delete' | 'revoke'): ConditionVerificationEnvelope => {
-      if (!user) throw new Error('Not authenticated');
-      const base = {
-        type: 'condition_verification' as const,
-        version: 1 as const,
-        description: item.description,
-        verified_by: { user_id: user.id, name: user.fullname },
-        verified_at: new Date().toISOString(),
-      };
-      if (action === 'delete') return { ...base, note: '__delete__' };
-      if (action === 'revoke') return { ...base, note: '__unverify__' };
-      return base;
-    },
-    [user],
-  );
-
-  const buildDiagnosisEnvelope = useCallback(
-    (item: ManageDiagnosis, action: 'create' | 'update' | 'delete' | 'revoke'): DiagnosisVerificationEnvelope => {
-      if (!user) throw new Error('Not authenticated');
-      const base = {
-        type: 'diagnosis_verification' as const,
-        version: 1 as const,
-        condition: item.condition,
-        date_of_diagnosis: item.dateOfDiagnosis || null,
-        severity: item.severity,
-        verified_by: { user_id: user.id, name: user.fullname },
-        verified_at: new Date().toISOString(),
-      };
-      if (action === 'delete') return { ...base, note: '__delete__' };
-      if (action === 'revoke') return { ...base, note: '__unverify__' };
-      return base;
-    },
-    [user],
-  );
-
-  const buildMedicationEnvelope = useCallback(
-    (item: ManageMedication, action: 'create' | 'update' | 'delete' | 'revoke'): MedicationVerificationEnvelope => {
-      if (!user) throw new Error('Not authenticated');
-      const base = {
-        type: 'medication_verification' as const,
-        version: 1 as const,
-        name: item.name,
-        dosage: item.dosage,
-        frequency: item.frequency,
-        notes: item.notes || null,
-        verified_by: { user_id: user.id, name: user.fullname },
-        verified_at: new Date().toISOString(),
-      };
-      if (action === 'delete') return { ...base, note: '__delete__' };
-      if (action === 'revoke') return { ...base, note: '__unverify__' };
-      return base;
-    },
-    [user],
-  );
-
-  const buildMedInfoPatch = useCallback((): MedicalInformationPatch => {
-    const patch: MedicalInformationPatch = {};
-    if (medInfoForm.first_name !== medInfoInitial.first_name) patch.first_name = medInfoForm.first_name;
-    if (medInfoForm.middle_name !== medInfoInitial.middle_name) patch.middle_name = medInfoForm.middle_name || null;
-    if (medInfoForm.last_name !== medInfoInitial.last_name) patch.last_name = medInfoForm.last_name;
-    if (medInfoForm.suffix !== medInfoInitial.suffix) patch.suffix = medInfoForm.suffix ?? null;
-    if (medInfoForm.date_of_birth !== medInfoInitial.date_of_birth) patch.date_of_birth = medInfoForm.date_of_birth || null;
-    if (medInfoForm.gender !== medInfoInitial.gender) patch.gender = medInfoForm.gender ?? null;
-    if (medInfoForm.blood_type !== medInfoInitial.blood_type) patch.blood_type = medInfoForm.blood_type ?? null;
-    if (medInfoForm.religion !== medInfoInitial.religion) patch.religion = medInfoForm.religion ?? null;
-    if (JSON.stringify(medInfoForm.address) !== JSON.stringify(medInfoInitial.address)) patch.address = medInfoForm.address;
-    if (medInfoForm.phone !== medInfoInitial.phone) patch.phone = medInfoForm.phone || null;
-    if (medInfoForm.phone_country_code !== medInfoInitial.phone_country_code) patch.phone_country_code = medInfoForm.phone_country_code || null;
-    if (medInfoForm.no_blood_transfusion !== medInfoInitial.no_blood_transfusion) patch.no_blood_transfusion = medInfoForm.no_blood_transfusion;
-    return patch;
-  }, [medInfoForm, medInfoInitial]);
-
-  const computeChanges = useCallback((): Change[] => {
-    if (!user) return [];
-    const changes: Change[] = [];
-
-    for (const item of allergies) {
-      const orig = originalAllergies.find((a) => a.allergen === item.allergen);
-      if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildAllergyEnvelope(item, 'delete'), envelopeType: 'allergy_verification', label: item.allergen });
-      } else if (item.isNew) {
-        changes.push({ type: 'create', envelope: buildAllergyEnvelope(item, 'create'), envelopeType: 'allergy_verification', label: item.allergen });
-      } else if (orig && (orig.severity !== item.severity || (orig.reaction ?? '') !== item.reaction)) {
-        changes.push({ type: 'update', envelope: buildAllergyEnvelope(item, 'update'), envelopeType: 'allergy_verification', label: item.allergen });
-      } else if (item.verifyTouched) {
-        changes.push({
-          type: 'update',
-          envelope: buildAllergyEnvelope(item, item.verifyToggle ? 'update' : 'revoke'),
-          envelopeType: 'allergy_verification',
-          label: item.allergen,
-        });
-      }
-    }
-
-    for (const item of conditions) {
-      const orig = originalConditions.find((c) => c.description === item.description);
-      if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildConditionEnvelope(item, 'delete'), envelopeType: 'condition_verification', label: item.description });
-      } else if (item.isNew) {
-        changes.push({ type: 'create', envelope: buildConditionEnvelope(item, 'create'), envelopeType: 'condition_verification', label: item.description });
-      } else if (item.verifyTouched) {
-        changes.push({
-          type: 'update',
-          envelope: buildConditionEnvelope(item, item.verifyToggle ? 'update' : 'revoke'),
-          envelopeType: 'condition_verification',
-          label: item.description,
-        });
-      }
-    }
-
-    for (const item of diagnoses) {
-      const orig = originalDiagnoses.find((d) => d.condition === item.condition);
-      if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildDiagnosisEnvelope(item, 'delete'), envelopeType: 'diagnosis_verification', label: item.condition });
-      } else if (item.isNew) {
-        changes.push({ type: 'create', envelope: buildDiagnosisEnvelope(item, 'create'), envelopeType: 'diagnosis_verification', label: item.condition });
-      } else if (orig && (orig.severity !== item.severity || (orig.dateOfDiagnosis ?? '') !== item.dateOfDiagnosis)) {
-        changes.push({ type: 'update', envelope: buildDiagnosisEnvelope(item, 'update'), envelopeType: 'diagnosis_verification', label: item.condition });
-      } else if (item.verifyTouched) {
-        changes.push({
-          type: 'update',
-          envelope: buildDiagnosisEnvelope(item, item.verifyToggle ? 'update' : 'revoke'),
-          envelopeType: 'diagnosis_verification',
-          label: item.condition,
-        });
-      }
-    }
-
-    for (const item of medications) {
-      const orig = originalMedications.find((m) => m.name === item.name);
-      if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildMedicationEnvelope(item, 'delete'), envelopeType: 'medication_verification', label: item.name });
-      } else if (item.isNew) {
-        changes.push({ type: 'create', envelope: buildMedicationEnvelope(item, 'create'), envelopeType: 'medication_verification', label: item.name });
-      } else if (orig && (orig.dosage !== item.dosage || (orig.frequency ?? '') !== item.frequency)) {
-        changes.push({ type: 'update', envelope: buildMedicationEnvelope(item, 'update'), envelopeType: 'medication_verification', label: item.name });
-      } else if (item.verifyTouched) {
-        changes.push({
-          type: 'update',
-          envelope: buildMedicationEnvelope(item, item.verifyToggle ? 'update' : 'revoke'),
-          envelopeType: 'medication_verification',
-          label: item.name,
-        });
-      }
-    }
-
-    const patch = buildMedInfoPatch();
-    if (Object.keys(patch).length > 0) {
-      changes.push({
-        type: 'update',
-        envelope: { type: 'medical_information_update', version: 1, fields: patch, updated_by: { user_id: user.id, name: user.fullname }, updated_at: new Date().toISOString() },
-        envelopeType: 'medical_information_update',
-        label: 'Medical information',
-      });
-    }
-
-    if (transfusionTouched || transfusionNote.trim()) {
-      changes.push({
-        type: 'update',
-        envelope: {
-          type: 'transfusion_witness',
-          version: 1,
-          consent_value: transfusionWitnessed,
-          witnessed_by: { user_id: user.id, name: user.fullname },
-          witnessed_at: new Date().toISOString(),
-          ...(transfusionNote.trim() ? { note: transfusionNote.trim() } : {}),
-        },
-        envelopeType: 'transfusion_witness',
-        label: 'Transfusion witness',
-      });
-    }
-
-    if (generalNote.trim()) {
-      changes.push({
-        type: 'create',
-        envelope: {
-          type: 'general_note',
-          version: 1,
-          note: generalNote.trim(),
-          author: { user_id: user.id, name: user.fullname },
-          created_at: new Date().toISOString(),
-        },
-        envelopeType: 'general_note',
-        label: 'Note',
-      });
-    }
-
-    return changes;
-  }, [
-    user,
-    allergies,
-    conditions,
-    diagnoses,
-    medications,
-    originalAllergies,
-    originalConditions,
-    originalDiagnoses,
-    originalMedications,
-    buildAllergyEnvelope,
-    buildConditionEnvelope,
-    buildDiagnosisEnvelope,
-    buildMedicationEnvelope,
-    buildMedInfoPatch,
-    transfusionTouched,
-    transfusionWitnessed,
-    transfusionNote,
-    generalNote,
-  ]);
-
-  const changes = useMemo(() => computeChanges(), [computeChanges]);
-  const hasChanges = changes.length > 0;
-
-  const handleSendBle = useCallback(async () => {
-    if (!user || patientId === null) return;
-    setSending(true);
-    setSyncError(null);
-    setSendMode('ble');
-    try {
-      const pending = computeChanges();
-      if (pending.length === 0) {
-        sheetRef.current?.dismiss();
-        return;
-      }
-
-      const peer = await scanForPatient(patientId, 20000);
-      if (!peer) {
-        setSyncError('Could not find the patient device nearby. Make sure they have Bluetooth sync open.');
-        return;
-      }
-
-      for (const change of pending) {
-        const ciphertext = await seal(change.envelope, peer.publicKeyBase64);
-        const result = await connectAndSubmit(peer, change.envelopeType, ciphertext);
-        if (result !== 'acked') {
-          setSyncError(`"${change.label}" was not acknowledged by the patient device.`);
-          return;
-        }
-      }
-
-      setSentSuccessfully(true);
-      closeTimerRef.current = setTimeout(() => {
-        sheetRef.current?.dismiss();
-        onSuccess?.();
-      }, 1500);
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Bluetooth sync failed.');
-    } finally {
-      setSending(false);
-      setSendMode(null);
-    }
-  }, [user, patientId, computeChanges]);
-
-  const handleSendInternet = useCallback(async () => {
-    if (!user || patientId === null) return;
-    setSending(true);
-    setSyncError(null);
-    setSendMode('internet');
-    try {
-      const pending = computeChanges();
-      if (pending.length === 0) {
-        sheetRef.current?.dismiss();
-        return;
-      }
-
-      for (const change of pending) {
-        await submitEnvelope({ patientId, envelopeType: change.envelopeType, payload: change.envelope, itemIdentifier: change.label });
-      }
-
-      setSentSuccessfully(true);
-      closeTimerRef.current = setTimeout(() => {
-        sheetRef.current?.dismiss();
-        onSuccess?.();
-      }, 1500);
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Internet sync failed.');
-    } finally {
-      setSending(false);
-      setSendMode(null);
-    }
-  }, [user, patientId, computeChanges, submitEnvelope]);
-
-  let body: React.ReactNode;
-
-  if (parseError) {
-    body = (
-      <View className="items-center gap-4 py-8 px-6">
-        <ThemedText className="text-center">Could not read the patient&apos;s QR data.</ThemedText>
+  const body = state.parseError ? (
+    <View className="items-center gap-4 py-8 px-6">
+      <ThemedText className="text-center">Could not read the patient&apos;s QR data.</ThemedText>
+    </View>
+  ) : !state.info ? (
+    <View className="items-center gap-4 py-8 px-6">
+      <ThemedText className="text-center">Loading patient info…</ThemedText>
+    </View>
+  ) : state.sentSuccessfully ? (
+    <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
+      <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '20' }}>
+        <Ionicons name="checkmark-circle" size={36} color={theme.primary} />
       </View>
-    );
-  } else if (!info) {
-    body = (
-      <View className="items-center gap-4 py-8 px-6">
-        <ThemedText className="text-center">Loading patient info…</ThemedText>
-      </View>
-    );
-  } else if (sentSuccessfully) {
-    body = (
-      <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
-        <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '20' }}>
-          <Ionicons name="checkmark-circle" size={36} color={theme.primary} />
-        </View>
-        <ThemedText type="heading" className="text-center">Update sent</ThemedText>
-        <ThemedText type="caption" className="text-center">The patient will see this the next time their device syncs.</ThemedText>
-      </View>
-    );
-  } else if (sending) {
-    body = (
-      <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
-        <ActivityIndicator size="large" color={theme.primary} />
-        <ThemedText type="heading" className="text-center">
-          {sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Sending update…'}
+      <ThemedText type="heading" className="text-center">Update sent</ThemedText>
+      <ThemedText type="caption" className="text-center">The patient will see this the next time their device syncs.</ThemedText>
+    </View>
+  ) : state.sending ? (
+    <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
+      <ActivityIndicator size="large" color={theme.primary} />
+      <ThemedText type="heading" className="text-center">
+        {state.sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Sending update…'}
+      </ThemedText>
+    </View>
+  ) : (
+    <BottomSheetFormWrapper>
+      <Card className="mb-4 gap-1">
+        <ThemedText className="text-lg font-semibold">{state.info.name}</ThemedText>
+        <ThemedText type="small" color="mutedForeground">
+          {formatIsoDate(state.info.dateOfBirth)} · {GENDER_OPTIONS.includes(state.info.gender as Gender) ? GenderLabel[state.info.gender as Gender] : state.info.gender}
         </ThemedText>
-      </View>
-    );
-  } else {
-    body = (
-      <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40, paddingTop: 8 }}>
-        <View className="mb-3 flex-row items-center justify-between">
-          <ThemedText type="overline">Manage info</ThemedText>
-          <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={8}>
-            <Ionicons name="close" size={20} color={theme.mutedForeground} />
-          </Pressable>
-        </View>
+      </Card>
 
-        <Card className="mb-4 gap-1">
-          <ThemedText className="text-lg font-semibold">{info.name}</ThemedText>
-          <ThemedText type="small" color="mutedForeground">
-            {formatIsoDate(info.dateOfBirth)} · {GENDER_OPTIONS.includes(info.gender as Gender) ? GenderLabel[info.gender as Gender] : info.gender}
-          </ThemedText>
+      {state.syncError ? (
+        <Card className="mb-4" style={{ backgroundColor: theme.destructive + '15', borderColor: theme.destructive }}>
+          <ThemedText type="small" color="destructive">{state.syncError}</ThemedText>
         </Card>
+      ) : null}
 
-        {syncError ? (
-          <Card className="mb-4" style={{ backgroundColor: theme.destructive + '15', borderColor: theme.destructive }}>
-            <ThemedText type="small" color="destructive">{syncError}</ThemedText>
-          </Card>
-        ) : null}
+      <EmergencyContactsSection
+        items={state.visibleContacts}
+        itemErrors={state.itemErrors}
+        theme={theme}
+        sending={state.sending}
+        onAdd={state.handleAddContact}
+        onEdit={(key) => state.handleEdit('contact', key)}
+        onDelete={(key, label) => state.handleDelete('contact', key, label)}
+        onSave={(key) => state.handleSaveEdit('contact', key)}
+        onCancel={(key) => state.handleCancelEdit('contact', key)}
+        onUpdate={(key, patch) => { state.setContact(key, patch); state.clearItemError(key); }}
+      />
 
-        {/* Emergency contacts (read-only) */}
-        <View className="mb-6 gap-2">
-          <ThemedText type="overline">Emergency contacts</ThemedText>
-          {info.emergencyContacts.length === 0 ? (
-            <Card>
-              <ThemedText type="label" color="mutedForeground">None recorded.</ThemedText>
-            </Card>
-          ) : (
-            <Card className="p-0">
-              <View className="px-4">
-                {info.emergencyContacts.map((contact, i) => (
-                  <View key={i}>
-                    <InfoRow label="Name" value={contact.name} />
-                    {contact.relationship && (
-                      <InfoRow
-                        label="Relationship"
-                        value={
-                          RELATION_TO_PATIENT_OPTIONS.includes(contact.relationship as RelationToPatient)
-                            ? RelationToPatientLabel[contact.relationship as RelationToPatient]
-                            : contact.relationship
-                        }
-                      />
-                    )}
-                    {contact.phone && <InfoRow label="Phone" value={contact.phone} last={i === info.emergencyContacts.length - 1} />}
-                    {i < info.emergencyContacts.length - 1 && <View className="border-b border-border" />}
-                  </View>
-                ))}
-              </View>
-            </Card>
-          )}
-        </View>
+      <MedicalInfoFormSection form={state.medInfoForm} />
 
-        {/* Medical information */}
-        <View className="mb-6 gap-1">
-          <ThemedText type="overline" className="mb-2">Medical information</ThemedText>
-          <TextField label="First name" value={medInfoForm.first_name} onChangeText={(v) => setMedInfoField('first_name', v)} />
-          <TextField label="Middle name" value={medInfoForm.middle_name} onChangeText={(v) => setMedInfoField('middle_name', v)} />
-          <TextField label="Last name" value={medInfoForm.last_name} onChangeText={(v) => setMedInfoField('last_name', v)} />
-          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={medInfoForm.suffix} onChange={(v) => setMedInfoField('suffix', v)} allowClear getLabel={(v) => SuffixLabel[v]} />
-          <DateField label="Date of birth" value={medInfoForm.date_of_birth} onChange={(v) => setMedInfoField('date_of_birth', v)} maximumDate={new Date()} />
-          <SelectField placeholder="Gender" options={GENDER_OPTIONS} value={medInfoForm.gender} onChange={(v) => setMedInfoField('gender', v)} getLabel={(v) => GenderLabel[v]} />
-          <PhoneInput
-            value={{ countryCode: medInfoForm.phone_country_code, phone: medInfoForm.phone }}
-            onChange={(v) => { setMedInfoField('phone_country_code', v.countryCode); setMedInfoField('phone', v.phone); }}
-          />
-          <AddressFields value={medInfoForm.address} onChange={(v) => setMedInfoField('address', v)} />
-          <SelectField placeholder="Blood type" options={BLOOD_TYPE_OPTIONS} value={medInfoForm.blood_type} onChange={(v) => setMedInfoField('blood_type', v)} getLabel={(v) => BloodTypeLabel[v]} />
-          <SelectField placeholder="Religion" options={RELIGION_OPTIONS} value={medInfoForm.religion} onChange={(v) => setMedInfoField('religion', v)} allowClear getLabel={(v) => ReligionLabel[v]} />
-          <View className="mb-4 flex-row items-center justify-between">
-            <ThemedText>No blood transfusion</ThemedText>
-            <Switch value={medInfoForm.no_blood_transfusion} onValueChange={(v) => setMedInfoField('no_blood_transfusion', v)} />
-          </View>
-        </View>
+      <AllergiesSection
+        items={state.visibleAllergies}
+        itemErrors={state.itemErrors}
+        theme={theme}
+        sending={state.sending}
+        onAdd={state.handleAddAllergy}
+        onEdit={(key) => state.handleEdit('allergy', key)}
+        onDelete={(key, label) => state.handleDelete('allergy', key, label)}
+        onSave={(key) => state.handleSaveEdit('allergy', key)}
+        onCancel={(key) => state.handleCancelEdit('allergy', key)}
+        onUpdate={(key, patch) => { state.setAllergy(key, patch); state.clearItemError(key); }}
+      />
 
-        {/* Allergies */}
-        <View className="mb-6 gap-2">
-          <View className="flex-row items-center justify-between">
-            <ThemedText type="overline">Allergies</ThemedText>
-            <Pressable onPress={handleAddAllergy} hitSlop={8} disabled={sending}>
-              <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
-                <Ionicons name="add" size={16} color={theme.primaryForeground} />
-              </View>
-            </Pressable>
-          </View>
+      <ConditionsSection
+        items={state.visibleConditions}
+        itemErrors={state.itemErrors}
+        theme={theme}
+        sending={state.sending}
+        onAdd={state.handleAddCondition}
+        onEdit={(key) => state.handleEdit('condition', key)}
+        onDelete={(key, label) => state.handleDelete('condition', key, label)}
+        onSave={(key) => state.handleSaveEdit('condition', key)}
+        onCancel={(key) => state.handleCancelEdit('condition', key)}
+        onUpdate={(key, patch) => { state.setCondition(key, patch); state.clearItemError(key); }}
+      />
 
-          {visibleAllergies.length === 0 ? (
-            <Card>
-              <ThemedText type="label" color="mutedForeground">No allergies recorded for this patient.</ThemedText>
-            </Card>
-          ) : (
-            <Card className="p-0">
-              {visibleAllergies.map((item, i) => (
-                <View
-                  key={item.key}
-                  className="px-4 py-3"
-                  style={i < visibleAllergies.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
-                >
-                  {item.editing ? (
-                    <View className="gap-2">
-                      {item.isNew ? (
-                        <BottomSheetTextInput
-                          className="rounded-lg border px-3 py-2 text-base"
-                          style={{ borderColor: theme.input, color: theme.foreground }}
-                          placeholder="Allergen name"
-                          placeholderTextColor={theme.mutedForeground}
-                          value={item.allergen}
-                          onChangeText={(v) => setAllergy(item.key, { allergen: v })}
-                        />
-                      ) : null}
-                      <PickerField label="Severity" options={ALLERGY_SEVERITIES} value={item.severity} onChange={(v) => setAllergy(item.key, { severity: v })} getLabel={(v) => AllergySeverityLabel[v]} />
-                      <BottomSheetTextInput
-                        className="rounded-lg border px-3 py-2 text-base"
-                        style={{ borderColor: theme.input, color: theme.foreground }}
-                        placeholder="Reaction (optional)"
-                        placeholderTextColor={theme.mutedForeground}
-                        value={item.reaction}
-                        onChangeText={(v) => setAllergy(item.key, { reaction: v })}
-                      />
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setAllergy(item.key, { verifyToggle: v, verifyTouched: true })} />
-                      </View>
-                      <View className="flex-row gap-2">
-                        <PrimaryButton label="Save" onPress={() => handleSaveEdit('allergy', item.key)} className="flex-1" />
-                        <PrimaryButton label="Cancel" variant="ghost" onPress={() => handleCancelEdit('allergy', item.key)} className="flex-1" />
-                      </View>
-                    </View>
-                  ) : (
-                    <View className="gap-2">
-                      <View className="flex-row items-center gap-3">
-                        <SeverityIcon severity={item.severity} size={36} />
-                        <View className="flex-1 shrink">
-                          <ThemedText className="font-semibold">{item.allergen}</ThemedText>
-                          {item.reaction ? <ThemedText type="small" color="mutedForeground">{item.reaction}</ThemedText> : null}
-                        </View>
-                        <SeverityBadge severity={item.severity} />
-                        <Pressable onPress={() => handleEdit('allergy', item.key)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
-                        </Pressable>
-                        <Pressable onPress={() => handleDelete('allergy', item.key, item.allergen)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="trash-outline" size={20} color={theme.destructive} />
-                        </Pressable>
-                      </View>
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setAllergy(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
+      <DiagnosesSection
+        items={state.visibleDiagnoses}
+        itemErrors={state.itemErrors}
+        theme={theme}
+        sending={state.sending}
+        isVerifiedProfessional={state.isVerifiedProfessional}
+        onAdd={state.handleAddDiagnosis}
+        onEdit={(key) => state.handleEdit('diagnosis', key)}
+        onDelete={(key, label) => state.handleDelete('diagnosis', key, label)}
+        onSave={(key) => state.handleSaveEdit('diagnosis', key)}
+        onCancel={(key) => state.handleCancelEdit('diagnosis', key)}
+        onUpdate={(key, patch) => { state.setDiagnosis(key, patch); state.clearItemError(key); }}
+      />
 
-        {/* Conditions */}
-        <View className="mb-6 gap-2">
-          <View className="flex-row items-center justify-between">
-            <ThemedText type="overline">Conditions</ThemedText>
-            <Pressable onPress={handleAddCondition} hitSlop={8} disabled={sending}>
-              <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
-                <Ionicons name="add" size={16} color={theme.primaryForeground} />
-              </View>
-            </Pressable>
-          </View>
+      <MedicationsSection
+        items={state.visibleMedications}
+        itemErrors={state.itemErrors}
+        theme={theme}
+        sending={state.sending}
+        onAdd={state.handleAddMedication}
+        onEdit={(key) => state.handleEdit('medication', key)}
+        onDelete={(key, label) => state.handleDelete('medication', key, label)}
+        onSave={(key) => state.handleSaveEdit('medication', key)}
+        onCancel={(key) => state.handleCancelEdit('medication', key)}
+        onUpdate={(key, patch) => { state.setMedication(key, patch); state.clearItemError(key); }}
+      />
 
-          {visibleConditions.length === 0 ? (
-            <Card>
-              <ThemedText type="label" color="mutedForeground">No conditions recorded for this patient.</ThemedText>
-            </Card>
-          ) : (
-            <Card className="p-0">
-              {visibleConditions.map((item, i) => (
-                <View
-                  key={item.key}
-                  className="px-4 py-3"
-                  style={i < visibleConditions.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
-                >
-                  {item.editing ? (
-                    <View className="gap-2">
-                      {item.isNew ? (
-                        <BottomSheetTextInput
-                          className="rounded-lg border px-3 py-2 text-base"
-                          style={{ borderColor: theme.input, color: theme.foreground }}
-                          placeholder="Condition description"
-                          placeholderTextColor={theme.mutedForeground}
-                          value={item.description}
-                          onChangeText={(v) => setCondition(item.key, { description: v })}
-                          multiline
-                        />
-                      ) : null}
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setCondition(item.key, { verifyToggle: v, verifyTouched: true })} />
-                      </View>
-                      <View className="flex-row gap-2">
-                        <PrimaryButton label="Save" onPress={() => handleSaveEdit('condition', item.key)} className="flex-1" />
-                        <PrimaryButton label="Cancel" variant="ghost" onPress={() => handleCancelEdit('condition', item.key)} className="flex-1" />
-                      </View>
-                    </View>
-                  ) : (
-                    <View className="gap-2">
-                      <View className="flex-row items-center gap-3">
-                        <View className="flex-1 shrink">
-                          <ThemedText className="font-semibold">{item.description}</ThemedText>
-                        </View>
-                        <Pressable onPress={() => handleEdit('condition', item.key)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
-                        </Pressable>
-                        <Pressable onPress={() => handleDelete('condition', item.key, item.description)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="trash-outline" size={20} color={theme.destructive} />
-                        </Pressable>
-                      </View>
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setCondition(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
+      <TransfusionWitnessSection
+        witnessed={state.transfusionWitnessed}
+        note={state.transfusionNote}
+        onWitnessedChange={(v) => { state.setTransfusionWitnessed(v); state.setTransfusionTouched(true); }}
+        onNoteChange={state.setTransfusionNote}
+      />
 
-        {/* Diagnoses */}
-        <View className="mb-6 gap-2">
-          <View className="flex-row items-center justify-between">
-            <ThemedText type="overline">Diagnoses</ThemedText>
-            <Pressable onPress={handleAddDiagnosis} hitSlop={8} disabled={sending}>
-              <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
-                <Ionicons name="add" size={16} color={theme.primaryForeground} />
-              </View>
-            </Pressable>
-          </View>
+      <GeneralNoteSection note={state.generalNote} onNoteChange={state.setGeneralNote} />
 
-          {visibleDiagnoses.length === 0 ? (
-            <Card>
-              <ThemedText type="label" color="mutedForeground">No diagnoses recorded for this patient.</ThemedText>
-            </Card>
-          ) : (
-            <Card className="p-0">
-              {visibleDiagnoses.map((item, i) => (
-                <View
-                  key={item.key}
-                  className="px-4 py-3"
-                  style={i < visibleDiagnoses.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
-                >
-                  {item.editing ? (
-                    <View className="gap-2">
-                      {item.isNew ? (
-                        <BottomSheetTextInput
-                          className="rounded-lg border px-3 py-2 text-base"
-                          style={{ borderColor: theme.input, color: theme.foreground }}
-                          placeholder="Condition name"
-                          placeholderTextColor={theme.mutedForeground}
-                          value={item.condition}
-                          onChangeText={(v) => setDiagnosis(item.key, { condition: v })}
-                        />
-                      ) : null}
-                      <PickerField label="Severity" options={DIAGNOSIS_SEVERITIES} value={item.severity} onChange={(v) => setDiagnosis(item.key, { severity: v })} getLabel={(v) => DiagnosisSeverityLabel[v]} />
-                      <BottomSheetTextInput
-                        className="rounded-lg border px-3 py-2 text-base"
-                        style={{ borderColor: theme.input, color: theme.foreground }}
-                        placeholder="Date of diagnosis (optional)"
-                        placeholderTextColor={theme.mutedForeground}
-                        value={item.dateOfDiagnosis}
-                        onChangeText={(v) => setDiagnosis(item.key, { dateOfDiagnosis: v })}
-                      />
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setDiagnosis(item.key, { verifyToggle: v, verifyTouched: true })} />
-                      </View>
-                      <View className="flex-row gap-2">
-                        <PrimaryButton label="Save" onPress={() => handleSaveEdit('diagnosis', item.key)} className="flex-1" />
-                        <PrimaryButton label="Cancel" variant="ghost" onPress={() => handleCancelEdit('diagnosis', item.key)} className="flex-1" />
-                      </View>
-                    </View>
-                  ) : (
-                    <View className="gap-2">
-                      <View className="flex-row items-center gap-3">
-                        <DiagnosisSeverityIcon severity={item.severity} size={36} />
-                        <View className="flex-1 shrink">
-                          <ThemedText className="font-semibold">{item.condition}</ThemedText>
-                          {item.dateOfDiagnosis ? <ThemedText type="small" color="mutedForeground">Diagnosed {formatIsoDate(item.dateOfDiagnosis)}</ThemedText> : null}
-                        </View>
-                        <DiagnosisSeverityBadge severity={item.severity} />
-                        <Pressable onPress={() => handleEdit('diagnosis', item.key)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
-                        </Pressable>
-                        <Pressable onPress={() => handleDelete('diagnosis', item.key, item.condition)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="trash-outline" size={20} color={theme.destructive} />
-                        </Pressable>
-                      </View>
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setDiagnosis(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        {/* Medications */}
-        <View className="mb-6 gap-2">
-          <View className="flex-row items-center justify-between">
-            <ThemedText type="overline">Medications</ThemedText>
-            <Pressable onPress={handleAddMedication} hitSlop={8} disabled={sending}>
-              <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary }}>
-                <Ionicons name="add" size={16} color={theme.primaryForeground} />
-              </View>
-            </Pressable>
-          </View>
-
-          {visibleMedications.length === 0 ? (
-            <Card>
-              <ThemedText type="label" color="mutedForeground">No medications recorded for this patient.</ThemedText>
-            </Card>
-          ) : (
-            <Card className="p-0">
-              {visibleMedications.map((item, i) => (
-                <View
-                  key={item.key}
-                  className="px-4 py-3"
-                  style={i < visibleMedications.length - 1 ? { borderBottomWidth: 1, borderBottomColor: theme.border } : undefined}
-                >
-                  {item.editing ? (
-                    <View className="gap-2">
-                      {item.isNew ? (
-                        <BottomSheetTextInput
-                          className="rounded-lg border px-3 py-2 text-base"
-                          style={{ borderColor: theme.input, color: theme.foreground }}
-                          placeholder="Medication name"
-                          placeholderTextColor={theme.mutedForeground}
-                          value={item.name}
-                          onChangeText={(v) => setMedication(item.key, { name: v })}
-                        />
-                      ) : null}
-                      <BottomSheetTextInput
-                        className="rounded-lg border px-3 py-2 text-base"
-                        style={{ borderColor: theme.input, color: theme.foreground }}
-                        placeholder="Dosage (e.g. 500mg)"
-                        placeholderTextColor={theme.mutedForeground}
-                        value={item.dosage}
-                        onChangeText={(v) => setMedication(item.key, { dosage: v })}
-                      />
-                      <BottomSheetTextInput
-                        className="rounded-lg border px-3 py-2 text-base"
-                        style={{ borderColor: theme.input, color: theme.foreground }}
-                        placeholder="Frequency (e.g. Twice daily)"
-                        placeholderTextColor={theme.mutedForeground}
-                        value={item.frequency}
-                        onChangeText={(v) => setMedication(item.key, { frequency: v })}
-                      />
-                      <BottomSheetTextInput
-                        className="rounded-lg border px-3 py-2 text-base"
-                        style={{ borderColor: theme.input, color: theme.foreground }}
-                        placeholder="Notes (optional)"
-                        placeholderTextColor={theme.mutedForeground}
-                        value={item.notes}
-                        onChangeText={(v) => setMedication(item.key, { notes: v })}
-                      />
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setMedication(item.key, { verifyToggle: v, verifyTouched: true })} />
-                      </View>
-                      <View className="flex-row gap-2">
-                        <PrimaryButton label="Save" onPress={() => handleSaveEdit('medication', item.key)} className="flex-1" />
-                        <PrimaryButton label="Cancel" variant="ghost" onPress={() => handleCancelEdit('medication', item.key)} className="flex-1" />
-                      </View>
-                    </View>
-                  ) : (
-                    <View className="gap-2">
-                      <View className="flex-row items-center gap-3">
-                        <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
-                          <Ionicons name="medical" size={18} color={theme.primary} />
-                        </View>
-                        <View className="flex-1 shrink">
-                          <ThemedText className="font-semibold">{item.name}</ThemedText>
-                          {item.dosage || item.frequency ? (
-                            <ThemedText type="small" color="mutedForeground">
-                              {[item.dosage, item.frequency].filter(Boolean).join(' · ')}
-                            </ThemedText>
-                          ) : null}
-                        </View>
-                        <Pressable onPress={() => handleEdit('medication', item.key)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="pencil" size={20} color={theme.mutedForeground} />
-                        </Pressable>
-                        <Pressable onPress={() => handleDelete('medication', item.key, item.name)} hitSlop={6} disabled={sending}>
-                          <Ionicons name="trash-outline" size={20} color={theme.destructive} />
-                        </Pressable>
-                      </View>
-                      <View className="flex-row items-center justify-between">
-                        <ThemedText type="small" color="mutedForeground">Mark as verified</ThemedText>
-                        <Switch value={item.verifyToggle} onValueChange={(v) => setMedication(item.key, { verifyToggle: v, verifyTouched: true })} disabled={sending} />
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </Card>
-          )}
-        </View>
-
-        {/* Transfusion witness */}
-        <View className="mb-6 gap-2">
-          <ThemedText type="overline">Transfusion witness</ThemedText>
-          <Card className="flex-row items-center justify-between">
-            <ThemedText>Patient consents to transfusion</ThemedText>
-            <Switch
-              value={transfusionWitnessed}
-              onValueChange={(v) => { setTransfusionWitnessed(v); setTransfusionTouched(true); }}
-            />
-          </Card>
-          <TextField label="Note (optional)" value={transfusionNote} onChangeText={setTransfusionNote} multiline />
-        </View>
-
-        {/* General note */}
-        <View className="mb-2 gap-2">
-          <ThemedText type="overline">General note</ThemedText>
-          <TextField label="Note (optional)" value={generalNote} onChangeText={setGeneralNote} multiline />
-        </View>
-
-        <View className="mt-2 gap-3">
-          <PrimaryButton
-            label={sendMode === 'ble' ? 'Syncing via Bluetooth…' : 'Send via Bluetooth'}
-            loading={sendMode === 'ble'}
-            disabled={sending || !hasChanges}
-            onPress={() => void handleSendBle()}
-          />
-          <PrimaryButton
-            label={sendMode === 'internet' ? 'Sending via internet…' : 'Send via internet (beta)'}
-            variant="ghost"
-            loading={sendMode === 'internet'}
-            disabled={sending || !hasChanges}
-            onPress={() => void handleSendInternet()}
-          />
-        </View>
-      </BottomSheetScrollView>
-    );
-  }
+      <SyncActionButtons
+        sendMode={state.sendMode}
+        sending={state.sending}
+        hasChanges={state.hasFormChanges}
+        onSendBle={() => void state.handleSendBle(sheetRef, onSuccess)}
+        onSendInternet={() => void state.handleSendInternet(sheetRef, onSuccess)}
+      />
+    </BottomSheetFormWrapper>
+  );
 
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['90%']}
+      snapPoints={['50%', '90%']}
       enableDynamicSizing={false}
-      backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
-      handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
+      backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
+      handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
+      onDismiss={handleDismiss}
     >
       {body}
     </BottomSheetModal>
