@@ -27,6 +27,243 @@ import { registerSchema } from '@/lib/validation/register-schema';
 import { registrationMedicalInfoSchema, registrationAddressSchema } from '@/lib/validation/registration-medical-info-schema';
 import { useTheme } from '@/hooks/use-theme';
 
+type StepIndicatorProps = {
+  step: number;
+  activeColor: string;
+  inactiveColor: string;
+};
+
+function StepIndicator({ step, activeColor, inactiveColor }: StepIndicatorProps) {
+  return (
+    <View className="mb-2 flex-row items-center justify-center gap-1.5">
+      {['step-0', 'step-1', 'step-2'].map((id, i) => (
+        <View
+          key={id}
+          className="h-1 flex-1 rounded-full"
+          style={{ backgroundColor: i <= step ? activeColor : inactiveColor }}
+        />
+      ))}
+    </View>
+  );
+}
+
+type Step0ContentProps = {
+  firstName: string;
+  setFirstName: (v: string) => void;
+  middleName: string;
+  setMiddleName: (v: string) => void;
+  lastName: string;
+  setLastName: (v: string) => void;
+  suffix: Suffix | undefined;
+  setSuffix: (v: Suffix | undefined) => void;
+  email: string;
+  setEmail: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  passwordConfirmation: string;
+  setPasswordConfirmation: (v: string) => void;
+  fieldErrors: Record<string, string>;
+  friendlyMessage: string | null;
+  onNext: () => void;
+};
+
+function Step0Content({
+  firstName, setFirstName,
+  middleName, setMiddleName,
+  lastName, setLastName,
+  suffix, setSuffix,
+  email, setEmail,
+  password, setPassword,
+  passwordConfirmation, setPasswordConfirmation,
+  fieldErrors, friendlyMessage, onNext,
+}: Step0ContentProps) {
+  return (
+    <>
+      <ThemedText type="overline" className="mb-3">
+        Your name
+      </ThemedText>
+      <TextField label="First name" leftIcon="person-outline" value={firstName} onChangeText={setFirstName} error={fieldErrors.firstName} />
+      <TextField label="Middle name" leftIcon="person-outline" value={middleName} onChangeText={setMiddleName} />
+      <TextField label="Last name" leftIcon="person-outline" value={lastName} onChangeText={setLastName} error={fieldErrors.lastName} />
+      <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={suffix} onChange={setSuffix} allowClear getLabel={(v) => SuffixLabel[v]} />
+
+      <ThemedText type="overline" className="mb-3 mt-4">
+        Account credentials
+      </ThemedText>
+      <TextField
+        label="Email"
+        leftIcon="mail-outline"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        error={fieldErrors.email}
+      />
+      <PasswordField label="Password" value={password} onChangeText={setPassword} error={fieldErrors.password} />
+      <PasswordField
+        label="Confirm password"
+        value={passwordConfirmation}
+        onChangeText={setPasswordConfirmation}
+        error={fieldErrors.passwordConfirmation}
+      />
+
+      <FormError message={friendlyMessage} />
+      <PrimaryButton label="Next" onPress={onNext} />
+    </>
+  );
+}
+
+type Step1ContentProps = {
+  dateOfBirth: string;
+  setDateOfBirth: (v: string) => void;
+  gender: Gender | undefined;
+  setGender: (v: Gender | undefined) => void;
+  phoneValue: PhoneInputValue;
+  setPhoneValue: (v: PhoneInputValue) => void;
+  fieldErrors: Record<string, string>;
+  friendlyMessage: string | null;
+  onNext: () => void;
+  onBack: () => void;
+};
+
+function Step1Content({
+  dateOfBirth, setDateOfBirth,
+  gender, setGender,
+  phoneValue, setPhoneValue,
+  fieldErrors, friendlyMessage, onNext, onBack,
+}: Step1ContentProps) {
+  return (
+    <>
+      <ThemedText type="overline" className="mb-3">
+        Identity & contact
+      </ThemedText>
+      <DateField
+        label="Date of birth"
+        value={dateOfBirth}
+        onChange={setDateOfBirth}
+        maximumDate={new Date()}
+        error={fieldErrors.date_of_birth}
+      />
+      <SelectField
+        placeholder="Gender"
+        options={GENDER_OPTIONS}
+        value={gender}
+        onChange={setGender}
+        error={fieldErrors.gender}
+        getLabel={(v) => GenderLabel[v]}
+      />
+      <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
+
+      <FormError message={friendlyMessage} />
+      <PrimaryButton label="Next" onPress={onNext} />
+      <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
+    </>
+  );
+}
+
+type Step2ContentProps = {
+  medicalAddress: MedicalInformationAddress;
+  setMedicalAddress: (v: MedicalInformationAddress) => void;
+  bloodType: BloodType | undefined;
+  setBloodType: (v: BloodType | undefined) => void;
+  religion: Religion | undefined;
+  setReligion: (v: Religion | undefined) => void;
+  noBloodTransfusion: boolean;
+  setNoBloodTransfusion: (v: boolean) => void;
+  acceptedTerms: boolean;
+  setAcceptedTerms: (v: boolean | ((prev: boolean) => boolean)) => void;
+  fieldErrors: Record<string, string>;
+  friendlyMessage: string | null;
+  isPending: boolean;
+  onSubmit: () => void;
+  onBack: () => void;
+  router: ReturnType<typeof useRouter>;
+  theme: ReturnType<typeof useTheme>;
+};
+
+function Step2Content({
+  medicalAddress, setMedicalAddress,
+  bloodType, setBloodType,
+  religion, setReligion,
+  noBloodTransfusion, setNoBloodTransfusion,
+  acceptedTerms, setAcceptedTerms,
+  fieldErrors, friendlyMessage, isPending, onSubmit, onBack, router, theme,
+}: Step2ContentProps) {
+  return (
+    <>
+      <ThemedText type="overline" className="mb-3">
+        Medical details
+      </ThemedText>
+      <AddressFields
+        value={medicalAddress}
+        onChange={setMedicalAddress}
+        errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
+        disabled={isPending}
+      />
+      <SelectField
+        placeholder="Blood type"
+        options={BLOOD_TYPE_OPTIONS}
+        value={bloodType}
+        onChange={setBloodType}
+        getLabel={(v) => BloodTypeLabel[v]}
+        disabled={isPending}
+      />
+      <SelectField
+        placeholder="Religion"
+        options={RELIGION_OPTIONS}
+        value={religion}
+        onChange={setReligion}
+        allowClear
+        getLabel={(v) => ReligionLabel[v]}
+        disabled={isPending}
+      />
+      <View className="mb-4 flex-row items-center justify-between">
+        <ThemedText>No blood transfusion</ThemedText>
+        <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} disabled={isPending} />
+      </View>
+
+      <Pressable
+        className="mb-2 flex-row items-start gap-3"
+        onPress={() => setAcceptedTerms((v) => !v)}
+        disabled={isPending}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: acceptedTerms }}
+        style={isPending ? { opacity: 0.6 } : undefined}
+      >
+        <Ionicons
+          name={acceptedTerms ? 'checkmark-circle' : 'checkmark-circle-outline'}
+          size={22}
+          color={acceptedTerms ? theme.primary : theme.mutedForeground}
+          style={{ marginTop: 1 }}
+        />
+        <ThemedText type="body" color="mutedForeground" className="flex-1">
+          I have read and agree to the{' '}
+          <ThemedText
+            type="linkPrimary"
+            onPress={(e) => {
+              if (isPending) return;
+              e.stopPropagation?.();
+              router.push('/terms');
+            }}
+            style={isPending ? { opacity: 0.6 } : undefined}
+          >
+            Terms of Service
+          </ThemedText>
+        </ThemedText>
+      </Pressable>
+      {fieldErrors.terms ? (
+        <ThemedText type="small" color="destructive" className="mb-2 pl-8">
+          {fieldErrors.terms}
+        </ThemedText>
+      ) : null}
+
+      <FormError message={friendlyMessage} />
+      <PrimaryButton label="Create account" loading={isPending} onPress={onSubmit} />
+      <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
+    </>
+  );
+}
+
 export default function RegisterScreen() {
   const { mutateAsync: register, isPending } = useRegister();
   const router = useRouter();
@@ -229,155 +466,54 @@ export default function RegisterScreen() {
         </ThemedText>
       </View>
 
-      <View className="mb-2 flex-row items-center justify-center gap-1.5">
-        {[0, 1, 2].map((i) => (
-          <View
-            key={i}
-            className="h-1 flex-1 rounded-full"
-            style={{ backgroundColor: i <= step ? theme.primary : theme.muted }}
-          />
-        ))}
-      </View>
+      <StepIndicator step={step} activeColor={theme.primary} inactiveColor={theme.muted} />
 
       <ThemedText type="caption" color="mutedForeground" className="mb-6 text-center">
         Step {step + 1} of 3
       </ThemedText>
 
       {step === 0 && (
-        <>
-          <ThemedText type="overline" className="mb-3">
-            Your name
-          </ThemedText>
-          <TextField label="First name" leftIcon="person-outline" value={firstName} onChangeText={setFirstName} error={fieldErrors.firstName} />
-          <TextField label="Middle name" leftIcon="person-outline" value={middleName} onChangeText={setMiddleName} />
-          <TextField label="Last name" leftIcon="person-outline" value={lastName} onChangeText={setLastName} error={fieldErrors.lastName} />
-          <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={suffix} onChange={setSuffix} allowClear getLabel={(v) => SuffixLabel[v]} />
-
-          <ThemedText type="overline" className="mb-3 mt-4">
-            Account credentials
-          </ThemedText>
-          <TextField
-            label="Email"
-            leftIcon="mail-outline"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            error={fieldErrors.email}
-          />
-          <PasswordField label="Password" value={password} onChangeText={setPassword} error={fieldErrors.password} />
-          <PasswordField
-            label="Confirm password"
-            value={passwordConfirmation}
-            onChangeText={setPasswordConfirmation}
-            error={fieldErrors.passwordConfirmation}
-          />
-
-          <FormError message={friendlyMessage} />
-          <PrimaryButton label="Next" onPress={onNext} />
-        </>
+        <Step0Content
+          firstName={firstName} setFirstName={setFirstName}
+          middleName={middleName} setMiddleName={setMiddleName}
+          lastName={lastName} setLastName={setLastName}
+          suffix={suffix} setSuffix={setSuffix}
+          email={email} setEmail={setEmail}
+          password={password} setPassword={setPassword}
+          passwordConfirmation={passwordConfirmation} setPasswordConfirmation={setPasswordConfirmation}
+          fieldErrors={fieldErrors}
+          friendlyMessage={friendlyMessage}
+          onNext={onNext}
+        />
       )}
 
       {step === 1 && (
-        <>
-          <ThemedText type="overline" className="mb-3">
-            Identity & contact
-          </ThemedText>
-          <DateField
-            label="Date of birth"
-            value={dateOfBirth}
-            onChange={setDateOfBirth}
-            maximumDate={new Date()}
-            error={fieldErrors.date_of_birth}
-          />
-          <SelectField
-            placeholder="Gender"
-            options={GENDER_OPTIONS}
-            value={gender}
-            onChange={setGender}
-            error={fieldErrors.gender}
-            getLabel={(v) => GenderLabel[v]}
-          />
-          <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phoneNumber || fieldErrors.phone_country_code} />
-
-          <FormError message={friendlyMessage} />
-          <PrimaryButton label="Next" onPress={onNext} />
-          <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
-        </>
+        <Step1Content
+          dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
+          gender={gender} setGender={setGender}
+          phoneValue={phoneValue} setPhoneValue={setPhoneValue}
+          fieldErrors={fieldErrors}
+          friendlyMessage={friendlyMessage}
+          onNext={onNext}
+          onBack={onBack}
+        />
       )}
 
       {step === 2 && (
-        <>
-          <ThemedText type="overline" className="mb-3">
-            Medical details
-          </ThemedText>
-          <AddressFields
-            value={medicalAddress}
-            onChange={setMedicalAddress}
-            errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
-            disabled={isPending}
-          />
-          <SelectField
-            placeholder="Blood type"
-            options={BLOOD_TYPE_OPTIONS}
-            value={bloodType}
-            onChange={setBloodType}
-            getLabel={(v) => BloodTypeLabel[v]}
-            disabled={isPending}
-          />
-          <SelectField
-            placeholder="Religion"
-            options={RELIGION_OPTIONS}
-            value={religion}
-            onChange={setReligion}
-            allowClear
-            getLabel={(v) => ReligionLabel[v]}
-            disabled={isPending}
-          />
-          <View className="mb-4 flex-row items-center justify-between">
-            <ThemedText>No blood transfusion</ThemedText>
-            <Switch value={noBloodTransfusion} onValueChange={setNoBloodTransfusion} disabled={isPending} />
-          </View>
-
-          <Pressable
-            className="mb-2 flex-row items-start gap-3"
-            onPress={() => setAcceptedTerms((v) => !v)}
-            disabled={isPending}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: acceptedTerms }}
-            style={isPending ? { opacity: 0.6 } : undefined}
-          >
-            <Ionicons
-              name={acceptedTerms ? 'checkmark-circle' : 'checkmark-circle-outline'}
-              size={22}
-              color={acceptedTerms ? theme.primary : theme.mutedForeground}
-              style={{ marginTop: 1 }}
-            />
-            <ThemedText type="body" color="mutedForeground" className="flex-1">
-              I have read and agree to the{' '}
-              <ThemedText
-                type="linkPrimary"
-                onPress={(e) => {
-                  if (isPending) return;
-                  e.stopPropagation?.();
-                  router.push('/terms');
-                }}
-                style={isPending ? { opacity: 0.6 } : undefined}
-              >
-                Terms of Service
-              </ThemedText>
-            </ThemedText>
-          </Pressable>
-          {fieldErrors.terms ? (
-            <ThemedText type="small" color="destructive" className="mb-2 pl-8">
-              {fieldErrors.terms}
-            </ThemedText>
-          ) : null}
-
-          <FormError message={friendlyMessage} />
-          <PrimaryButton label="Create account" loading={isPending} onPress={onSubmit} />
-          <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
-        </>
+        <Step2Content
+          medicalAddress={medicalAddress} setMedicalAddress={setMedicalAddress}
+          bloodType={bloodType} setBloodType={setBloodType}
+          religion={religion} setReligion={setReligion}
+          noBloodTransfusion={noBloodTransfusion} setNoBloodTransfusion={setNoBloodTransfusion}
+          acceptedTerms={acceptedTerms} setAcceptedTerms={setAcceptedTerms}
+          fieldErrors={fieldErrors}
+          friendlyMessage={friendlyMessage}
+          isPending={isPending}
+          onSubmit={onSubmit}
+          onBack={onBack}
+          router={router}
+          theme={theme}
+        />
       )}
 
       <Link href="/" className="mt-6 self-center">

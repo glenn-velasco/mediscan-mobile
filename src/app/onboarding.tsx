@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { FlatList, Pressable, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,36 +36,33 @@ export default function OnboardingScreen() {
 
   const slidePadding = Math.min(Math.round(width * 0.08), 40);
 
-  const onMomentumScrollEnd = useCallback((e: { nativeEvent: { contentOffset: { x: number } } }) => {
+  const onMomentumScrollEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
-  }, [width]);
+  };
 
-  const goNext = useCallback(() => {
+  const goNext = () => {
     if (index < SLIDES.length - 1) {
       flatListRef.current?.scrollToOffset({ offset: (index + 1) * width, animated: true });
       setIndex(index + 1);
     } else {
       void complete();
     }
-  }, [index, width, complete]);
+  };
 
   const isLast = index === SLIDES.length - 1;
 
-  const renderSlide = useCallback(
-    ({ item }: { item: (typeof SLIDES)[number] }) => (
-      <View style={{ width, paddingHorizontal: slidePadding }} className="items-center justify-center">
-        <View className="mb-8 h-20 w-20 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '1a' }}>
-          <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={36} color={theme.primary} />
-        </View>
-        <ThemedText type="title" className="mb-3 text-center">
-          {item.title}
-        </ThemedText>
-        <ThemedText type="body" color="mutedForeground" className="text-center">
-          {item.body}
-        </ThemedText>
+  const renderSlide = ({ item }: { item: (typeof SLIDES)[number] }) => (
+    <View style={{ width, paddingHorizontal: slidePadding }} className="items-center justify-center">
+      <View className="mb-8 h-20 w-20 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '1a' }}>
+        <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={36} color={theme.primary} />
       </View>
-    ),
-    [width, slidePadding, theme.primary],
+      <ThemedText type="title" className="mb-3 text-center">
+        {item.title}
+      </ThemedText>
+      <ThemedText type="body" color="mutedForeground" className="text-center">
+        {item.body}
+      </ThemedText>
+    </View>
   );
 
   return (
@@ -90,9 +87,9 @@ export default function OnboardingScreen() {
       />
 
       <View className="mb-8 flex-row items-center justify-center gap-2">
-        {SLIDES.map((_, i) => (
+        {SLIDES.map((slide, i) => (
           <View
-            key={i}
+            key={slide.title}
             className={i === index ? 'h-2 w-6 rounded-full' : 'h-2 w-2 rounded-full'}
             style={{ backgroundColor: i === index ? theme.primary : theme.muted }}
           />

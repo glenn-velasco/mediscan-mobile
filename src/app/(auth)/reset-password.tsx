@@ -53,7 +53,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <AuthLayout>
-      <ThemedText className="mb-8 text-center text-2xl font-semibold">Choose a new password</ThemedText>
+      <ThemedText type="authTitle" className="mb-8 text-center">Choose a new password</ThemedText>
 
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
       <PasswordField label="New password" value={password} onChangeText={setPassword} error={validationErrors.password} />

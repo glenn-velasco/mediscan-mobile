@@ -43,11 +43,11 @@ export default function ForgotPasswordScreen() {
 
   return (
     <AuthLayout>
-      <ThemedText className="mb-8 text-center text-2xl font-semibold">Reset your password</ThemedText>
+      <ThemedText type="authTitle" className="mb-8 text-center">Reset your password</ThemedText>
 
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" error={validationErrors.email} />
 
-      {successMessage ? <ThemedText className="mb-2" style={{ color: theme.success }}>{successMessage}</ThemedText> : null}
+      {successMessage ? <ThemedText className="mb-2" color="success">{successMessage}</ThemedText> : null}
       <FormError message={message} />
 
       <PrimaryButton label="Send reset link" loading={isPending} onPress={onSubmit} className="mt-2" />

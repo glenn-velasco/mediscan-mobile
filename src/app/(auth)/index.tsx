@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -44,7 +45,7 @@ export default function LoginScreen() {
       <View className="mb-10 items-center">
         <Image
           source={require('@/assets/images/mediscan-logo.png')}
-          resizeMode="contain"
+          contentFit="contain"
           style={{ width: 220, height: 91, marginBottom: 12 }}
           accessibilityLabel="MediScan"
         />

@@ -1,21 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/auth/useAuth';
 import { Card } from '@/components/card';
 import { ThemedText } from '@/components/themed-text';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
-import { useAllergies } from '@/features/allergies/useAllergies';
-import { useConditions } from '@/features/conditions/useConditions';
-import { useEmergencyContacts } from '@/features/emergency-contacts';
-import { useMedications } from '@/features/medications/useMedications';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useTheme } from '@/hooks/use-theme';
-import { useOnboardingChecklist, type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
+import { useOnboardingData } from '@/onboarding/useOnboardingData';
+import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 
 const TASK_ROUTE: Partial<Record<OnboardingTaskId, string>> = {
   emergency_contacts: '/emergency-contacts/new',
@@ -28,7 +24,7 @@ function AnimatedProgressBar({ progress, color, backgroundColor }: { progress: n
   const width = useSharedValue(0);
 
   useEffect(() => {
-    width.value = withSpring(progress * 100, { damping: 15, stiffness: 120 });
+    width.set(withSpring(progress * 100, { damping: 15, stiffness: 120 }));
   }, [progress, width]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -68,13 +64,13 @@ function TaskCard({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
-    opacity.value = withTiming(0.7, { duration: 100 });
+    scale.set(withSpring(0.97, { damping: 15, stiffness: 400 }));
+    opacity.set(withTiming(0.7, { duration: 100 }));
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 400 });
-    opacity.value = withTiming(1, { duration: 100 });
+    scale.set(withSpring(1, { damping: 15, stiffness: 400 }));
+    opacity.set(withTiming(1, { duration: 100 }));
   };
 
   return (
@@ -126,25 +122,10 @@ function TaskCard({
 export default function OnboardingTasksScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const { data: allergies, isFetchedAfterMount: allergiesFetched } = useAllergies();
-  const { data: conditions, isFetchedAfterMount: conditionsFetched } = useConditions();
-  const { data: medications, isFetchedAfterMount: medicationsFetched } = useMedications();
-  const { data: emergencyContacts, isFetchedAfterMount: emergencyContactsFetched } = useEmergencyContacts();
+  const { isDataReady, checklist } = useOnboardingData();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
-
-  const isDataReady = allergiesFetched && conditionsFetched && medicationsFetched && emergencyContactsFetched;
-
-  const checklist = useOnboardingChecklist({
-    userId: user?.id,
-    emailVerified: !!user?.email_verified_at,
-    hasEmergencyContacts: (emergencyContacts?.length ?? 0) > 0,
-    hasAllergies: (allergies?.length ?? 0) > 0,
-    hasConditions: (conditions?.length ?? 0) > 0,
-    hasMedications: (medications?.length ?? 0) > 0,
-  });
 
   useEffect(() => {
     if (emailCooldown <= 0) return;
@@ -159,12 +140,20 @@ export default function OnboardingTasksScreen() {
   }, [isDataReady, checklist.complete]);
 
   useFocusEffect(
-    useCallback(() => {
+    () => {
       void checklist.refreshSkipped();
-    }, [checklist.refreshSkipped])
+    }
   );
 
-  if (!isDataReady || checklist.complete) return null;
+  if (!isDataReady) {
+    return (
+      <View className="flex-1 items-center justify-center" style={{ backgroundColor: theme.background }}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (checklist.complete) return null;
 
   const handleSkipTask = (id: OnboardingTaskId) => {
     void checklist.skipTask(id);
@@ -202,7 +191,7 @@ export default function OnboardingTasksScreen() {
           <Ionicons name="trophy" size={36} color={theme.primary} />
         </View>
         <ThemedText type="title" className="mb-2 text-center">
-          Let's finish your profile
+          Let&apos;s finish your profile
         </ThemedText>
         <ThemedText type="body" color="mutedForeground" className="text-center">
           A few quick, optional steps so your medical profile is ready when it matters most.
@@ -214,21 +203,22 @@ export default function OnboardingTasksScreen() {
           <ThemedText type="small" color="mutedForeground">
             {checklist.doneCount} of {checklist.total} complete
           </ThemedText>
-          <ThemedText type="small" color="primary" className="font-semibold">
+          <ThemedText type="smallBold" color="primary">
             {Math.round(progress * 100)}%
           </ThemedText>
         </View>
         <AnimatedProgressBar progress={progress} color={theme.primary} backgroundColor={theme.muted} />
       </View>
 
-      <ScrollView
+      <FlatList
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: insets.bottom + 24, gap: 12 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, gap: 12 }}
+        contentInset={{ bottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
-      >
-        {checklist.tasks.map((task, index) => (
+        data={checklist.tasks}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item: task, index }) => (
           <TaskCard
-            key={task.id}
             task={task}
             theme={theme}
             disabled={task.id === 'email_verified' && isSendingVerification}
@@ -237,8 +227,8 @@ export default function OnboardingTasksScreen() {
             onPress={() => void handleSelectTask(task.id)}
             onSkip={() => handleSkipTask(task.id)}
           />
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 }

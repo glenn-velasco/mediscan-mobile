@@ -99,7 +99,8 @@ export default function TermsScreen() {
               </ThemedText>
             ) : null}
             {section.bullets?.map((bullet, i) => (
-              <View key={i} className="mb-1 flex-row gap-2 pl-2">
+              // react-doctor-disable-next-line react-doctor/no-array-index-as-key
+              <View key={bullet ?? i} className="mb-1 flex-row gap-2 pl-2">
                 <ThemedText type="body" color="mutedForeground">
                   {'\u2022'}
                 </ThemedText>
