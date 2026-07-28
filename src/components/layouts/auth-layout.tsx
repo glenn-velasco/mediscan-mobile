@@ -1,5 +1,4 @@
-import { ScrollView, View, type ViewProps } from 'react-native';
-import { AvoidSoftInputView } from 'react-native-avoid-softinput';
+import { KeyboardAvoidingView, Platform, ScrollView, View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/hooks/use-theme';
@@ -14,12 +13,23 @@ export function AuthLayout({ children, className, ...rest }: ViewProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <AvoidSoftInputView style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
-      <ScrollView contentContainerClassName="flex-grow" keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={insets.top}
+    >
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, ...(Platform.OS !== 'ios' ? { paddingTop: insets.top } : {}) }}
+        contentInset={Platform.OS === 'ios' ? { top: insets.top } : undefined}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <View className={cn('flex-1 justify-center gap-1 px-6', className)} {...rest}>
           {children}
         </View>
       </ScrollView>
-    </AvoidSoftInputView>
+    </KeyboardAvoidingView>
   );
 }

@@ -1,6 +1,6 @@
-import { memo, useCallback, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { View } from 'react-native';
-import { CommonResolutions, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
+import { CommonResolutions, type CameraDevice, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import { Camera as FaceDetectorCamera, type Face } from 'react-native-vision-camera-face-detector';
 
 import { ThemedText } from '@/components/themed-text';
@@ -41,9 +41,9 @@ type FaceCameraProps = Pick<
 // reconfigure, closing it mid-capture. Wrapping it in React.memo with stable props (see the
 // useCallback-wrapped handlers below) stops it from re-invoking on blink-triggered re-renders,
 // so the buggy hook is never called again after mount.
-const MemoizedFaceCamera = memo(function MemoizedFaceCamera(props: FaceCameraProps) {
+const MemoizedFaceCamera = function MemoizedFaceCamera(props: FaceCameraProps) {
   return <FaceDetectorCamera style={CAMERA_STYLE} runClassifications performanceMode="fast" {...props} />;
-});
+};
 
 export type LivenessCaptureResult = {
   selfieFrames: CapturedFile[];
@@ -54,6 +54,105 @@ export type LivenessCaptureResult = {
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function StatusIndicator({ status, blinkCount }: { status: CaptureStatus; blinkCount: number }) {
+  if (status !== 'positioning' && status !== 'blinking') return null;
+  return (
+    <View className="absolute bottom-2 left-2 rounded-full bg-black/60 px-3 py-1">
+      <ThemedText type="small" style={{ color: '#fff' }}>
+        {status === 'positioning' && 'Look at the camera…'}
+        {status === 'blinking' && `Blink naturally… ${blinkCount}/${REQUIRED_BLINKS}`}
+      </ThemedText>
+    </View>
+  );
+}
+
+function CameraPreview({
+  status,
+  device,
+  isLive,
+  cameraOutputs,
+  onFacesDetected,
+  onCameraStarted,
+  onCameraStopped,
+  onCameraError,
+  flashIndex,
+  blinkCount,
+}: {
+  status: CaptureStatus;
+  device: CameraDevice;
+  isLive: boolean;
+  cameraOutputs: FaceCameraProps['outputs'];
+  onFacesDetected: FaceCameraProps['onFacesDetected'];
+  onCameraStarted: FaceCameraProps['onStarted'];
+  onCameraStopped: FaceCameraProps['onStopped'];
+  onCameraError: FaceCameraProps['onError'];
+  flashIndex: number | null;
+  blinkCount: number;
+}) {
+  return (
+    <View className="relative aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-lg bg-black">
+      {status === 'idle' || status === 'error' ? (
+        <ThemedText color="mutedForeground" className="px-4 text-center text-sm">
+          Camera preview will appear here.
+        </ThemedText>
+      ) : (
+        <MemoizedFaceCamera
+          device={device}
+          isActive={isLive}
+          outputs={cameraOutputs}
+          onFacesDetected={onFacesDetected}
+          onStarted={onCameraStarted}
+          onStopped={onCameraStopped}
+          onError={onCameraError}
+        />
+      )}
+
+      {status === 'flashing' && flashIndex !== null && (
+        <View
+          className="absolute inset-0 items-center justify-center"
+          style={{ backgroundColor: FLASH_BACKGROUND[FLASH_COLORS[flashIndex]] }}
+        >
+          <ThemedText style={{ color: '#fff' }}>Hold still…</ThemedText>
+        </View>
+      )}
+
+      <StatusIndicator status={status} blinkCount={blinkCount} />
+
+      {status === 'done' && (
+        <ThemedText color="mutedForeground" className="px-4 text-center text-sm">
+          Capture complete.
+        </ThemedText>
+      )}
+    </View>
+  );
+}
+
+function ActionButtons({
+  status,
+  onStart,
+  onRetry,
+}: {
+  status: CaptureStatus;
+  onStart: () => void;
+  onRetry: () => void;
+}) {
+  if (status === 'idle' || status === 'error') {
+    return <PrimaryButton label={status === 'error' ? 'Retry capture' : 'Start selfie capture'} variant="ghost" onPress={onStart} />;
+  }
+  if (status === 'done') {
+    return <PrimaryButton label="Retake" variant="ghost" onPress={onRetry} />;
+  }
+  return (
+    <PrimaryButton
+      label={
+        status === 'requesting' ? 'Requesting camera…' : status === 'positioning' ? 'Positioning…' : status === 'blinking' ? 'Waiting for blinks…' : 'Flashing…'
+      }
+      loading
+      disabled
+    />
+  );
 }
 
 /**
@@ -80,6 +179,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
   const cameraOutputs = useMemo(() => [photoOutput], [photoOutput]);
 
   const [status, setStatus] = useState<CaptureStatus>('idle');
+  const statusRef = useRef<CaptureStatus>('idle');
   const [error, setErrorMessage] = useState<string | null>(null);
   const [blinkCount, setBlinkCount] = useState(0);
   const [flashIndex, setFlashIndex] = useState<number | null>(null);
@@ -100,6 +200,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
   const fail = useCallback((message: string) => {
     stoppedRef.current = true;
     setErrorMessage(message);
+    statusRef.current = 'error';
     setStatus('error');
   }, []);
 
@@ -145,6 +246,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
   }, [photoOutput]);
 
   const runFlashSequence = useCallback(async () => {
+    statusRef.current = 'flashing';
     setStatus('flashing');
     const flashFrames: CapturedFile[] = [];
     const flashColors: string[] = [];
@@ -167,6 +269,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
       return;
     }
 
+    statusRef.current = 'done';
     setStatus('done');
     onCaptured({ selfieFrames: selfieFramesRef.current, flashFrames, flashColors, blinkDetected: true });
   }, [captureFrame, fail, onCaptured]);
@@ -176,16 +279,15 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
       if (busyRef.current || stoppedRef.current || !cameraStartedRef.current) return;
       const face = faces[0];
 
-      setStatus((current) => {
-        if (current === 'positioning') {
-          void runPositioningTick(face);
-        } else if (current === 'blinking') {
-          void runBlinkingTick(face);
-        }
-        return current;
-      });
+      const current = statusRef.current;
+      if (current === 'positioning') {
+        void runPositioningTick(face);
+      } else if (current === 'blinking') {
+        void runBlinkingTick(face);
+      }
 
       async function runPositioningTick(f: Face | undefined) {
+        // react-doctor-disable-next-line react-hooks-js/todo
         deadlineRef.current ??= Date.now() + POSITIONING_TIMEOUT_MS;
         if (Date.now() > deadlineRef.current) {
           fail("We couldn't find your face. Please try again.");
@@ -202,11 +304,13 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
           const frame = await captureFrame('selfie-0.jpg');
           if (frame) selfieFramesRef.current.push(frame);
           busyRef.current = false;
+          statusRef.current = 'blinking';
           setStatus('blinking');
         }
       }
 
       async function runBlinkingTick(f: Face | undefined) {
+        // react-doctor-disable-next-line react-hooks-js/todo
         deadlineRef.current ??= Date.now() + BLINKING_TIMEOUT_MS;
         if (Date.now() > deadlineRef.current) {
           fail(`We only detected ${completedBlinksRef.current} of ${REQUIRED_BLINKS} blinks. Please try again and blink naturally.`);
@@ -259,6 +363,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
     setBlinkCount(0);
     setFlashIndex(null);
 
+    statusRef.current = 'requesting';
     setStatus('requesting');
     if (!hasPermission) {
       const granted = await requestPermission();
@@ -267,11 +372,13 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
         return;
       }
     }
+    statusRef.current = 'positioning';
     setStatus('positioning');
   }, [hasPermission, requestPermission, fail]);
 
   const retry = useCallback(() => {
     stoppedRef.current = true;
+    statusRef.current = 'idle';
     setStatus('idle');
     setErrorMessage(null);
     setBlinkCount(0);
@@ -293,47 +400,18 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
 
   return (
     <View className="gap-3">
-      <View className="relative aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-lg bg-black">
-        {status === 'idle' || status === 'error' ? (
-          <ThemedText color="mutedForeground" className="px-4 text-center text-sm">
-            Camera preview will appear here.
-          </ThemedText>
-        ) : (
-          <MemoizedFaceCamera
-            device={device}
-            isActive={isLive}
-            outputs={cameraOutputs}
-            onFacesDetected={handleFacesDetected}
-            onStarted={handleCameraStarted}
-            onStopped={handleCameraStopped}
-            onError={handleCameraError}
-          />
-        )}
-
-        {status === 'flashing' && flashIndex !== null && (
-          <View
-            className="absolute inset-0 items-center justify-center"
-            style={{ backgroundColor: FLASH_BACKGROUND[FLASH_COLORS[flashIndex]] }}
-          >
-            <ThemedText style={{ color: '#fff' }}>Hold still…</ThemedText>
-          </View>
-        )}
-
-        {isLive && status !== 'flashing' && (
-          <View className="absolute bottom-2 left-2 rounded-full bg-black/60 px-3 py-1">
-            <ThemedText type="small" style={{ color: '#fff' }}>
-              {status === 'positioning' && 'Look at the camera…'}
-              {status === 'blinking' && `Blink naturally… ${blinkCount}/${REQUIRED_BLINKS}`}
-            </ThemedText>
-          </View>
-        )}
-
-        {status === 'done' && (
-          <ThemedText color="mutedForeground" className="px-4 text-center text-sm">
-            Capture complete.
-          </ThemedText>
-        )}
-      </View>
+      <CameraPreview
+        status={status}
+        device={device}
+        isLive={isLive}
+        cameraOutputs={cameraOutputs}
+        onFacesDetected={handleFacesDetected}
+        onCameraStarted={handleCameraStarted}
+        onCameraStopped={handleCameraStopped}
+        onCameraError={handleCameraError}
+        flashIndex={flashIndex}
+        blinkCount={blinkCount}
+      />
 
       {error ? (
         <ThemedText type="small" color="destructive">
@@ -341,19 +419,7 @@ export function LivenessCaptureView({ onCaptured, onReset }: { onCaptured: (resu
         </ThemedText>
       ) : null}
 
-      {status === 'idle' || status === 'error' ? (
-        <PrimaryButton label={status === 'error' ? 'Retry capture' : 'Start selfie capture'} variant="ghost" onPress={() => void start()} />
-      ) : status === 'done' ? (
-        <PrimaryButton label="Retake" variant="ghost" onPress={retry} />
-      ) : (
-        <PrimaryButton
-          label={
-            status === 'requesting' ? 'Requesting camera…' : status === 'positioning' ? 'Positioning…' : status === 'blinking' ? 'Waiting for blinks…' : 'Flashing…'
-          }
-          loading
-          disabled
-        />
-      )}
+      <ActionButtons status={status} onStart={() => void start()} onRetry={retry} />
     </View>
   );
 }

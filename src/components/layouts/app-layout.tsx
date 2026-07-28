@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
-import { AvoidSoftInputView } from 'react-native-avoid-softinput';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
@@ -14,7 +13,7 @@ type AppLayoutProps = ViewProps & {
   maxContentWidth?: number;
   /** Additional styles for the ScrollView content container (ignored when scrollable=false). */
   contentContainerStyle?: StyleProp<ViewStyle>;
-  /** Wraps the ScrollView in a KeyboardAvoidingView (like AuthLayout) — use for screens with text inputs. */
+  /** Wraps the ScrollView in a KeyboardAvoidingView — use for screens with text inputs. */
   avoidKeyboard?: boolean;
 };
 
@@ -30,6 +29,7 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
   const handleRefresh = useCallback(async () => {
     if (!onRefresh) return;
     setRefreshing(true);
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       await onRefresh();
     } finally {
@@ -62,6 +62,9 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
       style={{ backgroundColor: theme.background }}
       refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.foreground} colors={[theme.primary]} progressBackgroundColor={theme.background} /> : undefined}
       keyboardShouldPersistTaps={avoidKeyboard ? 'handled' : undefined}
+      keyboardDismissMode={avoidKeyboard ? (Platform.OS === 'ios' ? 'interactive' : 'on-drag') : undefined}
+      showsVerticalScrollIndicator={false}
+      bounces={false}
       {...rest}
     >
       {content}
@@ -70,9 +73,12 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
 
   if (avoidKeyboard) {
     return (
-      <AvoidSoftInputView style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
         {scrollView}
-      </AvoidSoftInputView>
+      </KeyboardAvoidingView>
     );
   }
 

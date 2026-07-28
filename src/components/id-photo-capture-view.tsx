@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 import { ThemedText } from '@/components/themed-text';
@@ -23,6 +24,7 @@ export function IdPhotoCaptureView({ onCaptured }: { onCaptured: (photo: Capture
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (photo) {
@@ -54,7 +56,7 @@ export function IdPhotoCaptureView({ onCaptured }: { onCaptured: (photo: Capture
   if (previewUri) {
     return (
       <View className="gap-3">
-        <Image source={{ uri: previewUri }} className="aspect-[3/2] w-full rounded-lg" resizeMode="cover" />
+        <Image source={{ uri: previewUri }} className="aspect-[3/2] w-full rounded-lg" contentFit="cover" />
         <PrimaryButton label="Retake" variant="ghost" onPress={retake} />
       </View>
     );
@@ -73,7 +75,7 @@ export function IdPhotoCaptureView({ onCaptured }: { onCaptured: (photo: Capture
         style={{ backgroundColor: theme.primary, opacity: capturing ? 0.5 : 1 }}
         accessibilityRole="button"
       >
-        <ThemedText type="label" style={{ color: theme.primaryForeground }}>
+        <ThemedText type="label" color="primaryForeground">
           {capturing ? 'Capturing…' : 'Capture ID photo'}
         </ThemedText>
       </Pressable>

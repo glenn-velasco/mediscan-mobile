@@ -67,6 +67,7 @@ export function AddressFields({ value, onChange, errors, disabled }: AddressFiel
   );
 }
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const EMPTY_ADDRESS: MedicalInformationAddress = {
   street: null,
   unit: null,

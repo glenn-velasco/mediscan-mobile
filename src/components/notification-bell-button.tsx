@@ -24,7 +24,7 @@ export function NotificationBellButton({ onPress }: { onPress: () => void }) {
           className="absolute -right-1 -top-1 min-w-[18px] items-center justify-center rounded-full px-1"
           style={{ height: 18, backgroundColor: theme.destructive }}
         >
-          <ThemedText type="detail" style={{ color: '#fff', fontSize: 10, lineHeight: 12 }}>
+          <ThemedText type="detail" style={{ color: theme.destructiveForeground, fontSize: 10, lineHeight: 12 }}>
             {unreadCount > 9 ? '9+' : unreadCount}
           </ThemedText>
         </View>

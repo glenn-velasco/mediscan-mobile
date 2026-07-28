@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { View, type ViewProps } from 'react-native';
+import { useColorScheme, View, type ViewProps } from 'react-native';
 
+import { sheet } from '@/components/form/tokens';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
 
@@ -14,6 +15,14 @@ function hexToRgb(hex: string): [number, number, number] {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return [r, g, b];
+}
+
+function darken(hex: string, amount: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const dr = Math.round(r * (1 - amount));
+  const dg = Math.round(g * (1 - amount));
+  const db = Math.round(b * (1 - amount));
+  return `rgb(${dr},${dg},${db})`;
 }
 
 function lighten(hex: string, amount: number): string {
@@ -42,9 +51,16 @@ const LAYOUT_PY = 16;
 
 export function GradientHeader({ className, children, edgeToEdge = false, topInset = 0, style, ...rest }: GradientHeaderProps) {
   const theme = useTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const gradientColors: [string, string, string] = isDark
+    ? [darken(theme.primary, 0.15), theme.primary, mixWith(theme.primary, theme.background, 0.4)]
+    : [theme.primary, mixWith(theme.primary, theme.muted, 0.3), lighten(theme.primary, 0.45)];
+
   return (
     <LinearGradient
-      colors={[theme.primary, mixWith(theme.primary, '#e8ede9', 0.3), lighten(theme.primary, 0.45)]}
+      colors={gradientColors}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0.6 }}
       style={
@@ -55,7 +71,7 @@ export function GradientHeader({ className, children, edgeToEdge = false, topIns
               borderBottomLeftRadius: 24,
               borderBottomRightRadius: 24,
             }
-          : { borderRadius: 20 }
+          : { borderRadius: sheet.radius }
       }
     >
       <View

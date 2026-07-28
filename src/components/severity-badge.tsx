@@ -1,4 +1,3 @@
-import { memo } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,7 +21,7 @@ const SEVERITY_ICON: Record<AllergyRow['severity'], { name: keyof typeof Ionicon
   'life-threatening': { name: 'skull', colorKey: 'critical' },
 };
 
-export const SeverityBadge = memo(function SeverityBadge({ severity }: { severity: AllergyRow['severity'] }) {
+export function SeverityBadge({ severity }: { severity: AllergyRow['severity'] }) {
   const theme = useTheme();
   const style = SEVERITY_STYLE[severity];
   const bgColor = theme[style.bgKey] + '20';
@@ -40,7 +39,7 @@ export const SeverityBadge = memo(function SeverityBadge({ severity }: { severit
       </ThemedText>
     </View>
   );
-});
+}
 
 export function SeverityIcon({ severity, size = 40 }: { severity: AllergyRow['severity']; size?: number }) {
   const theme = useTheme();

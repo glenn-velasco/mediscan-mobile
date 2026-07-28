@@ -8,7 +8,7 @@ export function ConflictBanner({ message, className }: { message: string; classN
   const theme = useTheme();
   return (
     <View className={cn('rounded-md p-3', className)} style={{ backgroundColor: theme.warning + '26' }}>
-      <ThemedText type="small" style={{ color: theme.warning }}>
+      <ThemedText type="small" color="warning">
         ⚠ {message}
       </ThemedText>
     </View>

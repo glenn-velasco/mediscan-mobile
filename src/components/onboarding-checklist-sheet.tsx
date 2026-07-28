@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
+import { sheet } from '@/components/form/tokens';
 import { useTheme } from '@/hooks/use-theme';
 import type { OnboardingTask, OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 
@@ -49,13 +50,13 @@ function SheetTaskItem({
   }));
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
-    opacity.value = withTiming(0.7, { duration: 100 });
+    scale.set(withSpring(0.97, { damping: 15, stiffness: 400 }));
+    opacity.set(withTiming(0.7, { duration: 100 }));
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 400 });
-    opacity.value = withTiming(1, { duration: 100 });
+    scale.set(withSpring(1, { damping: 15, stiffness: 400 }));
+    opacity.set(withTiming(1, { duration: 100 }));
   };
 
   return (
@@ -117,12 +118,12 @@ export const OnboardingChecklistSheet = forwardRef<OnboardingChecklistSheetHandl
         ref={sheetRef}
         snapPoints={['60%']}
         enableDynamicSizing={false}
-        backgroundStyle={{ backgroundColor: theme.background, borderRadius: 20 }}
-        handleIndicatorStyle={{ backgroundColor: theme.border, width: 36 }}
+        backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
+        handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
         backdropComponent={renderBackdrop}
       >
-        <BottomSheetView style={{ paddingHorizontal: 20, paddingBottom: 24, gap: 4 }}>
-          <ThemedText className="mb-2 font-semibold text-lg">Finish setting up</ThemedText>
+        <BottomSheetView style={{ paddingHorizontal: sheet.paddingH, paddingBottom: 32, gap: 4 }}>
+          <ThemedText type="heading" className="mb-2">Finish setting up</ThemedText>
           {tasks.map((task) => (
             <SheetTaskItem
               key={task.id}

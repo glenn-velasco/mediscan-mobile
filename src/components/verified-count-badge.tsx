@@ -1,4 +1,3 @@
-import { memo } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -6,7 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Small chip showing how many professionals have verified a record. Count only — names live on the detail screen. */
-export const VerifiedCountBadge = memo(function VerifiedCountBadge({ count }: { count: number }) {
+export function VerifiedCountBadge({ count }: { count: number }) {
   const theme = useTheme();
   if (count <= 0) return null;
 
@@ -18,9 +17,9 @@ export const VerifiedCountBadge = memo(function VerifiedCountBadge({ count }: { 
       accessibilityLabel={`Verified by ${count} professional${count === 1 ? '' : 's'}`}
     >
       <Ionicons name="checkmark-done" size={12} color={theme.success} />
-      <ThemedText type="detail" style={{ color: theme.success }}>
+      <ThemedText type="detail" color="success">
         {count}
       </ThemedText>
     </View>
   );
-});
+}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, View, useWindowDimensions } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, useWindowDimensions } from 'react-native';
+import Animated, { interpolate, interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 
 import { ThemedText } from '@/components/themed-text';
@@ -29,37 +30,38 @@ export function QrScannerView({
   onScanned,
   fullscreen = false,
   torchOn = false,
-  accentColor = '#34D399',
+  accentColor,
 }: {
   onScanned: (data: string) => void;
   fullscreen?: boolean;
   torchOn?: boolean;
-  accentColor?: string;
+  accentColor: string;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [enabled, setEnabled] = useState(true);
   const lastScanned = useRef<string | null>(null);
   const { width } = useWindowDimensions();
   const frameSize = Math.min(Math.round(width * 0.7), 280);
-  const [lockProgress] = useState(() => new Animated.Value(0));
+  const lockProgress = useSharedValue(0);
 
-  const handleBarcodeScanned = useCallback(
-    (result: BarcodeScanningResult) => {
-      if (!enabled || lastScanned.current === result.data) return;
-      lastScanned.current = result.data;
-      setEnabled(false);
-      onScanned(result.data);
-    },
-    [enabled, onScanned],
-  );
+  const handleBarcodeScanned = (result: BarcodeScanningResult) => {
+    if (!enabled || lastScanned.current === result.data) return;
+    lastScanned.current = result.data;
+    setEnabled(false);
+    onScanned(result.data);
+  };
 
   useEffect(() => {
-    Animated.timing(lockProgress, {
-      toValue: enabled ? 0 : 1,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
+    lockProgress.set(withTiming(enabled ? 0 : 1, { duration: 220 }));
   }, [enabled, lockProgress]);
+
+  const cornerColorStyle = useAnimatedStyle(() => ({
+    borderColor: interpolateColor(lockProgress.value, [0, 1], ['#ffffff', accentColor]),
+  }));
+
+  const cornerContainerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(lockProgress.value, [0, 1], [1, 1.08]) }],
+  }));
 
   if (!permission) {
     return null;
@@ -90,9 +92,6 @@ export function QrScannerView({
     );
   }
 
-  const cornerColor = lockProgress.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', accentColor] });
-  const cornerScale = lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
-
   return (
     <View className="flex-1 items-center justify-center overflow-hidden bg-black">
       <CameraView
@@ -103,29 +102,33 @@ export function QrScannerView({
         onBarcodeScanned={enabled ? handleBarcodeScanned : undefined}
       />
       <View pointerEvents="none" className="absolute items-center" style={{ gap: 16 }}>
-        <Animated.View style={{ width: frameSize, height: frameSize, transform: [{ scale: cornerScale }] }}>
+        <Animated.View style={[{ width: frameSize, height: frameSize }, cornerContainerStyle]}>
           <Animated.View
             style={[
               cornerBase,
-              { top: 0, left: 0, borderColor: cornerColor, borderTopWidth: CORNER_THICKNESS, borderLeftWidth: CORNER_THICKNESS, borderTopLeftRadius: CORNER_RADIUS },
+              { top: 0, left: 0, borderTopWidth: CORNER_THICKNESS, borderLeftWidth: CORNER_THICKNESS, borderTopLeftRadius: CORNER_RADIUS },
+              cornerColorStyle,
             ]}
           />
           <Animated.View
             style={[
               cornerBase,
-              { top: 0, right: 0, borderColor: cornerColor, borderTopWidth: CORNER_THICKNESS, borderRightWidth: CORNER_THICKNESS, borderTopRightRadius: CORNER_RADIUS },
+              { top: 0, right: 0, borderTopWidth: CORNER_THICKNESS, borderRightWidth: CORNER_THICKNESS, borderTopRightRadius: CORNER_RADIUS },
+              cornerColorStyle,
             ]}
           />
           <Animated.View
             style={[
               cornerBase,
-              { bottom: 0, left: 0, borderColor: cornerColor, borderBottomWidth: CORNER_THICKNESS, borderLeftWidth: CORNER_THICKNESS, borderBottomLeftRadius: CORNER_RADIUS },
+              { bottom: 0, left: 0, borderBottomWidth: CORNER_THICKNESS, borderLeftWidth: CORNER_THICKNESS, borderBottomLeftRadius: CORNER_RADIUS },
+              cornerColorStyle,
             ]}
           />
           <Animated.View
             style={[
               cornerBase,
-              { bottom: 0, right: 0, borderColor: cornerColor, borderBottomWidth: CORNER_THICKNESS, borderRightWidth: CORNER_THICKNESS, borderBottomRightRadius: CORNER_RADIUS },
+              { bottom: 0, right: 0, borderBottomWidth: CORNER_THICKNESS, borderRightWidth: CORNER_THICKNESS, borderBottomRightRadius: CORNER_RADIUS },
+              cornerColorStyle,
             ]}
           />
         </Animated.View>

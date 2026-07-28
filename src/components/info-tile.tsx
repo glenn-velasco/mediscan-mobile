@@ -50,7 +50,7 @@ export function InfoTile({
           <ThemedText type="small" color="mutedForeground">
             {label}
           </ThemedText>
-          <ThemedText type="body" className="font-semibold" numberOfLines={1}>
+          <ThemedText type="bodyBold" numberOfLines={1}>
             {value}
           </ThemedText>
         </View>

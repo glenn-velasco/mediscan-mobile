@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import * as blePeripheralService from '@/services/ble-peripheral.service';
 import { useBlePeripheralPermission } from '@/hooks/use-ble-permission';
 import { useAuth } from '@/auth/useAuth';
 import { ensureBluetoothEnabled } from '@/services/ble-manager';
 import { ensureLocationEnabled } from '../../../modules/ble-location/src/ensureLocationEnabled';
-import { getSnapshot as getToggleSnapshot, setEnabled as persistEnabled, subscribe as subscribeToggle } from '@/features/ble-sync/ble-advertising-toggle.store';
+import { useBleAdvertisingToggleStore } from '@/features/ble-sync/ble-advertising-toggle.store';
 
 export type BleAdvertisingState = 'idle' | 'starting' | 'advertising' | 'error';
 
@@ -19,7 +19,7 @@ export function useBleAdvertising() {
   );
   const [error, setError] = useState<string | null>(null);
   const userRef = useRef(user);
-  const toggle = useSyncExternalStore(subscribeToggle, getToggleSnapshot);
+  const persistEnabled = useBleAdvertisingToggleStore((s) => s.setEnabled);
 
   useEffect(() => {
     userRef.current = user;
@@ -60,13 +60,13 @@ export function useBleAdvertising() {
       setError(err instanceof Error ? err.message : 'Failed to start Bluetooth sync.');
       void persistEnabled(false);
     }
-  }, [permission, requestPermission]);
+  }, [permission, requestPermission, persistEnabled]);
 
   const stop = useCallback(async () => {
     await blePeripheralService.stopAdvertising();
     setState('idle');
     void persistEnabled(false);
-  }, []);
+  }, [persistEnabled]);
 
   // Sync state with module-level advertising flag on mount (survives remounts). If sync was
   // already on, make sure the Bluetooth radio is actually enabled too — it may have been turned
@@ -78,21 +78,6 @@ export function useBleAdvertising() {
       if (!enabled) void blePeripheralService.stopAdvertising();
     });
   }, []);
-
-  // Cold start: the peripheral service's in-memory flag is always false on a fresh launch, so
-  // re-derive "should be advertising" from the persisted preference instead and resume it —
-  // otherwise the user has to flip the switch back on every time the app reloads.
-  const resumedRef = useRef(false);
-  useEffect(() => {
-    if (resumedRef.current) return;
-    if (!toggle.loaded || !toggle.enabled) return;
-    if (!userRef.current) return;
-    if (blePeripheralService.isAdvertising()) return;
-    resumedRef.current = true;
-    // start() is async and manages state updates via callbacks, not synchronously
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void start();
-  }, [toggle.loaded, toggle.enabled, start]);
 
   return { state, error, isAdvertising: state === 'advertising', start, stop };
 }
