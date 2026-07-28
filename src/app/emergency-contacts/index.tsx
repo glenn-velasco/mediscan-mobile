@@ -1,4 +1,3 @@
-import { memo, useCallback, useMemo } from 'react';
 import { Link, Stack } from 'expo-router';
 import { FlatList, Pressable, View , Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import type { EmergencyContactRow } from '@/db/schema';
 
-const ContactRow = memo(function ContactRow({
+function ContactRow({
   item,
   onDelete,
   theme,
@@ -21,10 +20,7 @@ const ContactRow = memo(function ContactRow({
   onDelete: (name: string, uuid: string) => void;
   theme: Record<string, string>;
 }) {
-  const href = useMemo(
-    () => ({ pathname: '/emergency-contacts/[localUuid]' as const, params: { localUuid: item.local_uuid } }),
-    [item.local_uuid],
-  );
+  const href = { pathname: '/emergency-contacts/[localUuid]' as const, params: { localUuid: item.local_uuid } };
 
   return (
     <Link href={href} asChild>
@@ -45,19 +41,19 @@ const ContactRow = memo(function ContactRow({
       </Pressable>
     </Link>
   );
-});
+}
 
 export default function EmergencyContactsScreen() {
   const { data: contacts, isLoading } = useEmergencyContacts();
   const deleteContact = useDeleteEmergencyContact();
   const theme = useTheme();
 
-  const handleDelete = useCallback((name: string, localUuid: string) => {
+  const handleDelete = (name: string, localUuid: string) => {
     Alert.alert('Remove Contact', `Are you sure you want to remove ${name}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => deleteContact.mutate(localUuid) },
     ]);
-  }, [deleteContact]);
+  };
 
   return (
     <>

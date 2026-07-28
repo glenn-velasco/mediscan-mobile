@@ -1,4 +1,3 @@
-import { memo, useMemo } from 'react';
 import { FlatList, Pressable, View, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 
@@ -13,7 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { Card } from '@/components/card';
 import type { MedicationRow } from '@/db/schema';
 
-const UnconfirmedMedicationAttestations = memo(function UnconfirmedMedicationAttestations({ medications }: { medications: MedicationRow[] }) {
+function UnconfirmedMedicationAttestations({ medications }: { medications: MedicationRow[] }) {
   const { data: unconfirmed } = useUnconfirmedMedicationAttestations();
   const { mutate: confirmMatch, isPending } = useConfirmMedicationAttestationMatch();
   const theme = useTheme();
@@ -28,7 +27,7 @@ const UnconfirmedMedicationAttestations = memo(function UnconfirmedMedicationAtt
 
         return (
           <Card key={attestation.local_id} className="gap-2" style={{ borderColor: theme.warning + '4d', backgroundColor: theme.warning + '1a', borderWidth: 1 }}>
-            <ThemedText type="small" className="font-semibold">
+            <ThemedText type="smallBold">
               {verified_by.name} verified &quot;{name}&quot; ({dosage}) — which medication is this?
             </ThemedText>
             <View className="flex-row flex-wrap gap-2">
@@ -49,18 +48,15 @@ const UnconfirmedMedicationAttestations = memo(function UnconfirmedMedicationAtt
       })}
     </View>
   );
-});
+}
 
 const SYNC_LABEL: Partial<Record<string, string>> = {
   pending: 'Not yet synced',
   syncing: 'Syncing…',
 };
 
-const MedicationRowCard = memo(function MedicationRowCard({ item }: { item: MedicationRow }) {
-  const href = useMemo(
-    () => ({ pathname: '/medications/[id]' as const, params: { id: item.local_uuid } }),
-    [item.local_uuid],
-  );
+function MedicationRowCard({ item }: { item: MedicationRow }) {
+  const href = { pathname: '/medications/[id]' as const, params: { id: item.local_uuid } };
   const syncLabel = SYNC_LABEL[item.sync_status];
 
   return (
@@ -80,7 +76,7 @@ const MedicationRowCard = memo(function MedicationRowCard({ item }: { item: Medi
       </Pressable>
     </Link>
   );
-});
+}
 
 export default function MedicationsScreen() {
   const { data: medications = [], isLoading } = useMedications();
@@ -98,7 +94,7 @@ export default function MedicationsScreen() {
     <AppLayout scrollable={false}>
       {medications.length === 0 ? (
         <ThemedView className="flex-1 items-center justify-center">
-          <EmptyState title="No medications yet" body="Add any current medications so they’re on hand in an emergency." />
+          <EmptyState title="No medications yet" body="Add any current medications so they're on hand in an emergency." />
         </ThemedView>
       ) : (
         <FlatList

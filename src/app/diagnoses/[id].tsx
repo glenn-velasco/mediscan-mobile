@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useForm, Controller, useFormState } from 'react-hook-form';
 
 import { useAuth } from '@/auth/useAuth';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { TextField } from '@/components/form/text-field';
-import { PickerField } from '@/components/form/picker-field';
+import { SelectField } from '@/components/form/select-field';
 import { DateField } from '@/components/form/date-field';
 import { PrimaryButton } from '@/components/primary-button';
 import { ConflictBanner } from '@/components/conflict-banner';
@@ -17,7 +18,9 @@ import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useUpdateDiagnosis } from '@/features/diagnoses/useUpdateDiagnosis';
 import { useDeleteDiagnosis } from '@/features/diagnoses/useDeleteDiagnosis';
 import { useAttestationsForDiagnosis } from '@/features/professional-attestations/useAttestations';
-import { DIAGNOSIS_SEVERITY_OPTIONS, type DiagnosisSeverity } from '@/constants/diagnosis-severity';
+import { diagnosisSchema, type DiagnosisFormValues } from '@/lib/validation/diagnosis-schema';
+import { DIAGNOSIS_SEVERITY_OPTIONS } from '@/constants/diagnosis-severity';
+import { zodResolver } from '@/lib/zod-resolver';
 
 export default function EditDiagnosisScreen() {
   const router = useRouter();
@@ -31,24 +34,21 @@ export default function EditDiagnosisScreen() {
 
   const existing = diagnoses.find((d) => d.local_uuid === id);
 
-  const [condition, setCondition] = useState('');
-  const [dateOfDiagnosis, setDateOfDiagnosis] = useState('');
-  const [severity, setSeverity] = useState<DiagnosisSeverity>('chronic');
+  const form = useForm<DiagnosisFormValues>({
+    resolver: zodResolver(diagnosisSchema),
+    defaultValues: { condition: '', date_of_diagnosis: '', severity: 'chronic' },
+  });
 
-  const verifiedCount = useMemo(
-    () => attestations.filter((a) => a.envelope_type === 'diagnosis_verification').length,
-    [attestations],
-  );
+  const { isDirty } = useFormState({ control: form.control });
+
+  const verifiedCount = attestations.filter((a) => a.envelope_type === 'diagnosis_verification').length;
 
   useEffect(() => {
     if (existing) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed of edit form state once the queried record loads
-      setCondition(existing.condition);
-      setDateOfDiagnosis(existing.date_of_diagnosis ?? '');
-      setSeverity(existing.severity);
+      form.reset({ condition: existing.condition, date_of_diagnosis: existing.date_of_diagnosis ?? '', severity: existing.severity });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-seed only when switching records, not on every background refetch
-  }, [existing?.local_uuid]);
+  // react-doctor-disable-next-line react-doctor/exhaustive-deps
+  }, [existing?.local_uuid, form.reset]);
 
   if (!existing) {
     return (
@@ -58,12 +58,8 @@ export default function EditDiagnosisScreen() {
     );
   }
 
-  const onSave = async () => {
-    if (!condition.trim()) return;
-    await updateDiagnosis({
-      localUuid: existing.local_uuid,
-      payload: { condition, date_of_diagnosis: dateOfDiagnosis || undefined, severity },
-    });
+  const onSave = async (data: DiagnosisFormValues) => {
+    await updateDiagnosis({ localUuid: existing.local_uuid, payload: data });
     router.back();
   };
 
@@ -79,50 +75,40 @@ export default function EditDiagnosisScreen() {
       ) : null}
 
       {existing.diagnosed_by_name ? (
-        <ThemedText type="small" color="mutedForeground" className="mb-2">
-          Diagnosed by {existing.diagnosed_by_name}
-        </ThemedText>
+        <ThemedText type="small" color="mutedForeground" className="mb-2">Diagnosed by {existing.diagnosed_by_name}</ThemedText>
       ) : null}
 
-      <TextField label="Condition" value={condition} onChangeText={setCondition} editable={isVerifiedProfessional} />
-      <DateField label="Date of diagnosis" value={dateOfDiagnosis} onChange={setDateOfDiagnosis} maximumDate={new Date()} disabled={!isVerifiedProfessional} />
-      <PickerField label="Severity" options={DIAGNOSIS_SEVERITY_OPTIONS} value={severity} onChange={setSeverity} disabled={!isVerifiedProfessional} />
+      <Controller control={form.control} name="condition" render={({ field, fieldState }) => (
+        <TextField label="Condition" value={field.value} onChangeText={field.onChange} editable={isVerifiedProfessional} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="date_of_diagnosis" render={({ field }) => (
+        <DateField label="Date of diagnosis" value={field.value ?? ''} onChange={field.onChange} maximumDate={new Date()} disabled={!isVerifiedProfessional} />
+      )} />
+      <Controller control={form.control} name="severity" render={({ field }) => (
+        <SelectField placeholder="Severity" options={DIAGNOSIS_SEVERITY_OPTIONS} value={field.value} onChange={field.onChange} disabled={!isVerifiedProfessional} getLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)} />
+      )} />
 
       <Card className="mb-6 flex-row items-center justify-between">
-        <ThemedText type="smallBold" color="mutedForeground">
-          Verified by professionals
-        </ThemedText>
+        <ThemedText type="smallBold" color="mutedForeground">Verified by professionals</ThemedText>
         <VerifiedCountBadge count={verifiedCount} />
       </Card>
 
       {attestations.length > 0 ? (
         <Card className="mb-6 gap-3">
-          <ThemedText type="smallBold" color="mutedForeground">
-            Verification history
-          </ThemedText>
+          <ThemedText type="smallBold" color="mutedForeground">Verification history</ThemedText>
           {(() => {
             const attestationMap = new Map<number, { name: string; verified_at: string; note?: string }>();
             attestations.forEach((a) => {
               if (a.payload.type === 'diagnosis_verification') {
-                attestationMap.set(a.payload.verified_by.user_id, {
-                  name: a.payload.verified_by.name,
-                  verified_at: a.payload.verified_at,
-                  note: a.payload.note,
-                });
+                attestationMap.set(a.payload.verified_by.user_id, { name: a.payload.verified_by.name, verified_at: a.payload.verified_at, note: a.payload.note });
               }
             });
             const recordEntries = (existing.verified_by ?? []).filter((v) => !attestationMap.has(v.user_id));
             const merged = [...attestationMap.entries(), ...recordEntries.map((v) => [v.user_id, { name: v.name, verified_at: v.verified_at, note: undefined }] as const)];
             return merged.map(([userId, info]) => (
               <View key={userId}>
-                <ThemedText type="small">
-                  {info.name} · {new Date(info.verified_at).toLocaleDateString()}
-                </ThemedText>
-                {info.note ? (
-                  <ThemedText type="small" color="mutedForeground">
-                    {info.note}
-                  </ThemedText>
-                ) : null}
+                <ThemedText type="small">{info.name} · {new Date(info.verified_at).toLocaleDateString()}</ThemedText>
+                {info.note ? <ThemedText type="small" color="mutedForeground">{info.note}</ThemedText> : null}
               </View>
             ));
           })()}
@@ -131,14 +117,10 @@ export default function EditDiagnosisScreen() {
 
       {attestations.length === 0 && existing.verified_by && existing.verified_by.length > 0 ? (
         <Card className="mb-6 gap-3">
-          <ThemedText type="smallBold" color="mutedForeground">
-            Verified by professionals
-          </ThemedText>
+          <ThemedText type="smallBold" color="mutedForeground">Verified by professionals</ThemedText>
           {existing.verified_by.map((v) => (
             <View key={v.user_id}>
-              <ThemedText type="small">
-                {v.name} · {new Date(v.verified_at).toLocaleDateString()}
-              </ThemedText>
+              <ThemedText type="small">{v.name} · {new Date(v.verified_at).toLocaleDateString()}</ThemedText>
             </View>
           ))}
         </Card>
@@ -146,7 +128,7 @@ export default function EditDiagnosisScreen() {
 
       {isVerifiedProfessional ? (
         <>
-          <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !condition.trim()} className="mb-2" />
+          <PrimaryButton label="Save" loading={isSaving} onPress={() => void form.handleSubmit(onSave)()} disabled={!isDirty || isDeleting || isSaving} className="mb-2" />
           <PrimaryButton label="Delete diagnosis" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
         </>
       ) : null}

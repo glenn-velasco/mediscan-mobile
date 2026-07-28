@@ -1,4 +1,3 @@
-import { memo, useMemo } from 'react';
 import { FlatList, Pressable, View, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 
@@ -16,7 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatIsoDate } from '@/lib/format-date';
 import type { DiagnosisRow } from '@/db/schema';
 
-const UnconfirmedDiagnosisAttestations = memo(function UnconfirmedDiagnosisAttestations({ diagnoses }: { diagnoses: DiagnosisRow[] }) {
+function UnconfirmedDiagnosisAttestations({ diagnoses }: { diagnoses: DiagnosisRow[] }) {
   const { data: unconfirmed } = useUnconfirmedDiagnosisAttestations();
   const { mutate: confirmMatch, isPending } = useConfirmDiagnosisAttestationMatch();
   const theme = useTheme();
@@ -31,7 +30,7 @@ const UnconfirmedDiagnosisAttestations = memo(function UnconfirmedDiagnosisAttes
 
         return (
           <Card key={attestation.local_id} className="gap-2" style={{ borderColor: theme.warning + '4d', backgroundColor: theme.warning + '1a', borderWidth: 1 }}>
-            <ThemedText type="small" className="font-semibold">
+            <ThemedText type="smallBold">
               {verified_by.name} verified &quot;{condition}&quot; ({severity}) — which diagnosis is this?
             </ThemedText>
             <View className="flex-row flex-wrap gap-2">
@@ -52,18 +51,15 @@ const UnconfirmedDiagnosisAttestations = memo(function UnconfirmedDiagnosisAttes
       })}
     </View>
   );
-});
+}
 
 const SYNC_LABEL: Partial<Record<string, string>> = {
   pending: 'Not yet synced',
   syncing: 'Syncing…',
 };
 
-const DiagnosisRowCard = memo(function DiagnosisRowCard({ item, verifiedCount }: { item: DiagnosisRow; verifiedCount: number }) {
-  const href = useMemo(
-    () => ({ pathname: '/diagnoses/[id]' as const, params: { id: item.local_uuid } }),
-    [item.local_uuid],
-  );
+function DiagnosisRowCard({ item, verifiedCount }: { item: DiagnosisRow; verifiedCount: number }) {
+  const href = { pathname: '/diagnoses/[id]' as const, params: { id: item.local_uuid } };
   const syncLabel = SYNC_LABEL[item.sync_status];
 
   return (
@@ -87,14 +83,14 @@ const DiagnosisRowCard = memo(function DiagnosisRowCard({ item, verifiedCount }:
       </Pressable>
     </Link>
   );
-});
+}
 
 export default function DiagnosesScreen() {
   const { data: diagnoses = [], isLoading } = useDiagnoses();
   const theme = useTheme();
   const { data: attestations = [] } = useAttestations();
 
-  const verifiedCountByUuid = useMemo(() => {
+  const verifiedCountByUuid = () => {
     const map = new Map<string, number>();
     for (const a of attestations) {
       if (a.envelope_type === 'diagnosis_verification' && a.matched_diagnosis_local_uuid) {
@@ -102,7 +98,7 @@ export default function DiagnosesScreen() {
       }
     }
     return map;
-  }, [attestations]);
+  };
 
   if (isLoading) {
     return (
@@ -116,7 +112,7 @@ export default function DiagnosesScreen() {
     <AppLayout scrollable={false}>
       {diagnoses.length === 0 ? (
         <ThemedView className="flex-1 items-center justify-center">
-          <EmptyState title="No diagnoses yet" body="Add any known diagnoses so they’re on hand in an emergency." />
+          <EmptyState title="No diagnoses yet" body="Add any known diagnoses so they're on hand in an emergency." />
         </ThemedView>
       ) : (
         <FlatList
@@ -124,7 +120,7 @@ export default function DiagnosesScreen() {
           keyExtractor={(item) => item.local_uuid}
           ListHeaderComponent={<UnconfirmedDiagnosisAttestations diagnoses={diagnoses} />}
           ItemSeparatorComponent={() => <View className="h-px bg-border" />}
-          renderItem={({ item }) => <DiagnosisRowCard item={item} verifiedCount={verifiedCountByUuid.get(item.local_uuid) ?? 0} />}
+          renderItem={({ item }) => <DiagnosisRowCard item={item} verifiedCount={verifiedCountByUuid().get(item.local_uuid) ?? 0} />}
         />
       )}
     </AppLayout>

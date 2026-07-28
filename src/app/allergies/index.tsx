@@ -1,4 +1,3 @@
-import { memo, useMemo } from 'react';
 import { FlatList, Pressable, View, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 
@@ -14,7 +13,7 @@ import { useUnconfirmedAttestations, useConfirmAttestationMatch } from '@/featur
 import { useTheme } from '@/hooks/use-theme';
 import type { AllergyRow } from '@/db/schema';
 
-const UnconfirmedAttestations = memo(function UnconfirmedAttestations({ allergies }: { allergies: AllergyRow[] }) {
+function UnconfirmedAttestations({ allergies }: { allergies: AllergyRow[] }) {
   const { data: unconfirmed } = useUnconfirmedAttestations();
   const { mutate: confirmMatch, isPending } = useConfirmAttestationMatch();
   const theme = useTheme();
@@ -29,7 +28,7 @@ const UnconfirmedAttestations = memo(function UnconfirmedAttestations({ allergie
 
         return (
           <Card key={attestation.local_id} className="gap-2" style={{ borderColor: theme.warning + '4d', backgroundColor: theme.warning + '1a', borderWidth: 1 }}>
-            <ThemedText type="small" className="font-semibold">
+            <ThemedText type="smallBold">
               {verified_by.name} verified &quot;{allergen}&quot; ({severity}) — which allergy is this?
             </ThemedText>
             <View className="flex-row flex-wrap gap-2">
@@ -50,18 +49,15 @@ const UnconfirmedAttestations = memo(function UnconfirmedAttestations({ allergie
       })}
     </View>
   );
-});
+}
 
 const SYNC_LABEL: Partial<Record<string, string>> = {
   pending: 'Not yet synced',
   syncing: 'Syncing…',
 };
 
-const AllergyRowCard = memo(function AllergyRowCard({ item }: { item: AllergyRow }) {
-  const href = useMemo(
-    () => ({ pathname: '/allergies/[id]' as const, params: { id: item.local_uuid } }),
-    [item.local_uuid],
-  );
+function AllergyRowCard({ item }: { item: AllergyRow }) {
+  const href = { pathname: '/allergies/[id]' as const, params: { id: item.local_uuid } };
   const syncLabel = SYNC_LABEL[item.sync_status];
 
   return (
@@ -82,7 +78,7 @@ const AllergyRowCard = memo(function AllergyRowCard({ item }: { item: AllergyRow
       </Pressable>
     </Link>
   );
-});
+}
 
 export default function AllergiesScreen() {
   const { data: allergies = [], isLoading } = useAllergies();
@@ -100,7 +96,7 @@ export default function AllergiesScreen() {
     <AppLayout scrollable={false}>
       {allergies.length === 0 ? (
         <ThemedView className="flex-1 items-center justify-center">
-          <EmptyState title="No allergies yet" body="Add any known allergies so they’re on hand in an emergency." />
+          <EmptyState title="No allergies yet" body="Add any known allergies so they're on hand in an emergency." />
         </ThemedView>
       ) : (
         <FlatList

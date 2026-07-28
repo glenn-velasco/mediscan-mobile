@@ -1,4 +1,3 @@
-import { memo, useMemo } from 'react';
 import { FlatList, Pressable, View, ActivityIndicator } from 'react-native';
 import { Link } from 'expo-router';
 
@@ -20,10 +19,7 @@ const SYNC_LABEL: Partial<Record<string, string>> = {
 };
 
 function ConditionRowCard({ item, verifiedCount }: { item: ConditionRow; verifiedCount: number }) {
-  const href = useMemo(
-    () => ({ pathname: '/conditions/[id]' as const, params: { id: item.local_uuid } }),
-    [item.local_uuid],
-  );
+  const href = { pathname: '/conditions/[id]' as const, params: { id: item.local_uuid } };
   const syncLabel = SYNC_LABEL[item.sync_status];
 
   return (
@@ -51,7 +47,7 @@ export default function ConditionsScreen() {
   const { data: conditions = [], isLoading } = useConditions();
   const { data: attestations = [] } = useAttestations();
 
-  const verifiedCountByUuid = useMemo(() => {
+  const verifiedCountByUuid = () => {
     const map = new Map<string, number>();
     for (const att of attestations) {
       if (att.envelope_type === 'condition_verification' && att.matched_condition_local_uuid) {
@@ -59,7 +55,7 @@ export default function ConditionsScreen() {
       }
     }
     return map;
-  }, [attestations]);
+  };
 
   if (isLoading) {
     return (
@@ -83,7 +79,7 @@ export default function ConditionsScreen() {
           renderItem={({ item }) => (
             <ConditionRowCard
               item={item}
-              verifiedCount={verifiedCountByUuid.get(item.local_uuid) ?? 0}
+              verifiedCount={verifiedCountByUuid().get(item.local_uuid) ?? 0}
             />
           )}
         />

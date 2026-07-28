@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useForm, Controller, useFormState } from 'react-hook-form';
 
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
@@ -13,6 +14,8 @@ import { useMedications } from '@/features/medications/useMedications';
 import { useUpdateMedication } from '@/features/medications/useUpdateMedication';
 import { useDeleteMedication } from '@/features/medications/useDeleteMedication';
 import { useAttestationsForMedication } from '@/features/professional-attestations/useAttestations';
+import { medicationSchema, type MedicationFormValues } from '@/lib/validation/medication-schema';
+import { zodResolver } from '@/lib/zod-resolver';
 
 export default function EditMedicationScreen() {
   const router = useRouter();
@@ -24,21 +27,19 @@ export default function EditMedicationScreen() {
 
   const existing = medications.find((m) => m.local_uuid === id);
 
-  const [name, setName] = useState('');
-  const [dosage, setDosage] = useState('');
-  const [frequency, setFrequency] = useState('');
-  const [notes, setNotes] = useState('');
+  const form = useForm<MedicationFormValues>({
+    resolver: zodResolver(medicationSchema),
+    defaultValues: { name: '', dosage: '', frequency: '', notes: '' },
+  });
+
+  const { isDirty } = useFormState({ control: form.control });
 
   useEffect(() => {
     if (existing) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time seed of edit form state once the queried record loads
-      setName(existing.name);
-      setDosage(existing.dosage);
-      setFrequency(existing.frequency);
-      setNotes(existing.notes ?? '');
+      form.reset({ name: existing.name, dosage: existing.dosage, frequency: existing.frequency, notes: existing.notes ?? '' });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-seed only when switching records, not on every background refetch
-  }, [existing?.local_uuid]);
+  // react-doctor-disable-next-line react-doctor/exhaustive-deps
+  }, [existing?.local_uuid, form.reset]);
 
   if (!existing) {
     return (
@@ -48,9 +49,8 @@ export default function EditMedicationScreen() {
     );
   }
 
-  const onSave = async () => {
-    if (!name.trim()) return;
-    await updateMedication({ localUuid: existing.local_uuid, payload: { name, dosage, frequency, notes: notes || undefined } });
+  const onSave = async (data: MedicationFormValues) => {
+    await updateMedication({ localUuid: existing.local_uuid, payload: data });
     router.back();
   };
 
@@ -65,10 +65,18 @@ export default function EditMedicationScreen() {
         <ConflictBanner message="This couldn't be saved. Check sync status for details." className="mb-4" />
       ) : null}
 
-      <TextField label="Name" value={name} onChangeText={setName} />
-      <TextField label="Dosage" value={dosage} onChangeText={setDosage} />
-      <TextField label="Frequency" value={frequency} onChangeText={setFrequency} />
-      <TextField label="Notes" value={notes} onChangeText={setNotes} />
+      <Controller control={form.control} name="name" render={({ field, fieldState }) => (
+        <TextField label="Name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="dosage" render={({ field, fieldState }) => (
+        <TextField label="Dosage" value={field.value ?? ''} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="frequency" render={({ field, fieldState }) => (
+        <TextField label="Frequency" value={field.value ?? ''} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
+      <Controller control={form.control} name="notes" render={({ field, fieldState }) => (
+        <TextField label="Notes" value={field.value ?? ''} onChangeText={field.onChange} error={fieldState.error?.message} />
+      )} />
 
       {(attestations.length > 0 || (existing.verified_by && existing.verified_by.length > 0)) ? (
         <Card className="mb-6 gap-3">
@@ -104,7 +112,7 @@ export default function EditMedicationScreen() {
         </Card>
       ) : null}
 
-      <PrimaryButton label="Save" loading={isSaving} onPress={onSave} disabled={isDeleting || !name.trim()} className="mb-2" />
+      <PrimaryButton label="Save" loading={isSaving} onPress={() => void form.handleSubmit(onSave)()} disabled={!isDirty || isDeleting || isSaving} className="mb-2" />
       <PrimaryButton label="Delete medication" variant="danger" loading={isDeleting} onPress={onDelete} disabled={isSaving} />
     </AppLayout>
   );
