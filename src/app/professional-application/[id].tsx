@@ -57,10 +57,10 @@ function StatusHero({
       <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: color + '15' }}>
         <Ionicons name={STATUS_ICON[status]} size={32} color={color} />
       </View>
-      <ThemedText className="text-xl font-semibold">{STATUS_LABEL[status]}</ThemedText>
+      <ThemedText type="screenTitle">{STATUS_LABEL[status]}</ThemedText>
       {status === 'processing' ? (
         <ThemedText color="mutedForeground" className="text-center">
-          We're verifying your ID and identity. This usually takes a minute.
+          We&apos;re verifying your ID and identity. This usually takes a minute.
         </ThemedText>
       ) : null}
       {status === 'pending_review' ? (
@@ -77,7 +77,7 @@ function StatusHero({
       ) : null}
       {stale ? (
         <ThemedText type="small" color="mutedForeground" className="text-center">
-          Showing the last known update — full details aren't available right now.
+          Showing the last known update — full details aren&apos;t available right now.
         </ThemedText>
       ) : null}
     </View>
@@ -155,7 +155,7 @@ function StatusFallbackError({ isNotFound, error, onBack }: { isNotFound: boolea
       <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.destructive + '15' }}>
         <Ionicons name="alert-circle" size={32} color={theme.destructive} />
       </View>
-      <ThemedText className="text-xl font-semibold">
+      <ThemedText type="screenTitle">
         {isNotFound ? 'Application not found' : 'Something went wrong'}
       </ThemedText>
       <ThemedText color="mutedForeground" className="text-center">

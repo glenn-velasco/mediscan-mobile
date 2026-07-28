@@ -38,7 +38,7 @@ function EmailVerificationRow({ item }: { item: AppNotification }) {
           {item.body}
         </ThemedText>
         <Pressable onPress={() => send()} disabled={isPending} hitSlop={8} className="mt-2 self-start">
-          <ThemedText type="small" color="primary" className="font-semibold">
+          <ThemedText type="smallBold" color="primary">
             {isPending ? 'Sending…' : 'Resend verification email'}
           </ThemedText>
         </Pressable>
@@ -52,6 +52,11 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { items, loaded, markRead } = useNotifications();
 
+  const handlePress = useGuardedPress((item: AppNotification) => {
+    void markRead(item.id);
+    if (item.href) router.push(item.href as never);
+  });
+
   if (loaded && items.length === 0) {
     return (
       <ThemedView className="flex-1 items-center justify-center">
@@ -59,11 +64,6 @@ export default function NotificationsScreen() {
       </ThemedView>
     );
   }
-
-  const handlePress = useGuardedPress((item: AppNotification) => {
-    void markRead(item.id);
-    if (item.href) router.push(item.href as never);
-  });
 
   return (
     <AppLayout scrollable={false}>

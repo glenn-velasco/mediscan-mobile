@@ -12,7 +12,6 @@ import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useBleAdvertising } from '@/features/ble-sync/useBleAdvertising';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
-import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
@@ -24,7 +23,6 @@ export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
-  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const { data: myApplication } = useMyProfessionalApplication();
   // A denied/auto-rejected application is soft-deleted but still returned by the API for a few
   // days before pruning — the user already learned the outcome via notification, so treat it the
@@ -59,6 +57,7 @@ export default function AccountScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       await refreshUser();
     } catch {
@@ -81,7 +80,6 @@ export default function AccountScreen() {
               ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined })
               : '?'
           }
-          imageUrl={medicalInformationAvatar?.avatar}
           size={72}
         />
         <ThemedText color="mutedForeground">{user?.email}</ThemedText>
@@ -91,7 +89,7 @@ export default function AccountScreen() {
             style={{ backgroundColor: theme.primary + '20', borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 }}
           >
             <Ionicons name="shield-checkmark" size={14} color={theme.primary} />
-            <ThemedText type="small" style={{ color: theme.primary }}>
+            <ThemedText type="small" color="primary">
               Verified Professional
             </ThemedText>
           </View>
@@ -134,7 +132,7 @@ export default function AccountScreen() {
           </View>
           {deviceKey ? (
             <Pressable onPress={() => rotateKey()} disabled={isRotating} hitSlop={8}>
-              <ThemedText type="small" color="primary" className="font-semibold">
+              <ThemedText type="smallBold" color="primary">
                 {isRotating ? 'Rotating…' : 'Rotate'}
               </ThemedText>
             </Pressable>

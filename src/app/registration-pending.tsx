@@ -24,10 +24,10 @@ export default function RegistrationPendingScreen() {
         <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.warning + '15' }}>
           <Ionicons name="mail-unread-outline" size={32} color={theme.warning} />
         </View>
-        <ThemedText className="text-center text-xl font-semibold">Registration received</ThemedText>
+        <ThemedText type="screenTitle" className="text-center">Registration received</ThemedText>
         <ThemedText color="mutedForeground" className="text-center">
-          Someone with an existing medical record needs to confirm this is you before your account is created. We'll
-          email you once it's approved.
+          Someone with an existing medical record needs to confirm this is you before your account is created. We&apos;ll
+          email you once it&apos;s approved.
         </ThemedText>
         <PrimaryButton label="Back to login" className="mt-4 w-sm" onPress={() => router.replace('/(auth)')} />
       </View>

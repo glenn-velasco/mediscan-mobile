@@ -45,6 +45,7 @@ export default function SyncStatusScreen() {
 
   const onRetryPull = async () => {
     setRefreshing(true);
+    // react-doctor-disable-next-line react-hooks-js/todo
     try {
       await pull();
     } finally {

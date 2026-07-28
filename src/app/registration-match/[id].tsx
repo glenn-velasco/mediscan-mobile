@@ -41,7 +41,7 @@ export default function RegistrationMatchScreen() {
           <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.destructive + '15' }}>
             <Ionicons name="alert-circle" size={32} color={theme.destructive} />
           </View>
-          <ThemedText className="text-xl font-semibold">Something went wrong</ThemedText>
+          <ThemedText type="screenTitle">Something went wrong</ThemedText>
           <ThemedText color="mutedForeground" className="text-center">
             {getErrorMessage(error)}
           </ThemedText>
@@ -58,7 +58,7 @@ export default function RegistrationMatchScreen() {
           <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.mutedForeground + '15' }}>
             <Ionicons name="checkmark-done-circle" size={32} color={theme.mutedForeground} />
           </View>
-          <ThemedText className="text-xl font-semibold">Nothing to review</ThemedText>
+          <ThemedText type="screenTitle">Nothing to review</ThemedText>
           <ThemedText color="mutedForeground" className="text-center">
             This request has already been resolved or is no longer available.
           </ThemedText>
@@ -77,7 +77,7 @@ export default function RegistrationMatchScreen() {
         <View className="h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: theme.warning + '15' }}>
           <Ionicons name="help-circle" size={32} color={theme.warning} />
         </View>
-        <ThemedText className="text-xl font-semibold">Verification needed</ThemedText>
+        <ThemedText type="screenTitle">Verification needed</ThemedText>
         <ThemedText color="mutedForeground" className="text-center">
           Someone registered for an account claiming to be linked to your medical record. Was this you?
         </ThemedText>
@@ -85,7 +85,7 @@ export default function RegistrationMatchScreen() {
 
       <Card className="gap-1">
         <ThemedText type="small" color="mutedForeground">
-          If this was you, accept to link your accounts. If you don't recognize this, deny it — the registration will be removed.
+          If this was you, accept to link your accounts. If you don&apos;t recognize this, deny it — the registration will be removed.
         </ThemedText>
       </Card>
 

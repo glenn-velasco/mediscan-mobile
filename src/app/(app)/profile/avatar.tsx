@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
-import { Image, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Alert, View } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,40 +8,59 @@ import * as ImagePicker from 'expo-image-picker';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/primary-button';
-import { useTheme } from '@/hooks/use-theme';
-import { useApiError } from '@/api/use-api-error';
-import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
-import { useUpdateMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
-import type { SelectedAvatarPhoto } from '@/services/medical-information-avatar.service';
+import { useAvatarStore } from '@/stores/avatar-store';
 
-type Mode = 'choose' | 'camera' | 'preview';
+type Mode = 'choose' | 'camera';
 
 export default function AvatarCaptureScreen() {
   const router = useRouter();
-  const theme = useTheme();
-  const { message, setError, clearErrors } = useApiError();
-  const { data: medicalInformation } = useMedicalInformation();
-  const { mutateAsync: submitPhoto, isPending: uploading } = useUpdateMedicalInformationAvatar();
+  const saveLocal = useAvatarStore((s) => s.saveLocal);
+  const setPendingUpload = useAvatarStore((s) => s.setPendingUpload);
+  const medicalInformationId = useAvatarStore((s) => s.medicalInformationId);
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
 
   const [mode, setMode] = useState<Mode>('choose');
-  const [photo, setPhoto] = useState<SelectedAvatarPhoto | null>(null);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const openCamera = useCallback(async () => {
-    clearErrors();
+  const handleUsePhoto = async () => {
+    if (!previewUri) return;
+
+    if (!medicalInformationId) {
+      console.warn('[avatar-screen] no medicalInformationId, cannot upload');
+      Alert.alert('Not ready', 'Your profile is still loading. Please try again.');
+      return;
+    }
+
+    console.log('[avatar-screen] saving photo locally...', { previewUri, medicalInformationId });
+    setSaving(true);
+    // react-doctor-disable-next-line react-hooks-js/todo
+    try {
+      const localUri = await saveLocal(previewUri);
+      console.log('[avatar-screen] saved locally:', localUri);
+
+      setPendingUpload({ localUri, medicalInformationId });
+      console.log('[avatar-screen] pending upload set, navigating back');
+
+      router.back();
+    } catch (e) {
+      console.warn('[avatar-screen] save failed:', e);
+      Alert.alert('Error', 'Failed to save photo. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
-      if (!result.granted) {
-        setError(new Error('Camera access is needed to take a selfie.'));
-        return;
-      }
+      if (!result.granted) return;
     }
     setMode('camera');
-  }, [permission, requestPermission, clearErrors, setError]);
+  };
 
-  const openGallery = useCallback(async () => {
-    clearErrors();
+  const openGallery = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -48,40 +68,20 @@ export default function AvatarCaptureScreen() {
       quality: 0.85,
     });
     if (result.canceled || !result.assets[0]) return;
+    setPreviewUri(result.assets[0].uri);
+  };
 
-    const asset = result.assets[0];
-    setPhoto({ uri: asset.uri, name: 'avatar.jpg', type: 'image/jpeg' });
-    setMode('preview');
-  }, [clearErrors]);
-
-  const takeSelfie = useCallback(async () => {
+  const takeSelfie = async () => {
     if (!cameraRef.current) return;
     const captured = await cameraRef.current.takePictureAsync({ quality: 0.85 });
     if (!captured) return;
-    setPhoto({ uri: captured.uri, name: 'avatar.jpg', type: 'image/jpeg' });
-    setMode('preview');
-  }, []);
+    setPreviewUri(captured.uri);
+  };
 
-  const retake = useCallback(() => {
-    setPhoto(null);
+  const retake = () => {
+    setPreviewUri(null);
     setMode('choose');
-  }, []);
-
-  const usePhoto = useCallback(async () => {
-    if (!photo) return;
-    if (!medicalInformation?.server_id) {
-      setError(new Error('Your medical information hasn\'t finished syncing yet — please try again shortly.'));
-      return;
-    }
-
-    clearErrors();
-    try {
-      await submitPhoto({ medicalInformationId: medicalInformation.server_id, photo });
-      router.back();
-    } catch (err) {
-      setError(err);
-    }
-  }, [photo, medicalInformation?.server_id, submitPhoto, clearErrors, setError, router]);
+  };
 
   return (
     <AppLayout>
@@ -90,22 +90,14 @@ export default function AvatarCaptureScreen() {
         <ThemedText type="subtitle">Choose a profile photo</ThemedText>
       </View>
 
-      {message ? (
-        <View className="mb-4 rounded-md p-3" style={{ backgroundColor: theme.destructive + '26' }}>
-          <ThemedText type="small" style={{ color: theme.destructive }}>
-            {message}
-          </ThemedText>
-        </View>
-      ) : null}
-
-      {mode === 'choose' ? (
+      {!previewUri && mode === 'choose' ? (
         <View className="gap-3">
           <PrimaryButton label="Take a selfie" onPress={() => void openCamera()} />
           <PrimaryButton label="Choose from gallery" variant="ghost" onPress={() => void openGallery()} />
         </View>
       ) : null}
 
-      {mode === 'camera' ? (
+      {!previewUri && mode === 'camera' ? (
         <View className="gap-3">
           <View className="aspect-square w-full overflow-hidden rounded-lg bg-black">
             <CameraView ref={cameraRef} style={{ width: '100%', height: '100%' }} facing="front" />
@@ -115,11 +107,11 @@ export default function AvatarCaptureScreen() {
         </View>
       ) : null}
 
-      {mode === 'preview' && photo ? (
+      {previewUri ? (
         <View className="gap-3">
-          <Image source={{ uri: photo.uri }} className="aspect-square w-full rounded-lg" resizeMode="cover" />
-          <PrimaryButton label="Use photo" loading={uploading} onPress={() => void usePhoto()} />
-          <PrimaryButton label="Choose a different photo" variant="ghost" disabled={uploading} onPress={retake} />
+          <Image source={{ uri: previewUri }} className="aspect-square w-full rounded-lg" contentFit="cover" />
+          <PrimaryButton label="Use photo" loading={saving} onPress={() => void handleUsePhoto()} />
+          <PrimaryButton label="Choose a different photo" variant="ghost" disabled={saving} onPress={retake} />
         </View>
       ) : null}
     </AppLayout>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -26,22 +26,24 @@ export default function CreateProfessionalApplicationScreen() {
   const router = useRouter();
   const { message, setError, clearErrors } = useApiError();
   const [step, setStep] = useState<Step>('id-photo');
-  const [idPhoto, setIdPhoto] = useState<CapturedPhoto | null>(null);
-  const [liveness, setLiveness] = useState<LivenessCaptureResult | null>(null);
+  const idPhotoRef = useRef<CapturedPhoto | null>(null);
+  const livenessRef = useRef<LivenessCaptureResult | null>(null);
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const handleIdPhoto = useCallback((photo: CapturedPhoto) => {
-    setIdPhoto(photo);
+  const handleIdPhoto = (photo: CapturedPhoto) => {
+    idPhotoRef.current = photo;
     setStep('liveness');
-  }, []);
+  };
 
-  const handleLiveness = useCallback((result: LivenessCaptureResult) => {
-    setLiveness(result);
+  const handleLiveness = (result: LivenessCaptureResult) => {
+    livenessRef.current = result;
     setStep('date-of-birth');
-  }, []);
+  };
 
-  const submit = useCallback(async () => {
+  const submit = async () => {
+    const idPhoto = idPhotoRef.current;
+    const liveness = livenessRef.current;
     if (!idPhoto || !liveness) return;
 
     const result = dateOfBirthSchema.safeParse(dateOfBirth);
@@ -68,7 +70,7 @@ export default function CreateProfessionalApplicationScreen() {
       setError(err);
       setStep('date-of-birth');
     }
-  }, [idPhoto, liveness, dateOfBirth, clearErrors, setError, router]);
+  };
 
   return (
     <AppLayout>
@@ -80,7 +82,7 @@ export default function CreateProfessionalApplicationScreen() {
       <FormError message={message} />
 
       {step === 'id-photo' && <IdPhotoCaptureView onCaptured={handleIdPhoto} />}
-      {step === 'liveness' && <LivenessCaptureView onCaptured={handleLiveness} onReset={() => setLiveness(null)} />}
+      {step === 'liveness' && <LivenessCaptureView onCaptured={handleLiveness} onReset={() => (livenessRef.current = null)} />}
       {(step === 'date-of-birth' || step === 'submitting') && (
         <View className="gap-4">
           <DateField

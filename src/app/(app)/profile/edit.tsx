@@ -1,20 +1,21 @@
-import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Pressable, Switch, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
+import { useForm, Controller, useFormState, useWatch } from 'react-hook-form';
 
 import { ThemedText } from '@/components/themed-text';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { Avatar } from '@/components/avatar';
+import { AvatarPreviewSheet, type AvatarPreviewSheetHandle } from '@/components/avatar-preview-sheet';
 import { TextField } from '@/components/form/text-field';
 import { DateField } from '@/components/form/date-field';
 import { SelectField } from '@/components/form/select-field';
 import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
-import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
+import { PhoneInput } from '@/components/form/phone-input';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useUpdateMedicalInformation } from '@/features/medical-information/useUpdateMedicalInformation';
-import { useMedicalInformationAvatar } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useAuth } from '@/auth/useAuth';
 import { useApiError } from '@/api/use-api-error';
 import { getFieldErrors } from '@/api/errors';
@@ -25,6 +26,7 @@ import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/reli
 import { medicalInformationSchema } from '@/lib/validation/medical-information-schema';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
+import { zodResolver } from '@/lib/zod-resolver';
 
 type FormState = {
   first_name: string;
@@ -35,6 +37,8 @@ type FormState = {
   gender: Gender | undefined;
   blood_type: BloodType | undefined;
   religion: Religion | undefined;
+  phone_country_code: string;
+  phone: string;
   address: MedicalInformationAddress;
   no_blood_transfusion: boolean;
 };
@@ -43,131 +47,202 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { data: existing } = useMedicalInformation();
-  const { data: medicalInformationAvatar } = useMedicalInformationAvatar();
   const { mutateAsync: save, isPending } = useUpdateMedicalInformation();
   const { message, setError, clearErrors } = useApiError();
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Email is intentionally not editable here — it's account identity and carries a server-side
-  // uniqueness constraint that can't be validated offline, so it's handled by settings/email.tsx
-  // (which requires a live connection) instead of this offline-queued profile form.
   const email = existing?.email ?? user?.email ?? '';
 
-  const [form, setForm] = useState<FormState>({
-    first_name: existing?.first_name ?? '',
-    middle_name: existing?.middle_name ?? '',
-    last_name: existing?.last_name ?? '',
-    suffix: existing?.suffix ?? undefined,
-    date_of_birth: existing?.date_of_birth ?? '',
-    gender: existing?.gender ?? undefined,
-    blood_type: existing?.blood_type ?? undefined,
-    religion: existing?.religion ?? undefined,
-    address: parseStoredAddress(existing?.address ?? null) ?? EMPTY_ADDRESS,
-    no_blood_transfusion: !!existing?.no_blood_transfusion,
+  const form = useForm<FormState>({
+    resolver: zodResolver(medicalInformationSchema) as any,
+    defaultValues: {
+      first_name: '',
+      middle_name: '',
+      last_name: '',
+      suffix: undefined,
+      date_of_birth: '',
+      gender: undefined,
+      blood_type: undefined,
+      religion: undefined,
+      phone_country_code: 'PH',
+      phone: '',
+      address: EMPTY_ADDRESS,
+      no_blood_transfusion: false,
+    },
   });
-  const [phoneValue, setPhoneValue] = useState<PhoneInputValue>({
-    countryCode: existing?.phone_country_code ?? 'PH',
-    phone: existing?.phone ?? '',
-  });
 
-  const parseFieldErrors = (issues: readonly any[]) => {
-    const errors: Record<string, string> = {};
-    for (const issue of issues) {
-      const path = issue.path as string[];
-      if (path.length === 1) {
-        const key = path[0];
-        if (key && !errors[key]) errors[key] = issue.message;
-      } else if (path.length >= 2 && path[0] === 'address') {
-        const key = path[1];
-        if (key && !errors[key]) errors[key] = issue.message;
-      }
-    }
-    return errors;
-  };
+  const { isDirty } = useFormState({ control: form.control });
+  const phoneCountryCode = useWatch({ control: form.control, name: 'phone_country_code' });
 
-  const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const onSubmit = async () => {
-    clearErrors();
-    setFieldErrors({});
-
-    const result = medicalInformationSchema.safeParse({
-      ...form,
-      phone_country_code: phoneValue.countryCode,
-      phone: phoneValue.phone,
+  // react-doctor-disable-next-line react-hooks-js/exhaustive-deps
+  useEffect(() => {
+    if (!existing) return;
+    form.reset({
+      first_name: existing.first_name ?? '',
+      middle_name: existing.middle_name ?? '',
+      last_name: existing.last_name ?? '',
+      suffix: existing.suffix ?? undefined,
+      date_of_birth: existing.date_of_birth ?? '',
+      gender: existing.gender ?? undefined,
+      blood_type: existing.blood_type ?? undefined,
+      religion: existing.religion ?? undefined,
+      phone_country_code: existing.phone_country_code ?? 'PH',
+      phone: existing.phone ?? '',
+      address: parseStoredAddress(existing.address ?? null) ?? EMPTY_ADDRESS,
+      no_blood_transfusion: !!existing.no_blood_transfusion,
     });
-    if (!result.success) {
-      setFieldErrors(parseFieldErrors(result.error.issues));
-      return;
-    }
+  }, [existing, form.reset]);
+
+  const onSubmit = async (data: FormState) => {
+    clearErrors();
+    form.clearErrors();
 
     try {
-      const { blood_type, ...rest } = result.data;
-      const payload: MedicalInformationPayload = { email, ...rest, ...(blood_type ? { blood_type } : {}) };
+      const payload: MedicalInformationPayload = {
+        email,
+        first_name: data.first_name,
+        middle_name: data.middle_name || undefined,
+        last_name: data.last_name,
+        suffix: data.suffix ?? undefined,
+        date_of_birth: data.date_of_birth || undefined,
+        gender: data.gender ?? undefined,
+        blood_type: data.blood_type ?? undefined,
+        religion: data.religion ?? undefined,
+        phone_country_code: data.phone_country_code || undefined,
+        phone: data.phone || undefined,
+        address: data.address || undefined,
+        no_blood_transfusion: data.no_blood_transfusion,
+      };
       await save(payload);
       router.back();
     } catch (err) {
       setError(err);
-      setFieldErrors((prev) => ({ ...prev, ...getFieldErrors(err) }));
+      const apiErrors = getFieldErrors(err);
+      for (const [key, msg] of Object.entries(apiErrors)) {
+        form.setError(key as keyof FormState, { message: msg });
+      }
     }
   };
+
+  const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
 
   return (
     <AppLayout avoidKeyboard>
       <View className="mb-6 items-center gap-2">
-        <Avatar name={existing?.full_name || 'Unnamed'} imageUrl={medicalInformationAvatar?.avatar} size={80} />
-        <Link href="/profile/avatar">
+        <Pressable onPress={() => avatarSheetRef.current?.present()}>
+          <Avatar name={existing?.full_name || 'Unnamed'} size={80} />
+        </Pressable>
+        <Pressable onPress={() => avatarSheetRef.current?.present()}>
           <ThemedText type="linkPrimary">Change photo</ThemedText>
-        </Link>
+        </Pressable>
       </View>
+      <AvatarPreviewSheet ref={avatarSheetRef} name={existing?.full_name || 'Unnamed'} />
 
       <ThemedText type="overline" className="mb-2">
         Identity
       </ThemedText>
-      <TextField label="First name" value={form.first_name} onChangeText={(v) => setField('first_name', v)} error={fieldErrors.first_name} />
-      <TextField label="Middle name" value={form.middle_name} onChangeText={(v) => setField('middle_name', v)} />
-      <TextField label="Last name" value={form.last_name} onChangeText={(v) => setField('last_name', v)} error={fieldErrors.last_name} />
-      <SelectField
-        placeholder="Suffix"
-        options={SUFFIX_OPTIONS}
-        value={form.suffix}
-        onChange={(v) => setField('suffix', v)}
-        allowClear
-        getLabel={(v) => SuffixLabel[v]}
+      <Controller
+        control={form.control}
+        name="first_name"
+        render={({ field, fieldState }) => (
+          <TextField label="First name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+        )}
       />
-      <DateField
-        label="Date of birth"
-        value={form.date_of_birth}
-        onChange={(v) => setField('date_of_birth', v)}
-        maximumDate={new Date()}
-        error={fieldErrors.date_of_birth}
+      <Controller
+        control={form.control}
+        name="middle_name"
+        render={({ field }) => (
+          <TextField label="Middle name" value={field.value} onChangeText={field.onChange} />
+        )}
       />
-      <SelectField
-        placeholder="Gender"
-        options={GENDER_OPTIONS}
-        value={form.gender}
-        onChange={(v) => setField('gender', v)}
-        error={fieldErrors.gender}
-        getLabel={(v) => GenderLabel[v]}
+      <Controller
+        control={form.control}
+        name="last_name"
+        render={({ field, fieldState }) => (
+          <TextField label="Last name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
+        )}
+      />
+      <Controller
+        control={form.control}
+        name="suffix"
+        render={({ field }) => (
+          <SelectField
+            placeholder="Suffix"
+            options={SUFFIX_OPTIONS}
+            value={field.value}
+            onChange={field.onChange}
+            allowClear
+            getLabel={(v) => SuffixLabel[v]}
+          />
+        )}
+      />
+      <Controller
+        control={form.control}
+        name="date_of_birth"
+        render={({ field, fieldState }) => (
+          <DateField
+            label="Date of birth"
+            value={field.value}
+            onChange={field.onChange}
+            maximumDate={new Date()}
+            error={fieldState.error?.message}
+          />
+        )}
+      />
+      <Controller
+        control={form.control}
+        name="gender"
+        render={({ field, fieldState }) => (
+          <SelectField
+            placeholder="Gender"
+            options={GENDER_OPTIONS}
+            value={field.value}
+            onChange={field.onChange}
+            error={fieldState.error?.message}
+            getLabel={(v) => GenderLabel[v]}
+          />
+        )}
       />
       <View className="my-5 border-t border-border" />
 
       <ThemedText type="overline" className="mb-2 mt-5">
         Contact
       </ThemedText>
-      <PhoneInput value={phoneValue} onChange={setPhoneValue} error={fieldErrors.phone || fieldErrors.phone_country_code} />
-      <AddressFields
-        value={form.address}
-        onChange={(v) => setField('address', v)}
-        errors={{
-          street: fieldErrors.street,
-          unit: fieldErrors.unit,
-          city: fieldErrors.city,
-          province: fieldErrors.province,
-          postal_code: fieldErrors.postal_code,
-          country: fieldErrors.country,
+      <Controller
+        control={form.control}
+        name="phone"
+        render={({ field }) => {
+          const phoneErr = form.formState.errors.phone?.message || form.formState.errors.phone_country_code?.message;
+          return (
+            <PhoneInput
+              value={{ countryCode: phoneCountryCode, phone: field.value }}
+              onChange={(v) => {
+                form.setValue('phone_country_code', v.countryCode, { shouldDirty: true });
+                form.setValue('phone', v.phone, { shouldDirty: true });
+              }}
+              error={phoneErr}
+            />
+          );
+        }}
+      />
+      <Controller
+        control={form.control}
+        name="address"
+        render={({ field }) => {
+          const addrErrors = form.formState.errors.address;
+          return (
+            <AddressFields
+              value={field.value}
+              onChange={field.onChange}
+              errors={{
+                street: addrErrors?.street?.message,
+                unit: addrErrors?.unit?.message,
+                city: addrErrors?.city?.message,
+                province: addrErrors?.province?.message,
+                postal_code: addrErrors?.postal_code?.message,
+                country: addrErrors?.country?.message,
+              }}
+            />
+          );
         }}
       />
       <View className="my-5 border-t border-border" />
@@ -175,26 +250,44 @@ export default function EditProfileScreen() {
       <ThemedText type="overline" className="mb-2 mt-5">
         Medical details
       </ThemedText>
-      <SelectField
-        placeholder="Blood type"
-        options={BLOOD_TYPE_OPTIONS}
-        value={form.blood_type}
-        onChange={(v) => setField('blood_type', v)}
-        error={fieldErrors.blood_type}
-        getLabel={(v) => BloodTypeLabel[v]}
+      <Controller
+        control={form.control}
+        name="blood_type"
+        render={({ field, fieldState }) => (
+          <SelectField
+            placeholder="Blood type"
+            options={BLOOD_TYPE_OPTIONS}
+            value={field.value}
+            onChange={field.onChange}
+            error={fieldState.error?.message}
+            getLabel={(v) => BloodTypeLabel[v]}
+          />
+        )}
       />
-      <SelectField
-        placeholder="Religion"
-        options={RELIGION_OPTIONS}
-        value={form.religion}
-        onChange={(v) => setField('religion', v)}
-        allowClear
-        getLabel={(v) => ReligionLabel[v]}
+      <Controller
+        control={form.control}
+        name="religion"
+        render={({ field }) => (
+          <SelectField
+            placeholder="Religion"
+            options={RELIGION_OPTIONS}
+            value={field.value}
+            onChange={field.onChange}
+            allowClear
+            getLabel={(v) => ReligionLabel[v]}
+          />
+        )}
       />
-      <View className="flex-row items-center justify-between">
-        <ThemedText>No blood transfusion</ThemedText>
-        <Switch value={form.no_blood_transfusion} onValueChange={(v) => setField('no_blood_transfusion', v)} />
-      </View>
+      <Controller
+        control={form.control}
+        name="no_blood_transfusion"
+        render={({ field }) => (
+          <View className="flex-row items-center justify-between">
+            <ThemedText>No blood transfusion</ThemedText>
+            <Switch value={field.value} onValueChange={field.onChange} />
+          </View>
+        )}
+      />
       <View className="my-5 border-t border-border" />
 
       <View className="mb-4 flex-row items-center justify-between">
@@ -211,8 +304,8 @@ export default function EditProfileScreen() {
       <PrimaryButton
         label="Save"
         loading={isPending}
-        onPress={onSubmit}
-        disabled={!form.address.street?.trim() || !form.address.unit?.trim() || !form.address.city?.trim() || !form.address.province?.trim() || !form.address.postal_code?.trim() || !form.address.country?.trim()}
+        onPress={() => void form.handleSubmit(onSubmit)()}
+        disabled={!isDirty}
         className="mb-16"
       />
     </AppLayout>
