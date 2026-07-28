@@ -5,6 +5,7 @@ import * as deviceKeyRepo from '@/db/repositories/device-key.repo';
 import { registerDeviceKey, revokeDeviceKey } from '@/api/endpoints/device-keys';
 import { generateKeypair, type Keypair } from '@/services/sealed-box.service';
 import * as deviceKeyStorage from '@/services/device-key-storage';
+import { getIsOffline } from '@/lib/network-state';
 
 class NoDeviceKeyError extends Error {
   constructor() {
@@ -13,7 +14,11 @@ class NoDeviceKeyError extends Error {
   }
 }
 
-/** Registers a new device keypair if one isn't already set up. Safe to call on every authenticated app boot. */
+/**
+ * Generates and stores a device keypair locally if one isn't already set up.
+ * Works fully offline — BLE sync can start immediately without a server round-trip.
+ * Safe to call on every authenticated app boot.
+ */
 export async function ensureDeviceKeyRegistered(): Promise<void> {
   const [localRow, privateKey] = await Promise.all([deviceKeyRepo.getLocal(), deviceKeyStorage.loadPrivateKey()]);
   if (localRow && privateKey) return;
@@ -23,13 +28,30 @@ export async function ensureDeviceKeyRegistered(): Promise<void> {
   await deviceKeyStorage.setPrivateKey(sodium.to_base64(keypair.privateKey));
 
   const label = await getDeviceName();
-  const registered = await registerDeviceKey({ public_key: publicKeyB64, label });
-  await deviceKeyRepo.saveRegistered({
-    serverDeviceKeyId: registered.id,
-    publicKey: publicKeyB64,
-    label: registered.label,
-    registeredAt: registered.registered_at,
-  });
+  await deviceKeyRepo.saveLocal({ publicKey: publicKeyB64, label });
+}
+
+/**
+ * Registers the local device keypair with the server if it hasn't been registered yet.
+ * Requires internet — call from sync triggers on reconnect or foreground.
+ */
+export async function ensureDeviceKeyServerRegistered(): Promise<void> {
+  if (getIsOffline()) return;
+  const localRow = await deviceKeyRepo.getLocal();
+  if (!localRow) return;
+  if (localRow.server_device_key_id != null) return;
+
+  try {
+    const registered = await registerDeviceKey({ public_key: localRow.public_key, label: localRow.label ?? undefined });
+    await deviceKeyRepo.saveRegistered({
+      serverDeviceKeyId: registered.id,
+      publicKey: localRow.public_key,
+      label: registered.label,
+      registeredAt: registered.registered_at,
+    });
+  } catch {
+    // Left without server_device_key_id for the next retry attempt.
+  }
 }
 
 /**
@@ -63,6 +85,7 @@ export async function rotateDeviceKey(): Promise<void> {
 
 /** Retries a revoke left over from an interrupted rotation. Safe/cheap to call on every app foreground. */
 export async function retryPendingRevoke(): Promise<void> {
+  if (getIsOffline()) return;
   const local = await deviceKeyRepo.getLocal();
   if (local?.pending_revoke_server_id == null) return;
 

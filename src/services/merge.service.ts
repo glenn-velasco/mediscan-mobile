@@ -344,14 +344,16 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
   await pendingSyncEnvelopeRepo.markMerged(envelope.local_id);
   console.debug(TAG, 'Envelope merged successfully', { localId: envelope.local_id });
 
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: allergiesQueryKey }),
-    queryClient.invalidateQueries({ queryKey: conditionsQueryKey }),
-    queryClient.invalidateQueries({ queryKey: diagnosesQueryKey }),
-    queryClient.invalidateQueries({ queryKey: medicationsQueryKey }),
-    queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey }),
-    queryClient.invalidateQueries({ queryKey: attestationsQueryKey }),
-  ]);
+  // Batch query invalidations to avoid rendering storms — use a single microtask
+  // so all envelopes in a batch are processed before re-renders fire.
+  void Promise.resolve().then(() => {
+    queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
+    queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
+    queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
+    queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
+    queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+    queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
+  });
 
   return 'merged';
 }

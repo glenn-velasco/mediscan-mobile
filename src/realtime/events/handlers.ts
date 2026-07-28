@@ -9,6 +9,7 @@ import { professionalApplicationQueryKey } from '@/features/professional-applica
 import { myProfessionalApplicationQueryKey, professionalApplicationBroadcastStatusQueryKey } from '@/lib/query-keys';
 import type { UserChannelEventHandlers } from '@/realtime/events/types';
 import { pullPendingSync } from '@/services/pending-sync.service';
+import { getAppReady } from '@/lib/app-ready';
 import { pullPatientChanges } from '@/services/patient-sync.service';
 
 const TAG = '[EventHandler]';
@@ -49,6 +50,10 @@ export function createUserChannelHandlers(deps: {
 
     PendingSyncEnvelopeCreated: async (payload) => {
       console.log(TAG, 'PendingSyncEnvelopeCreated received', { id: payload.envelope_id });
+      if (!getAppReady()) {
+        console.log(TAG, 'PendingSyncEnvelopeCreated skipped — app not ready yet');
+        return;
+      }
       await pullPendingSync();
       await deps.queryClient.invalidateQueries({ queryKey: pendingSyncQueryKey });
       await deps.queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
@@ -60,6 +65,10 @@ export function createUserChannelHandlers(deps: {
     // fallback for missed events (offline delivery gaps), not the primary trigger.
     PatientRecordUpdated: async (payload) => {
       console.log(TAG, 'PatientRecordUpdated received', { recordType: payload.record_type, recordId: payload.record_id });
+      if (!getAppReady()) {
+        console.log(TAG, 'PatientRecordUpdated skipped — app not ready yet');
+        return;
+      }
       await pullPatientChanges();
     },
 

@@ -17,11 +17,8 @@ export async function backfillVerifiedBy(): Promise<void> {
   
   const attestations = await professionalAttestationRepo.getAll();
   
-  let allergiesUpdated = 0;
-  let conditionsUpdated = 0;
-  let diagnosesUpdated = 0;
-  let medicationsUpdated = 0;
-  
+  const allUpdates: Promise<void>[] = [];
+
   for (const att of attestations) {
     const payload = att.payload as { verified_by?: { user_id: number; name: string }; verified_at?: string };
     if (!payload.verified_by || !payload.verified_at) continue;
@@ -33,32 +30,25 @@ export async function backfillVerifiedBy(): Promise<void> {
     };
     
     if (att.matched_allergy_local_uuid) {
-      await addToTable(db, 'allergies', att.matched_allergy_local_uuid, entry);
-      allergiesUpdated++;
+      allUpdates.push(addToTable(db, 'allergies', att.matched_allergy_local_uuid, entry));
     }
     
     if (att.matched_condition_local_uuid) {
-      await addToTable(db, 'conditions', att.matched_condition_local_uuid, entry);
-      conditionsUpdated++;
+      allUpdates.push(addToTable(db, 'conditions', att.matched_condition_local_uuid, entry));
     }
     
     if (att.matched_diagnosis_local_uuid) {
-      await addToTable(db, 'diagnoses', att.matched_diagnosis_local_uuid, entry);
-      diagnosesUpdated++;
+      allUpdates.push(addToTable(db, 'diagnoses', att.matched_diagnosis_local_uuid, entry));
     }
     
     if (att.matched_medication_local_uuid) {
-      await addToTable(db, 'medications', att.matched_medication_local_uuid, entry);
-      medicationsUpdated++;
+      allUpdates.push(addToTable(db, 'medications', att.matched_medication_local_uuid, entry));
     }
   }
-  
-  console.debug(TAG, 'Backfill complete', {
-    allergiesUpdated,
-    conditionsUpdated,
-    diagnosesUpdated,
-    medicationsUpdated,
-  });
+
+  await Promise.all(allUpdates);
+
+  console.debug(TAG, 'Backfill complete', { count: allUpdates.length });
 }
 
 async function addToTable(

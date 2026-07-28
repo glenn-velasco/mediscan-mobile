@@ -7,6 +7,7 @@ import { processEnvelope } from '@/services/merge.service';
 import { backoffDelayMs } from '@/lib/backoff';
 import { getCachedToken } from '@/auth/token-storage';
 import { NetworkError, UnauthenticatedError } from '@/api/errors';
+import { getIsOffline } from '@/lib/network-state';
 import type { EnvelopeType } from '@/api/types';
 
 const TAG = '[PendingSyncService]';
@@ -35,15 +36,16 @@ export function resetPendingSyncBackoff(): void {
 export async function pullPendingSync(): Promise<void> {
   if (!getCachedToken()) return;
   if (!hasCurrentUser()) return;
+  if (getIsOffline()) return;
   if (isProcessing) return;
   if (withinBackoffWindow()) return;
 
   isProcessing = true;
   try {
     const { envelopes } = await getPendingSync();
-    for (const envelope of envelopes) {
+    await Promise.all(envelopes.map(async (envelope) => {
       const existing = await pendingSyncEnvelopeRepo.getByServerEnvelopeId(envelope.id);
-      if (existing) continue;
+      if (existing) return;
       await pendingSyncEnvelopeRepo.insertReceived({
         localId: Crypto.randomUUID(),
         serverEnvelopeId: envelope.id,
@@ -53,16 +55,16 @@ export async function pullPendingSync(): Promise<void> {
         ciphertext: envelope.ciphertext,
         expiresAt: envelope.expires_at,
       });
-    }
+    }));
 
     const unprocessed = await pendingSyncEnvelopeRepo.getUnprocessed();
-    for (const row of unprocessed) {
+    await Promise.all(unprocessed.map(async (row) => {
       const result = await processEnvelope(row);
       if (result === 'merged' && row.server_envelope_id != null) {
         await ackEnvelope(row.server_envelope_id);
         await pendingSyncEnvelopeRepo.markAcked(row.local_id);
       }
-    }
+    }));
 
     consecutiveFailures = 0;
   } catch (err) {

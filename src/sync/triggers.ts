@@ -1,13 +1,13 @@
-import { useEffect } from 'react';
-import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
+import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
 
-import { useAuth } from '@/auth/useAuth';
 import { getIsRegistering } from '@/auth/AuthContext';
-import { pullPendingSync } from '@/services/pending-sync.service';
-import { pushPatientChanges, pullPatientChanges } from '@/services/patient-sync.service';
-import { retryPendingRevoke } from '@/services/device-key.service';
+import { getIsOffline } from '@/lib/network-state';
+import { useAuth } from '@/auth/useAuth';
 import { queryClient } from '@/lib/query-client';
+import { ensureDeviceKeyServerRegistered, retryPendingRevoke } from '@/services/device-key.service';
+import { pullPatientChanges, pushPatientChanges } from '@/services/patient-sync.service';
 
 const PERIODIC_INTERVAL_MS = 60_000;
 
@@ -19,9 +19,6 @@ const PERIODIC_INTERVAL_MS = 60_000;
  * `sync`/`api` rate limits (429 Too Many Attempts) during normal use, not just abuse.
  */
 const MIN_TRIGGER_INTERVAL_MS = 10_000;
-let lastTriggerAt = 0;
-
-let initialized = false;
 
 /**
  * Push before pull so a change made on this device isn't immediately clobbered by a pull that
@@ -42,51 +39,79 @@ async function syncPatientData(): Promise<void> {
  */
 export function useSyncTriggers(): void {
   const { status, refreshUser } = useAuth();
+  const initializedRef = useRef(false);
+  const lastTriggerAtRef = useRef(0);
+  const mountedRef = useRef(true);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup
   useEffect(() => {
-    if (initialized) return;
-    initialized = true;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    mountedRef.current = true;
+
+    const scheduleTimer = (fn: () => void, delay: number) => {
+      const id = setTimeout(() => {
+        timersRef.current = timersRef.current.filter((t) => t !== id);
+        fn();
+      }, delay);
+      timersRef.current.push(id);
+    };
 
     const safeRefreshUser = () => {
-      if (status !== 'authenticated') return;
+      if (status !== 'authenticated' || !mountedRef.current) return;
       refreshUser().catch(() => {
         // Best-effort: likely offline or the token just expired; next trigger will retry.
       });
     };
 
     /** Shared cooldown across all trigger sources — see MIN_TRIGGER_INTERVAL_MS above. */
-    const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean }) => {
+    const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean; registerDeviceKey?: boolean }) => {
+      if (!mountedRef.current) return;
       if (getIsRegistering()) return;
+      if (getIsOffline()) return;
       const now = Date.now();
-      if (now - lastTriggerAt < MIN_TRIGGER_INTERVAL_MS) return;
-      lastTriggerAt = now;
+      if (now - lastTriggerAtRef.current < MIN_TRIGGER_INTERVAL_MS) return;
+      lastTriggerAtRef.current = now;
 
-      void pullPendingSync();
-      void syncPatientData();
+      scheduleTimer(() => {
+        if (mountedRef.current) void syncPatientData();
+      }, 500);
       safeRefreshUser();
       if (extras?.retryRevoke) void retryPendingRevoke();
-      if (extras?.invalidateQueries) void queryClient.invalidateQueries();
+      if (extras?.registerDeviceKey) void ensureDeviceKeyServerRegistered();
+      if (extras?.invalidateQueries) {
+        scheduleTimer(() => {
+          if (mountedRef.current) void queryClient.invalidateQueries();
+        }, 1000);
+      }
     };
 
-    runTriggeredSync({ retryRevoke: true });
+    runTriggeredSync({ retryRevoke: true, registerDeviceKey: true });
 
     const netInfoUnsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected) runTriggeredSync();
+      const reachable = state.isInternetReachable ?? state.isConnected;
+      if (reachable && mountedRef.current) runTriggeredSync();
     });
 
     const appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') runTriggeredSync({ retryRevoke: true, invalidateQueries: true });
+      if (nextState === 'active' && mountedRef.current) {
+        runTriggeredSync({ retryRevoke: true, invalidateQueries: true, registerDeviceKey: true });
+      }
     });
 
     const interval = setInterval(() => {
-      runTriggeredSync();
+      if (mountedRef.current) runTriggeredSync();
     }, PERIODIC_INTERVAL_MS);
 
     return () => {
+      mountedRef.current = false;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
       netInfoUnsubscribe();
       appStateSubscription.remove();
       clearInterval(interval);
-      initialized = false;
+      initializedRef.current = false;
     };
   }, [status, refreshUser]);
 }

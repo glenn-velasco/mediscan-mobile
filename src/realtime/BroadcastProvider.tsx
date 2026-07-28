@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type Pusher from 'pusher-js';
-import { useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { useEffect, useRef, type PropsWithChildren } from 'react';
 
 import { useAuth } from '@/auth/useAuth';
+import { getIsOffline } from '@/lib/network-state';
 import { subscribeToPresenceChannel } from '@/realtime/channels/presence-channel';
 import { subscribeToUserChannel } from '@/realtime/channels/user-channel';
 import { createUserChannelHandlers } from '@/realtime/events/handlers';
-import type { PresenceMember } from '@/realtime/events/types';
 import { createReverbClient } from '@/realtime/reverb-client';
 
 export function BroadcastProvider({ children }: PropsWithChildren) {
@@ -15,18 +15,23 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
   const pusherRef = useRef<Pusher | null>(null);
   const logoutRef = useRef(logout);
   const refreshUserRef = useRef(refreshUser);
-  const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
 
   useEffect(() => {
     logoutRef.current = logout;
     refreshUserRef.current = refreshUser;
-  });
+  }, [logout, refreshUser]);
 
   useEffect(() => {
-    if (status !== 'authenticated' || !user) {
+    if (status !== 'authenticated' || !user || getIsOffline()) {
       pusherRef.current?.disconnect();
       pusherRef.current = null;
       return;
+    }
+
+    if (pusherRef.current) {
+      console.log('[BroadcastProvider] disconnecting stale Pusher client before re-init');
+      pusherRef.current.disconnect();
+      pusherRef.current = null;
     }
 
     let pusher: ReturnType<typeof createReverbClient>;
@@ -43,34 +48,38 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
 
     console.log('[BroadcastProvider] Pusher client created, subscribing to channels');
     pusherRef.current = pusher;
-    subscribeToUserChannel(pusher, user.id, createUserChannelHandlers({
-      refreshUser: () => refreshUserRef.current(),
-      logout: () => logoutRef.current(),
-      queryClient,
-    }));
 
-    subscribeToPresenceChannel(pusher, 'family', {
-      onHere: (members) => {
-        console.log('[BroadcastProvider] presence:here', { count: members.length });
-        setPresenceMembers(members);
-      },
-      onJoining: (member) => {
-        console.log('[BroadcastProvider] presence:joining', { name: member.name });
-        setPresenceMembers((prev) => [...prev, member]);
-      },
-      onLeaving: (member) => {
-        console.log('[BroadcastProvider] presence:leaving', { name: member.name });
-        setPresenceMembers((prev) => prev.filter((m) => m.id !== member.id));
-      },
-    });
+    try {
+      subscribeToUserChannel(pusher, user.id, createUserChannelHandlers({
+        refreshUser: () => refreshUserRef.current(),
+        logout: () => logoutRef.current(),
+        queryClient,
+      }));
+
+      subscribeToPresenceChannel(pusher, 'family', {
+        onHere: (members) => {
+          console.log('[BroadcastProvider] presence:here', { count: members.length });
+        },
+        onJoining: (member) => {
+          console.log('[BroadcastProvider] presence:joining', { name: member.name });
+        },
+        onLeaving: (member) => {
+          console.log('[BroadcastProvider] presence:leaving', { name: member.name });
+        },
+      });
+    } catch (err) {
+      console.error('[BroadcastProvider] channel subscription FAILED', { error: String(err) });
+      pusher.disconnect();
+      pusherRef.current = null;
+    }
 
     return () => {
       console.log('[BroadcastProvider] disconnecting');
       pusher.disconnect();
       pusherRef.current = null;
-      setPresenceMembers([]);
     };
-  }, [status, user?.id]);
+  // react-doctor-disable-next-line react-doctor/exhaustive-deps
+  }, [status, user?.id, queryClient]);
 
   return <>{children}</>;
 }

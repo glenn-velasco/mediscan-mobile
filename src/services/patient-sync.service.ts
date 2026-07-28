@@ -1,36 +1,37 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { hasCurrentUser, getCurrentUserId } from '@/db/context';
-import { getCachedToken } from '@/auth/token-storage';
 import { NetworkError, UnauthenticatedError, ValidationError, getErrorStatus } from '@/api/errors';
+import { getCachedToken } from '@/auth/token-storage';
+import { getIsOffline } from '@/lib/network-state';
+import { getCurrentUserId, hasCurrentUser } from '@/db/context';
 import { backoffDelayMs } from '@/lib/backoff';
 import { queryClient } from '@/lib/query-client';
 import {
   allergiesQueryKey,
   conditionsQueryKey,
   diagnosesQueryKey,
-  medicationsQueryKey,
   emergencyContactsQueryKey,
   medicalInformationQueryKey,
+  medicationsQueryKey,
 } from '@/lib/query-keys';
 
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
-import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import * as medicationsRepo from '@/db/repositories/medications.repo';
 
-import { createAllergy, updateAllergy, deleteAllergy } from '@/api/endpoints/allergies';
-import { createCondition, updateCondition, deleteCondition } from '@/api/endpoints/conditions';
-import { createDiagnosis, updateDiagnosis, deleteDiagnosis } from '@/api/endpoints/diagnoses';
-import { createMedication, updateMedication, deleteMedication } from '@/api/endpoints/medications';
+import { createAllergy, deleteAllergy, updateAllergy } from '@/api/endpoints/allergies';
+import { createCondition, deleteCondition, updateCondition } from '@/api/endpoints/conditions';
+import { createDiagnosis, deleteDiagnosis, updateDiagnosis } from '@/api/endpoints/diagnoses';
 import {
   createEmergencyContact,
-  updateEmergencyContact,
   deleteEmergencyContact,
+  updateEmergencyContact,
 } from '@/api/endpoints/emergency-contacts';
 import { createMedicalInformation, updateMedicalInformation } from '@/api/endpoints/medical-information';
+import { createMedication, deleteMedication, updateMedication } from '@/api/endpoints/medications';
 import { pullSync } from '@/api/endpoints/sync';
 
 const TAG = '[PatientSyncService]';
@@ -53,9 +54,16 @@ function withinBackoffWindow(): boolean {
 }
 
 /** Clears the retry backoff so a fresh login doesn't inherit a stale delay from before the user logged out. */
-export function resetPatientSyncBackoff(): void {
+function resetPatientSyncBackoff(): void {
   consecutiveFailures = 0;
   lastFailureAt = 0;
+}
+
+/** Clears the last-synced timestamp so the next login does a full pull instead of skipping data. */
+export async function clearLastSyncedAt(): Promise<void> {
+  if (!hasCurrentUser()) return;
+  const userId = getCurrentUserId();
+  await AsyncStorage.removeItem(`patient_sync_last_synced_at_${userId}`);
 }
 
 function lastSyncedAtKey(): string {
@@ -149,6 +157,7 @@ async function pushOne(
 
 async function pushAllergies(): Promise<void> {
   for (const row of await allergiesRepo.getAllForPush()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
       'allergy',
       () =>
@@ -164,6 +173,7 @@ async function pushAllergies(): Promise<void> {
 
 async function pushConditions(): Promise<void> {
   for (const row of await conditionsRepo.getAllForPush()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
       'condition',
       () =>
@@ -183,6 +193,7 @@ async function pushDiagnoses(): Promise<void> {
   if (!medicalInformationId) return;
 
   for (const row of await diagnosesRepo.getAllForPush()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
       'diagnosis',
       () =>
@@ -207,6 +218,7 @@ async function pushDiagnoses(): Promise<void> {
 
 async function pushMedications(): Promise<void> {
   for (const row of await medicationsRepo.getAllForPush()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
       'medication',
       () =>
@@ -222,6 +234,7 @@ async function pushMedications(): Promise<void> {
 
 async function pushEmergencyContacts(): Promise<void> {
   for (const row of await emergencyContactsRepo.getAllForPush()) {
+    // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
       'emergency contact',
       () =>
@@ -259,6 +272,7 @@ async function pushMedicalInformation(): Promise<void> {
 export async function pushPatientChanges(): Promise<void> {
   if (!getCachedToken()) return;
   if (!hasCurrentUser()) return;
+  if (getIsOffline()) return;
   if (isPushing) return;
   if (withinBackoffWindow()) return;
 
@@ -285,6 +299,33 @@ export async function pushPatientChanges(): Promise<void> {
 }
 
 /**
+ * Force-pushes all pending patient data before logout. Bypasses single-flight guard, backoff
+ * window, and offline check — we want a last-ditch attempt to save data even if the network
+ * state is flaky. Only skips if there's no token (already logged out).
+ *
+ * Called by AuthContext.logout() BEFORE clearing auth so pending changes aren't lost.
+ * If the server is unreachable, changes stay in the local DB and sync on next login.
+ */
+export async function forcePushBeforeLogout(): Promise<void> {
+  if (!getCachedToken()) return;
+  if (!hasCurrentUser()) return;
+
+  console.log(TAG, 'forcePushBeforeLogout: flushing all pending changes');
+  try {
+    await pushMedicalInformation();
+    await pushAllergies();
+    await pushConditions();
+    await pushDiagnoses();
+    await pushMedications();
+    await pushEmergencyContacts();
+    consecutiveFailures = 0;
+    console.log(TAG, 'forcePushBeforeLogout: done');
+  } catch (err) {
+    console.warn(TAG, 'forcePushBeforeLogout: some data may not have synced', { error: String(err) });
+  }
+}
+
+/**
  * Pulls everything changed server-side since the last successful pull and applies it locally.
  * Last-write-wins: whatever the server returns unconditionally overwrites the matching local row
  * (see each repo's `upsertFromServer`/`saveFromServer`) — this is where the losing side of a
@@ -293,6 +334,7 @@ export async function pushPatientChanges(): Promise<void> {
 export async function pullPatientChanges(): Promise<void> {
   if (!getCachedToken()) return;
   if (!hasCurrentUser()) return;
+  if (getIsOffline()) return;
   if (isPulling) return;
   if (withinBackoffWindow()) return;
 
@@ -307,63 +349,54 @@ export async function pullPatientChanges(): Promise<void> {
       diagnoses: response.diagnoses.length,
       medications: response.medications.length,
       emergency_contacts: response.emergency_contacts.length,
+      medical_information: response.medical_information ? 'present' : 'null',
     });
 
     if (response.medical_information) {
       await medicalInformationRepo.saveFromServer(response.medical_information);
     }
 
-    for (const record of response.allergies) {
-      if (record.deleted_at) {
-        await allergiesRepo.hardDelete(record.id);
-      } else {
-        await allergiesRepo.upsertFromServer(record);
-      }
-    }
+    await Promise.all(response.allergies.map((record) =>
+      record.deleted_at
+        ? allergiesRepo.hardDelete(record.id)
+        : allergiesRepo.upsertFromServer(record),
+    ));
 
-    for (const record of response.conditions) {
-      if (record.deleted_at) {
-        await conditionsRepo.hardDelete(record.id);
-      } else {
-        await conditionsRepo.upsertFromServer(record);
-      }
-    }
+    await Promise.all(response.conditions.map((record) =>
+      record.deleted_at
+        ? conditionsRepo.hardDelete(record.id)
+        : conditionsRepo.upsertFromServer(record),
+    ));
 
-    for (const record of response.diagnoses) {
-      if (record.deleted_at) {
-        console.debug(TAG, `pull: deleting diagnosis ${record.id}`);
-        await diagnosesRepo.hardDelete(record.id);
-      } else {
-        console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition });
-        await diagnosesRepo.upsertFromServer(record);
-      }
-    }
+    await Promise.all(response.diagnoses.map((record) =>
+      record.deleted_at
+        ? (console.debug(TAG, `pull: deleting diagnosis ${record.id}`), diagnosesRepo.hardDelete(record.id))
+        : (console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition }), diagnosesRepo.upsertFromServer(record)),
+    ));
 
-    for (const record of response.medications) {
-      if (record.deleted_at) {
-        await medicationsRepo.hardDelete(record.id);
-      } else {
-        await medicationsRepo.upsertFromServer(record);
-      }
-    }
+    await Promise.all(response.medications.map((record) =>
+      record.deleted_at
+        ? medicationsRepo.hardDelete(record.id)
+        : medicationsRepo.upsertFromServer(record),
+    ));
 
-    for (const record of response.emergency_contacts) {
-      if (record.deleted_at) {
-        await emergencyContactsRepo.hardDelete(record.id);
-      } else {
-        await emergencyContactsRepo.upsertFromServer(record);
-      }
-    }
+    await Promise.all(response.emergency_contacts.map((record) =>
+      record.deleted_at
+        ? emergencyContactsRepo.hardDelete(record.id)
+        : emergencyContactsRepo.upsertFromServer(record),
+    ));
 
     await setLastSyncedAt(response.server_time);
     consecutiveFailures = 0;
 
-    queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-    queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
-    queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
-    queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
-    queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
-    queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });
+    void Promise.resolve().then(() => {
+      queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+      queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
+      queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
+      queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
+      queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
+      queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });
+    });
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError) {
       consecutiveFailures += 1;

@@ -5,12 +5,12 @@
  * WASM implementation react-native-libsodium itself falls back to on web) directly, bypassing its
  * dynamic `import()` indirection which needs --experimental-vm-modules under Jest's CJS transform.
  */
+import { generateKeypair, seal, unseal } from '@/services/sealed-box.service';
+
 jest.mock('react-native-libsodium', () => {
   const sodium = require('libsodium-wrappers');
   return { __esModule: true, default: sodium, ready: sodium.ready };
 });
-
-import { generateKeypair, seal, unseal } from '@/services/sealed-box.service';
 
 describe('sealed-box.service', () => {
   it('round-trips a plaintext value through seal/unseal with the correct keypair', async () => {
