@@ -559,6 +559,7 @@ export default function HomeScreen() {
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
     if (emailCooldown <= 0) return;
@@ -605,11 +606,15 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!dataReady) return;
-    if (checklist.complete) return;
+    if (checklist.complete) {
+      setOnboardingChecked(true);
+      return;
+    }
     checklist.markPrompted().then((isFirstTime) => {
       if (isFirstTime) {
         router.push('/onboarding-tasks');
       }
+      setOnboardingChecked(true);
     });
   }, [dataReady, checklist.complete, checklist.markPrompted, router]);
 
@@ -723,8 +728,8 @@ export default function HomeScreen() {
     void pullPendingSync();
   }, [refreshUser]);
 
-  // Show skeleton only on first load when no cached data exists
-  if (!profile && (isLoading || isReconciling || isInitialLoading)) {
+  // Show skeleton only on first load when no cached data exists, or while waiting for onboarding redirect decision
+  if (!profile && (isLoading || isReconciling || isInitialLoading || !onboardingChecked)) {
     return (
       <View className="flex-1">
         <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>

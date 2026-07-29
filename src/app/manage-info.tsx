@@ -175,16 +175,9 @@ function MedicalInfoFormSection({ form }: { form: UseFormReturn<MedInfoFormState
       <Controller control={form.control} name="gender" render={({ field, fieldState }) => (
         <SelectField placeholder="Gender" options={GENDER_OPTIONS} value={field.value} onChange={field.onChange} getLabel={(v) => GenderLabel[v as Gender]} error={fieldState.error?.message} />
       )} />
-      <Controller control={form.control} name="phone" render={({ field }) => {
-        const phoneErr = form.formState.errors.phone?.message || form.formState.errors.phone_country_code?.message;
-        return (
-          <PhoneInput
-            value={{ countryCode: form.getValues('phone_country_code'), phone: field.value }}
-            onChange={(v) => { form.setValue('phone_country_code', v.countryCode, { shouldDirty: true }); form.setValue('phone', v.phone, { shouldDirty: true }); }}
-            error={phoneErr}
-          />
-        );
-      }} />
+      <Controller control={form.control} name="phone" render={({ field, fieldState }) => (
+        <TextField label="Phone" value={field.value} onChangeText={field.onChange} keyboardType="phone-pad" error={fieldState.error?.message} placeholder="Phone number" />
+      )} />
       <Controller control={form.control} name="address" render={({ field }) => {
         const addrErrs = form.formState.errors.address;
         return (
