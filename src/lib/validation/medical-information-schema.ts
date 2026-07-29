@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidPhoneNumber, isPossiblePhoneNumber, validatePhoneNumberLength } from 'libphonenumber-js';
 
 import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
@@ -31,6 +32,40 @@ export const medicalInformationSchema = z.object({
     country: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Country is required').max(255)),
   }),
   no_blood_transfusion: z.boolean(),
-});
+}).refine(
+  (data) => {
+    const cc = data.phone_country_code;
+    if (!cc) return true;
+    try {
+      const result = validatePhoneNumberLength(data.phone, cc as any);
+      return result === undefined;
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Phone number length is invalid for the selected country', path: ['phone'] },
+).refine(
+  (data) => {
+    const cc = data.phone_country_code;
+    if (!cc) return true;
+    try {
+      return isPossiblePhoneNumber(data.phone, cc as any);
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Phone number is not possible for the selected country', path: ['phone'] },
+).refine(
+  (data) => {
+    const cc = data.phone_country_code;
+    if (!cc) return true;
+    try {
+      return isValidPhoneNumber(data.phone, cc as any);
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Invalid phone number for the selected country', path: ['phone'] },
+);
 
 export type MedicalInformationFormValues = z.infer<typeof medicalInformationSchema>;

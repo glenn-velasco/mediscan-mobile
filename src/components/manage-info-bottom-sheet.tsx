@@ -20,6 +20,8 @@ import { sheet } from '@/components/form/tokens';
 import {
   ALLERGY_SEVERITIES,
   AllergySeverityLabel,
+  BLOOD_TYPE_OPTIONS,
+  BloodTypeLabel,
   DIAGNOSIS_SEVERITIES,
   DiagnosisSeverityLabel,
   formatPhoneWithCountryCode,
@@ -27,6 +29,10 @@ import {
   GenderLabel,
   RELATION_TO_PATIENT_OPTIONS,
   RelationToPatientLabel,
+  RELIGION_OPTIONS,
+  ReligionLabel,
+  SUFFIX_OPTIONS,
+  SuffixLabel,
   type ManageAllergy,
   type ManageCondition,
   type ManageDiagnosis,
@@ -38,6 +44,9 @@ import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { useManageInfo } from '@/components/use-manage-info';
 import type { Gender } from '@/constants/gender';
+import type { BloodType } from '@/constants/blood-type';
+import type { Suffix } from '@/constants/suffix';
+import type { Religion } from '@/constants/religion';
 import { useTheme } from '@/hooks/use-theme';
 import { formatIsoDate } from '@/lib/format-date';
 
@@ -168,7 +177,7 @@ function MedicalInfoFormSection({ form }: { form: any }) {
         <TextField label="Last name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
       )} />
       <Controller control={form.control} name="suffix" render={({ field }) => (
-        <SelectField placeholder="Suffix" options={['Jr.', 'Sr.', 'I', 'II', 'III', 'IV', 'V']} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => v} />
+        <SelectField placeholder="Suffix" options={SUFFIX_OPTIONS} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => SuffixLabel[v as Suffix]} />
       )} />
       <Controller control={form.control} name="date_of_birth" render={({ field, fieldState }) => (
         <DateField label="Date of birth" value={field.value} onChange={field.onChange} maximumDate={new Date()} error={fieldState.error?.message} />
@@ -200,10 +209,10 @@ function MedicalInfoFormSection({ form }: { form: any }) {
         );
       }} />
       <Controller control={form.control} name="blood_type" render={({ field, fieldState }) => (
-        <SelectField placeholder="Blood type" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} value={field.value} onChange={field.onChange} getLabel={(v) => v} error={fieldState.error?.message} />
+        <SelectField placeholder="Blood type" options={BLOOD_TYPE_OPTIONS} value={field.value} onChange={field.onChange} getLabel={(v) => BloodTypeLabel[v as BloodType]} error={fieldState.error?.message} />
       )} />
       <Controller control={form.control} name="religion" render={({ field }) => (
-        <SelectField placeholder="Religion" options={['Catholic', 'Protestant', 'Muslim', 'Buddhist', 'Hindu', 'Jewish', 'Other']} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => v} />
+        <SelectField placeholder="Religion" options={RELIGION_OPTIONS} value={field.value} onChange={field.onChange} allowClear getLabel={(v) => ReligionLabel[v as Religion]} />
       )} />
       <Controller control={form.control} name="no_blood_transfusion" render={({ field }) => (
         <View className="mb-4 flex-row items-center justify-between">
