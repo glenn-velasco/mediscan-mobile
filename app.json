@@ -9,6 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
+      "backgroundColor": "#0b0e11",
       "associatedDomains": [
         "applinks:app.mediscan.cloud",
         "applinks:staging.mediscan.cloud"
@@ -16,6 +17,7 @@
     },
     "android": {
       "package": "com.application.mediscanmobile",
+      "backgroundColor": "#0b0e11",
       "adaptiveIcon": {
         "backgroundColor": "#e8ede9",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

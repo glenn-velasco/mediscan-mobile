@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { useBlePeripheralPermission } from '@/hooks/use-ble-permission';
@@ -25,18 +26,21 @@ export function useBleAdvertisingResume() {
     if (blePeripheralService.isAdvertising()) return;
     resumedRef.current = true;
 
-    void (async () => {
-      try {
-        const granted = permission?.granted || (await requestPermission());
-        if (!granted) return;
-        const bluetoothEnabled = await ensureBluetoothEnabled();
-        if (!bluetoothEnabled) return;
-        const locationEnabled = await ensureLocationEnabled();
-        if (!locationEnabled) return;
-        await blePeripheralService.startAdvertising(user.id);
-      } catch {
-        // Silently fail — the Account page toggle will show the error state if the user visits it.
-      }
-    })();
+    const handle = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          const granted = permission?.granted || (await requestPermission());
+          if (!granted) return;
+          const bluetoothEnabled = await ensureBluetoothEnabled();
+          if (!bluetoothEnabled) return;
+          const locationEnabled = await ensureLocationEnabled();
+          if (!locationEnabled) return;
+          await blePeripheralService.startAdvertising(user.id);
+        } catch {
+          // Silently fail — the Account page toggle will show the error state if the user visits it.
+        }
+      })();
+    });
+    return () => handle.cancel();
   }, [toggle.loaded, toggle.enabled, user, permission, requestPermission]);
 }

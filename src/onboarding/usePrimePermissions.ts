@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { InteractionManager } from 'react-native';
 import { useCameraPermissions } from 'expo-camera';
 
 import { useBleCentralPermission, useBlePeripheralPermission } from '@/hooks/use-ble-permission';
@@ -19,17 +20,20 @@ export function usePrimePermissions(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    (async () => {
-      // react-doctor-disable-next-line react-hooks-js/todo
-      try {
-        await requestCentralPermission();
-        await requestPeripheralPermission();
-        await ensureNotificationPermission();
-        await requestCameraPermission();
-      } finally {
-        void complete();
-      }
-    })();
+    const handle = InteractionManager.runAfterInteractions(() => {
+      (async () => {
+        // react-doctor-disable-next-line react-hooks-js/todo
+        try {
+          await requestCentralPermission();
+          await requestPeripheralPermission();
+          await ensureNotificationPermission();
+          await requestCameraPermission();
+        } finally {
+          void complete();
+        }
+      })();
+    });
+    return () => handle.cancel();
     // Runs once when `enabled` flips true — the request/complete callbacks are stable enough
     // for a one-shot priming effect and re-running it on their identity churn isn't desired.
     // eslint-disable-next-line react-hooks/exhaustive-deps
