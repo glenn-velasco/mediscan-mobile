@@ -496,11 +496,13 @@ export default function RegisterScreen() {
       };
 
       const result = await register({ payload: registerPayload, medicalInfo });
-      if (result.pending) {
-        router.replace('/registration-pending');
-      } else {
-        router.replace('/onboarding-tasks');
-      }
+      requestAnimationFrame(() => {
+        if (result.pending) {
+          router.replace('/registration-pending');
+        } else {
+          router.replace('/onboarding-tasks');
+        }
+      });
     } catch (err) {
       setError(err);
       const apiErrors = getFieldErrors(err, { dob: 'date_of_birth', phone_number: 'phone' });
