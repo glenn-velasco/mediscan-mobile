@@ -73,9 +73,9 @@ class QrScannerTileModule(reactContext: ReactApplicationContext) : ReactContextB
   override fun getName() = "QrScannerTileModule"
 
   private fun findMainActivity(): MainActivity? {
-    val app = reactApplicationContext.application as? ReactApplication ?: return null
-    return app.reactHost.currentReactContext?.currentActivity as? MainActivity
-      ?: reactApplicationContext.currentActivity as? MainActivity
+    val app = reactApplicationContext.applicationContext as? ReactApplication
+    val hostActivity = app?.reactHost?.currentReactContext?.currentActivity as? MainActivity
+    return hostActivity ?: (reactApplicationContext.currentActivity as? MainActivity)
   }
 
   @ReactMethod
