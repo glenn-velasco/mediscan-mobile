@@ -1,0 +1,65 @@
+name: Android Preview Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/**"
+      - "android/**"
+      - "app.json"
+      - "package.json"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: preview
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env from environment
+        run: |
+          echo "EXPO_PUBLIC_API_URL=${{ secrets.API_URL }}" > .env
+          echo "EXPO_PUBLIC_REVERB_APP_KEY=${{ secrets.REVERB_APP_KEY }}" >> .env
+          echo "EXPO_PUBLIC_REVERB_HOST=${{ secrets.REVERB_HOST }}" >> .env
+          echo "EXPO_PUBLIC_REVERB_PORT=${{ secrets.REVERB_PORT }}" >> .env
+          echo "EXPO_PUBLIC_REVERB_SCHEME=${{ secrets.REVERB_SCHEME }}" >> .env
+
+      - name: Prebuild
+        run: npx expo prebuild --platform android --clean
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Decode keystore
+        if: env.ANDROID_KEYSTORE != ''
+        run: echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android/app/release.keystore
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mediscan-preview-${{ github.sha }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 14

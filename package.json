@@ -95,7 +95,13 @@
     "lint": "expo lint",
     "test": "jest",
     "postinstall": "patch-package",
-    "sync-theme-colors": "node scripts/sync-theme-colors.mjs"
+    "sync-theme-colors": "node scripts/sync-theme-colors.mjs",
+    "build:preview": "copy .env .env.backup && copy .env.production .env && cd android && gradlew assembleRelease && cd .. && copy .env.backup .env && del .env.backup",
+    "build:debug": "cd android && gradlew assembleDebug",
+    "version": "node scripts/version.mjs",
+    "bump:patch": "node scripts/version.mjs patch",
+    "bump:minor": "node scripts/version.mjs minor",
+    "bump:major": "node scripts/version.mjs major"
   },
   "jest": {
     "preset": "jest-expo",
