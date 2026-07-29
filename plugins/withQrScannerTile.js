@@ -55,6 +55,7 @@ class QrScannerTileService : TileService() {
 
 const TILE_MODULE_KT = `package ${PACKAGE_NAME}
 
+import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContext
@@ -71,20 +72,23 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class QrScannerTileModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
   override fun getName() = "QrScannerTileModule"
 
+  private fun findMainActivity(): MainActivity? {
+    val app = reactApplicationContext.application as? ReactApplication ?: return null
+    return app.reactHost.currentReactContext?.currentActivity as? MainActivity
+      ?: reactApplicationContext.currentActivity as? MainActivity
+  }
+
   @ReactMethod
   fun clearLockScreenFlags() {
-    (reactApplicationContext.currentActivity as? MainActivity)?.clearQuickScanLockScreenFlags()
+    findMainActivity()?.clearQuickScanLockScreenFlags()
   }
 
   @ReactMethod
   fun consumePendingRoute(promise: Promise) {
-    val route = (reactApplicationContext.currentActivity as? MainActivity)?.consumePendingQuickScanRoute()
+    val route = findMainActivity()?.consumePendingQuickScanRoute()
     promise.resolve(route)
   }
 
-  // Required by NativeEventEmitter's JS-side contract even though events are emitted directly via
-  // RCTDeviceEventEmitter below — without these, RN warns "NativeEventEmitter... without the
-  // required addListener/removeListeners method".
   @ReactMethod
   fun addListener(eventName: String) {}
 

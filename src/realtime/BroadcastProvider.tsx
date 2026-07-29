@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type Pusher from 'pusher-js';
-import { useEffect, useRef, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useRef, type PropsWithChildren } from 'react';
 
 import { useAuth } from '@/auth/useAuth';
 import { useNetworkStatus } from '@/hooks/use-network-status';
@@ -8,6 +8,8 @@ import { subscribeToPresenceChannel } from '@/realtime/channels/presence-channel
 import { subscribeToUserChannel } from '@/realtime/channels/user-channel';
 import { createUserChannelHandlers } from '@/realtime/events/handlers';
 import { createReverbClient } from '@/realtime/reverb-client';
+import { refreshToken as apiRefreshToken } from '@/api/endpoints/auth';
+import { setToken } from '@/auth/token-storage';
 
 export function BroadcastProvider({ children }: PropsWithChildren) {
   const { status, user, refreshUser, logout } = useAuth();
@@ -16,6 +18,11 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
   const pusherRef = useRef<Pusher | null>(null);
   const logoutRef = useRef(logout);
   const refreshUserRef = useRef(refreshUser);
+
+  const handleRefreshToken = useCallback(async () => {
+    const { token } = await apiRefreshToken();
+    await setToken(token);
+  }, []);
 
   useEffect(() => {
     logoutRef.current = logout;
@@ -57,6 +64,7 @@ export function BroadcastProvider({ children }: PropsWithChildren) {
       subscribeToUserChannel(pusher, user.id, createUserChannelHandlers({
         refreshUser: () => refreshUserRef.current(),
         logout: () => logoutRef.current(),
+        refreshToken: handleRefreshToken,
         queryClient,
       }));
 

@@ -1,0 +1,13 @@
+diff --git a/node_modules/expo-dev-launcher/android/src/debug/java/expo/modules/devlauncher/launcher/loaders/DevLauncherAppLoader.kt b/node_modules/expo-dev-launcher/android/src/debug/java/expo/modules/devlauncher/launcher/loaders/DevLauncherAppLoader.kt
+--- a/node_modules/expo-dev-launcher/android/src/debug/java/expo/modules/devlauncher/launcher/loaders/DevLauncherAppLoader.kt
++++ b/node_modules/expo-dev-launcher/android/src/debug/java/expo/modules/devlauncher/launcher/loaders/DevLauncherAppLoader.kt
+@@ -46,7 +46,8 @@
+     return { activity ->
+       onDelegateWillBeCreated(activity)
+ 
+-      require(appHost.currentReactContext == null) { "App react context shouldn't be created before." }
++      // Patched: skip assertion that crashes with RN 0.86's loadReactNative pre-creating the context
++      // require(appHost.currentReactContext == null) { "App react context shouldn't be created before." }
+       appHost.addReactInstanceEventListener(object : ReactInstanceEventListener {
+         override fun onReactContextInitialized(context: ReactContext) {
+           if (reactContextWasInitialized) {

@@ -16,3 +16,13 @@ export function logout() {
 export function me() {
   return apiClient.get<{ user: User }>('api/v1/me');
 }
+
+/**
+ * Request a fresh personal-access-token whose abilities reflect the user's
+ * current permissions. Called after a professional application is approved so
+ * the token picks up the `verified professional` ability that was missing
+ * when the token was originally issued at login/registration.
+ */
+export function refreshToken() {
+  return apiClient.post<{ token: string }>('api/v1/auth/refresh-token');
+}

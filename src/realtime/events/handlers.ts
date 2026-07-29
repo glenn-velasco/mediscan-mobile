@@ -30,6 +30,7 @@ const ACCOUNT_RETRIEVAL_STATUS_NOTIFICATION: Partial<Record<string, { title: str
 export function createUserChannelHandlers(deps: {
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
+  refreshToken: () => Promise<void>;
   queryClient: QueryClient;
 }): UserChannelEventHandlers {
   return {
@@ -94,6 +95,16 @@ export function createUserChannelHandlers(deps: {
         await deps.refreshUser();
       } catch {
         console.warn(TAG, 'refreshUser failed — likely offline, will pick up changes on next online fetch');
+      }
+      // After approval the backend grants the `verified professional` permission, but the
+      // Sanctum personal-access-token was created at login/registration without that ability.
+      // Request a fresh token so subsequent API calls that check token abilities succeed.
+      if (payload.status === 'approved') {
+        try {
+          await deps.refreshToken();
+        } catch {
+          console.warn(TAG, 'refreshToken failed — token abilities may be stale until next login');
+        }
       }
     },
 
