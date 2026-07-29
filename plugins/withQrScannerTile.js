@@ -15,10 +15,8 @@ const EVENT_NAME = 'QrScannerTileRoute';
 
 const TILE_SERVICE_KT = `package ${PACKAGE_NAME}
 
-import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.drawable.Icon
-import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
@@ -40,15 +38,8 @@ class QrScannerTileService : TileService() {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       putExtra("${ROUTE_EXTRA}", "${ROUTE_VALUE}")
     }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-      val pendingIntent = PendingIntent.getActivity(
-        this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-      )
-      startActivityAndCollapse(pendingIntent)
-    } else {
-      @Suppress("DEPRECATION")
-      startActivityAndCollapse(intent)
-    }
+    @Suppress("DEPRECATION")
+    startActivityAndCollapse(intent)
   }
 }
 `;
