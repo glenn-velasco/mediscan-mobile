@@ -19,7 +19,7 @@ import { useAuth } from '@/auth/useAuth';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { OfflineBanner } from '@/components/offline-banner';
 import { NetworkProvider } from '@/hooks/use-network-status';
-import { getDb } from '@/db/client';
+
 import { useAppUpdates } from '@/hooks/use-app-updates';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { LightweightModeContext } from '@/lib/lightweight-mode-context';
@@ -79,11 +79,6 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     'Inter-Bold': require('../../assets/fonts/Inter-Bold.ttf'),
   });
 
-  // Initialize database in background — don't block UI on it
-  useEffect(() => {
-    getDb().catch(() => {});
-  }, []);
-
   // Safety timeout — if boot takes more than 10s, force-show the app
   useEffect(() => {
     const timer = setTimeout(() => setBootTimeout(true), 10_000);
@@ -134,7 +129,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
 
   useEffect(() => {
     if (ready) {
-      console.log('[Stack]', { ready, seen, authenticated, onboardingGuard: seen === false, appGuard: seen === true && authenticated, authGuard: seen === true && !authenticated });
+      console.log('[Stack]', { ready, seen, authenticated, onboardingGuard: seen !== true, appGuard: seen === true && authenticated, authGuard: seen === true && !authenticated });
     }
   }, [ready, seen, authenticated]);
 
@@ -142,7 +137,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
     <>
       {showDeferred && <DeferredWork />}
       <Stack screenOptions={{ ...screenOptions, headerShown: false }}>
-        <Stack.Protected guard={ready && seen === false}>
+        <Stack.Protected guard={ready && seen !== true}>
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         </Stack.Protected>
         <Stack.Protected guard={ready && seen === true && authenticated}>

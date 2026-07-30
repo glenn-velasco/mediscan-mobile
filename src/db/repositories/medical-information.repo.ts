@@ -1,19 +1,19 @@
+import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
+import type { BloodType } from '@/constants/blood-type';
+import type { Gender } from '@/constants/gender';
+import type { Religion } from '@/constants/religion';
+import type { Suffix } from '@/constants/suffix';
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
-import { encryptField, decryptField } from '@/lib/crypto';
-import { buildFullName } from '@/lib/build-full-name';
-import type { MedicalInformationPatch } from '@/lib/envelope-schema';
 import type {
   MedicalInformationEncryptedFields,
   MedicalInformationRawRow,
   MedicalInformationRow,
   SyncStatus,
 } from '@/db/schema';
-import type { MedicalInformationPayload, MedicalInformationAddress } from '@/api/types';
-import type { Suffix } from '@/constants/suffix';
-import type { Gender } from '@/constants/gender';
-import type { BloodType } from '@/constants/blood-type';
-import type { Religion } from '@/constants/religion';
+import { buildFullName } from '@/lib/build-full-name';
+import { decryptField, encryptField } from '@/lib/crypto';
+import type { MedicalInformationPatch } from '@/lib/envelope-schema';
 
 async function decryptRow(row: MedicalInformationRawRow): Promise<MedicalInformationRow> {
   return {
@@ -308,22 +308,24 @@ export async function saveFromServer(record: {
   await db.runAsync(
     `INSERT INTO medical_information (user_id, server_id, email, full_name, first_name, middle_name, last_name, suffix, date_of_birth, gender, phone_country_code, phone, blood_type, religion, address, no_blood_transfusion, sync_status, updated_at_local, server_updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET
-       server_id = excluded.server_id,
-       full_name = excluded.full_name,
-       first_name = excluded.first_name,
-       middle_name = excluded.middle_name,
-       last_name = excluded.last_name,
-       suffix = excluded.suffix,
-       date_of_birth = excluded.date_of_birth,
-       gender = excluded.gender,
-       blood_type = excluded.blood_type,
-       religion = excluded.religion,
-       address = excluded.address,
-       no_blood_transfusion = excluded.no_blood_transfusion,
-       sync_status = 'synced',
-       updated_at_local = excluded.updated_at_local,
-       server_updated_at = excluded.server_updated_at`,
+      ON CONFLICT(user_id) DO UPDATE SET
+        server_id = excluded.server_id,
+        full_name = excluded.full_name,
+        first_name = excluded.first_name,
+        middle_name = excluded.middle_name,
+        last_name = excluded.last_name,
+        suffix = excluded.suffix,
+        date_of_birth = excluded.date_of_birth,
+        gender = excluded.gender,
+        phone_country_code = excluded.phone_country_code,
+        phone = excluded.phone,
+        blood_type = excluded.blood_type,
+        religion = excluded.religion,
+        address = excluded.address,
+        no_blood_transfusion = excluded.no_blood_transfusion,
+        sync_status = 'synced',
+        updated_at_local = excluded.updated_at_local,
+        server_updated_at = excluded.server_updated_at`,
     userId,
     record.id,
     existing?.email ?? '',

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useAuth } from '@/auth/useAuth';
 import type { MedicalInformationPayload, RegisterPayload } from '@/api/types';
+import { useAuth } from '@/auth/useAuth';
 import { emergencyContactsQueryKey } from '@/features/emergency-contacts';
 import {
   allergiesQueryKey,

@@ -2,7 +2,6 @@ import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
-import { getIsRegistering } from '@/auth/AuthContext';
 import { getIsOffline } from '@/lib/network-state';
 import { useAuth } from '@/auth/useAuth';
 import { queryClient } from '@/lib/query-client';
@@ -68,7 +67,6 @@ export function useSyncTriggers(): void {
     /** Shared cooldown across all trigger sources — see MIN_TRIGGER_INTERVAL_MS above. */
     const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean; registerDeviceKey?: boolean }) => {
       if (!mountedRef.current) return;
-      if (getIsRegistering()) return;
       if (getIsOffline()) return;
       const now = Date.now();
       if (now - lastTriggerAtRef.current < MIN_TRIGGER_INTERVAL_MS) return;

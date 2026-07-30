@@ -559,7 +559,6 @@ export default function HomeScreen() {
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
-  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   useEffect(() => {
     if (emailCooldown <= 0) return;
@@ -596,6 +595,10 @@ export default function HomeScreen() {
   const dataReady = !isInitialLoading && isDataReady;
 
   useEffect(() => {
+    console.log('[Home] dataReady:', dataReady, { isInitialLoading, isDataReady, allergies: allergies.length, conditions: conditions.length, medications: medications.length, emergencyContacts: emergencyContacts.length });
+  }, [dataReady, isInitialLoading, isDataReady, allergies.length, conditions.length, medications.length, emergencyContacts.length]);
+
+  useEffect(() => {
     if (!dataReady || !checklist.visible) return;
     checklist.markNotified().then((shouldNotify) => {
       if (!shouldNotify) return;
@@ -607,14 +610,16 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!dataReady) return;
     if (checklist.complete) {
-      setOnboardingChecked(true);
+      console.log('[Home] checklist complete, skipping onboarding');
       return;
     }
+    console.log('[Home] calling markPrompted, visible:', checklist.visible, 'doneCount:', checklist.doneCount);
     checklist.markPrompted().then((isFirstTime) => {
+      console.log('[Home] markPrompted result:', isFirstTime);
       if (isFirstTime) {
+        console.log('[Home] pushing /onboarding-tasks');
         router.push('/onboarding-tasks');
       }
-      setOnboardingChecked(true);
     });
   }, [dataReady, checklist.complete, checklist.markPrompted, router]);
 
@@ -709,10 +714,13 @@ export default function HomeScreen() {
         no_blood_transfusion: mi.no_blood_transfusion,
       }).then(() => {
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-      }).finally(() => {
+      }).catch(() => {
+        // Even on error, stop reconciling to avoid stuck skeleton
         reconcilingRef.current = false;
         setIsReconciling(false);
       });
+      // Don't set isReconciling false here — wait until medicalInformation
+      // appears from the query refetch to avoid flashing the empty state
     } else if (medicalInformation || !user?.medical_information) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsReconciling(false);
@@ -728,8 +736,8 @@ export default function HomeScreen() {
     void pullPendingSync();
   }, [refreshUser]);
 
-  // Show skeleton only on first load when no cached data exists, or while waiting for onboarding redirect decision
-  if (!profile && (isLoading || isReconciling || isInitialLoading || !onboardingChecked)) {
+  // Show skeleton only on first load when no cached data exists
+  if (!profile && (isLoading || isReconciling || isInitialLoading)) {
     return (
       <View className="flex-1">
         <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>

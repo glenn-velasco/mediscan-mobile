@@ -50,11 +50,13 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
     }
   }
 
-  // Backfill verified_by from existing attestations after migration 016
+  // Backfill verified_by from existing attestations after migration 016.
+  // Pass the already-opened db directly — calling getDb() here would deadlock
+  // because dbPromise is still pending on this very migration chain.
   if (ranMigration016) {
     try {
       const { backfillVerifiedBy } = await import('@/services/backfill-verified-by.service');
-      await backfillVerifiedBy();
+      await backfillVerifiedBy(db);
     } catch (err) {
       console.warn('[Migrations] Backfill verified_by failed (will retry on next sync)', err);
     }

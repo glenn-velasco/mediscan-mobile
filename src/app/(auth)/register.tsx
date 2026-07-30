@@ -1,31 +1,31 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
-import { Link, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
-import { ThemedText } from '@/components/themed-text';
-import { AuthLayout } from '@/components/layouts/auth-layout';
-import { TextField } from '@/components/form/text-field';
-import { PasswordField } from '@/components/form/password-field';
-import { SelectField } from '@/components/form/select-field';
+import { getFieldErrors } from '@/api/errors';
+import type { MedicalInformationAddress } from '@/api/types';
+import { useApiError } from '@/api/use-api-error';
 import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
 import { DateField } from '@/components/form/date-field';
-import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
 import { FormError } from '@/components/form/form-error';
+import { PasswordField } from '@/components/form/password-field';
+import { PhoneInput, type PhoneInputValue } from '@/components/form/phone-input';
+import { SelectField } from '@/components/form/select-field';
+import { TextField } from '@/components/form/text-field';
+import { AuthLayout } from '@/components/layouts/auth-layout';
 import { PrimaryButton } from '@/components/primary-button';
-import { useRegister } from '@/features/auth/useRegister';
-import { useApiError } from '@/api/use-api-error';
-import { getFieldErrors } from '@/api/errors';
-import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
-import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
+import { ThemedText } from '@/components/themed-text';
 import { BLOOD_TYPE_OPTIONS, BloodTypeLabel, type BloodType } from '@/constants/blood-type';
+import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
 import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
-import { parsePhoneNumberFromString, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
-import type { MedicalInformationAddress } from '@/api/types';
+import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
+import { useRegister } from '@/features/auth/useRegister';
+import { useTheme } from '@/hooks/use-theme';
 import { formatAddress } from '@/lib/format-address';
 import { registerSchema } from '@/lib/validation/register-schema';
-import { registrationMedicalInfoSchema, registrationAddressSchema } from '@/lib/validation/registration-medical-info-schema';
-import { useTheme } from '@/hooks/use-theme';
+import { registrationAddressSchema, registrationMedicalInfoSchema } from '@/lib/validation/registration-medical-info-schema';
+import { getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
 type StepIndicatorProps = {
   step: number;
@@ -496,13 +496,13 @@ export default function RegisterScreen() {
       };
 
       const result = await register({ payload: registerPayload, medicalInfo });
-      requestAnimationFrame(() => {
-        if (result.pending) {
-          router.replace('/registration-pending');
-        } else {
-          router.replace('/onboarding-tasks');
-        }
-      });
+      if (result.pending) {
+        router.replace('/registration-pending');
+      }
+      // After successful registration, setStatus('authenticated') triggers the
+      // Stack.Protected guard to mount the (app) group. The home screen's effect
+      // handles showing the onboarding-tasks modal via markPrompted() — no
+      // navigation needed here.
     } catch (err) {
       setError(err);
       const apiErrors = getFieldErrors(err, { dob: 'date_of_birth', phone_number: 'phone' });

@@ -2,6 +2,8 @@ import { openDatabaseAsync, deleteDatabaseAsync, type SQLiteDatabase } from 'exp
 
 import { runMigrations } from '@/db/migrations';
 
+export type { SQLiteDatabase };
+
 let dbPromise: Promise<SQLiteDatabase> | null = null;
 let isClosing = false;
 
@@ -21,7 +23,9 @@ export function getDb(): Promise<SQLiteDatabase> {
   }
 
   if (!dbPromise) {
+    console.log('[DB] getDb(): opening database');
     dbPromise = openDatabaseAsync('mediscan.db').then(async (db) => {
+      console.log('[DB] getDb(): database opened, setting PRAGMAs');
       // Default rollback-journal mode takes an exclusive file lock per write transaction, and the
       // default busy_timeout of 0 means any concurrent statement on this connection fails instantly
       // as "database is locked" instead of waiting — easy to hit since several independent
@@ -30,8 +34,13 @@ export function getDb(): Promise<SQLiteDatabase> {
       // busy_timeout makes SQLite retry internally for up to 5s before giving up.
       await db.execAsync('PRAGMA journal_mode = WAL;');
       await db.execAsync('PRAGMA busy_timeout = 5000;');
+      console.log('[DB] getDb(): PRAGMAs set, running migrations');
       await runMigrations(db);
+      console.log('[DB] getDb(): migrations complete');
       return db;
+    }).catch((err) => {
+      console.error('[DB] getDb(): FAILED', err);
+      throw err;
     });
   }
   return dbPromise;
@@ -80,3 +89,7 @@ if (__DEV__) {
       });
   });
 }
+
+// Kick off DB initialization at module load so it's ready by the time components mount.
+// All callers go through getDb() which returns this same cached promise.
+void getDb();

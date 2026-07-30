@@ -1,4 +1,4 @@
-import { getDb } from '@/db/client';
+import { getDb, type SQLiteDatabase } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import type { VerifiedByEntry } from '@/db/schema';
@@ -8,9 +8,10 @@ const TAG = '[BackfillVerifiedBy]';
 /**
  * Backfill the `verified_by` column from existing `professional_attestations`.
  * Run once after migration 016 to populate BLE-only verifications that never hit the server.
+ * @param injectedDb - Pass the already-opened db when called from runMigrations() to avoid deadlock.
  */
-export async function backfillVerifiedBy(): Promise<void> {
-  const db = await getDb();
+export async function backfillVerifiedBy(injectedDb?: SQLiteDatabase): Promise<void> {
+  const db = injectedDb ?? await getDb();
   const userId = getCurrentUserId();
   
   console.debug(TAG, 'Starting backfill for user', { userId });

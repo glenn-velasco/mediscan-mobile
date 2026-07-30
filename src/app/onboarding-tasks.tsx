@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
-import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
@@ -10,8 +10,8 @@ import { ThemedText } from '@/components/themed-text';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useTheme } from '@/hooks/use-theme';
-import { useOnboardingData } from '@/onboarding/useOnboardingData';
 import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
+import { useOnboardingData } from '@/onboarding/useOnboardingData';
 
 const TASK_ROUTE: Partial<Record<OnboardingTaskId, string>> = {
   emergency_contacts: '/emergency-contacts/new',
@@ -127,14 +127,20 @@ export default function OnboardingTasksScreen() {
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
 
+  console.log('[OnboardingTasks] mounted', { isDataReady, complete: checklist.complete, doneCount: checklist.doneCount, total: checklist.total, visible: checklist.visible });
+
   useEffect(() => {
     if (emailCooldown <= 0) return;
     const timer = setTimeout(() => setEmailCooldown((s) => s - 1), 1000);
     return () => clearTimeout(timer);
   }, [emailCooldown]);
 
+  const dismissedRef = useRef(false);
+
   useEffect(() => {
-    if (isDataReady && checklist.complete) {
+    if (isDataReady && checklist.complete && !dismissedRef.current) {
+      console.log('[OnboardingTasks] auto-dismissing (all tasks complete)');
+      dismissedRef.current = true;
       router.dismissAll();
     }
   }, [isDataReady, checklist.complete]);
@@ -146,6 +152,7 @@ export default function OnboardingTasksScreen() {
   );
 
   if (!isDataReady) {
+    console.log('[OnboardingTasks] showing spinner (isDataReady=false)');
     return (
       <View className="flex-1 items-center justify-center" style={{ backgroundColor: theme.background }}>
         <ActivityIndicator size="large" color={theme.primary} />
@@ -153,7 +160,10 @@ export default function OnboardingTasksScreen() {
     );
   }
 
-  if (checklist.complete) return null;
+  if (checklist.complete) {
+    console.log('[OnboardingTasks] checklist complete, returning null');
+    return null;
+  }
 
   const handleSkipTask = (id: OnboardingTaskId) => {
     void checklist.skipTask(id);

@@ -13,19 +13,12 @@ import { getIsOffline } from '@/lib/network-state';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
 import { clearPrivateKey } from '@/services/device-key-storage';
-import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import { clearLastSyncedAt, forcePushBeforeLogout } from '@/services/patient-sync.service';
+import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import { forceSyncBeforeLogout } from '@/services/verification-sync.service';
 import { useAvatarStore } from '@/stores/avatar-store';
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
-
-let isRegistering = false;
-
-// react-doctor-disable-next-line react-doctor/only-export-components
-export function getIsRegistering(): boolean {
-  return isRegistering;
-}
 
 type AuthContextValue = {
   status: AuthStatus;
@@ -78,6 +71,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const handleUnauthenticated = useCallback(async () => {
+    queryClient.clear();
     await clearPrivateKey();
     setCurrentUserId(null);
     await clearToken();
@@ -100,6 +94,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       const token = await loadToken();
       if (cancelled) return;
       if (!token) {
+        console.log('[Auth] boot: no token → unauthenticated');
         setStatus('unauthenticated');
         setIsInitialLoading(false);
         return;
@@ -107,6 +102,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
       const cached = await loadUser();
       if (cancelled) return;
+      console.log('[Auth] boot: token found, cached user:', !!cached);
 
       if (skipNetworkRefresh) {
         if (cached) {
@@ -144,15 +140,18 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('apiMe timeout')), ME_TIMEOUT_MS)),
         ]);
         if (cancelled) return;
+        console.log('[Auth] boot: apiMe resolved, user:', fetchedUser.id);
         setCurrentUserId(fetchedUser.id);
         setUser(fetchedUser);
         if (!cached) {
+          console.log('[Auth] boot: no cache → setting authenticated');
           setStatus('authenticated');
           setIsInitialLoading(false);
         }
         void backfillUserId(fetchedUser.id);
         await saveUser(fetchedUser);
-      } catch {
+      } catch (err) {
+        console.error('[Auth] boot: apiMe failed:', err);
         if (!cancelled && !cached) {
           await handleUnauthenticated();
           setIsInitialLoading(false);
@@ -178,7 +177,6 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const register = useCallback(async (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => {
-    isRegistering = true;
     // react-doctor-disable-next-line react-hooks-js/todo
     try {
       setStatus('authenticating');
@@ -217,8 +215,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       setIsInitialLoading(false);
       void backfillUserId(registeredUser.id);
       return { pending: false };
-    } finally {
-      isRegistering = false;
+    } catch (err) {
+      throw err;
     }
   }, []);
 
