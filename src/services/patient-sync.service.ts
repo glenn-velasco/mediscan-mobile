@@ -116,7 +116,7 @@ async function pushRecord<TPayload>(
       // instead of leaving the row stuck unsynced forever.
       if (err instanceof ValidationError) {
         await api.update(row.local_uuid, payload);
-      } else if (getErrorStatus(err) === 404) {
+      } else if (typeof getErrorStatus === 'function' && getErrorStatus(err) === 404) {
         // 404 on CREATE means the endpoint/parent record doesn't exist yet — NOT that this record
         // was deleted. Skip for now and retry next cycle instead of hard-deleting (which would
         // destroy data that never existed server-side).
@@ -146,7 +146,7 @@ async function pushOne(
     // was merged/deleted server-side (e.g. a registration-match accept moved it elsewhere, or an
     // admin deleted it). Retrying forever would just log the same 404 every cycle; drop the local
     // row instead since there's nothing left to reconcile it against.
-    if (getErrorStatus(err) === 404) {
+    if (typeof getErrorStatus === 'function' && getErrorStatus(err) === 404) {
       console.warn(TAG, `${tag} no longer exists server-side, dropping local copy`, { localUuid });
       await onNotFound(localUuid);
       return;
