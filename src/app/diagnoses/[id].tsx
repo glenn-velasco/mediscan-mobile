@@ -97,7 +97,7 @@ export default function EditDiagnosisScreen() {
         <Card className="mb-6 gap-3">
           <ThemedText type="smallBold" color="mutedForeground">Verification history</ThemedText>
           {(() => {
-            const attestationMap = new Map<number, { name: string; verified_at: string; note?: string }>();
+            const attestationMap = new Map<string | number, { name: string; verified_at: string; note?: string }>();
             attestations.forEach((a) => {
               if (a.payload.type === 'diagnosis_verification') {
                 attestationMap.set(a.payload.verified_by.user_id, { name: a.payload.verified_by.name, verified_at: a.payload.verified_at, note: a.payload.note });

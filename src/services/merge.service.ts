@@ -7,12 +7,15 @@ import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import * as scannedPatientsRepo from '@/db/repositories/scanned-patients.repo';
+import * as myScanActivityRepo from '@/db/repositories/my-scan-activity.repo';
+import { getCurrentUserId } from '@/db/context';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
 import { parseEnvelopePlaintext } from '@/lib/envelope-schema';
 import { queryClient } from '@/lib/query-client';
-import { allergiesQueryKey, conditionsQueryKey, diagnosesQueryKey, medicationsQueryKey, medicalInformationQueryKey, attestationsQueryKey } from '@/lib/query-keys';
-import type { AllergyVerificationEnvelope, ConditionVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope } from '@/lib/envelope-schema';
+import { allergiesQueryKey, conditionsQueryKey, diagnosesQueryKey, medicationsQueryKey, medicalInformationQueryKey, attestationsQueryKey, professionalScansQueryKey, myScanActivityQueryKey } from '@/lib/query-keys';
+import type { AllergyVerificationEnvelope, ConditionVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, ScanEventEnvelope } from '@/lib/envelope-schema';
 import type { PendingSyncEnvelopeRow, VerifiedByEntry } from '@/db/schema';
 import type { EnvelopeType } from '@/api/types';
 
@@ -272,6 +275,24 @@ async function createOrUpdateOrDeleteMedication(medication: MedicationVerificati
   return newUuid;
 }
 
+async function handleScanEvent(event: ScanEventEnvelope): Promise<void> {
+  console.debug(TAG, 'Processing scan event', { patientServerId: event.patient_server_id, scanner: event.scanner.name });
+  const currentUserId = getCurrentUserId();
+
+  if (currentUserId === event.scanner.user_id) {
+    console.debug(TAG, 'Ignoring self-scan event');
+    return;
+  }
+
+  const uniqueId = new Date(event.scanned_at).getTime();
+  await myScanActivityRepo.upsertFromApi({
+    id: uniqueId,
+    scanner_fullname: event.scanner.name,
+    scanned_at: event.scanned_at,
+  });
+  console.debug(TAG, 'Scan event saved to my_scan_activity');
+}
+
 /**
  * Decrypts, validates, and merges a single envelope, regardless of whether it arrived via the relay or
  * BLE — both write into the same `pending_sync_envelopes` inbox first, so this
@@ -303,6 +324,18 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
 
   console.debug(TAG, 'Envelope decrypted successfully', { localId: envelope.local_id, type: parsed.type });
   await pendingSyncEnvelopeRepo.markDecrypted(envelope.local_id);
+
+  if (parsed.type === 'scan_event') {
+    console.debug(TAG, 'Processing scan event envelope');
+    await handleScanEvent(parsed);
+    await pendingSyncEnvelopeRepo.markMerged(envelope.local_id);
+    void Promise.resolve().then(() => {
+      void queryClient.refetchQueries({ queryKey: [...myScanActivityQueryKey, getCurrentUserId()] });
+      void queryClient.refetchQueries({ queryKey: [...professionalScansQueryKey, getCurrentUserId()] });
+    });
+    console.debug(TAG, 'Scan event envelope merged successfully', { localId: envelope.local_id });
+    return 'merged';
+  }
 
   const matchedAllergyLocalUuid = parsed.type === 'allergy_verification'
     ? await createOrUpdateOrDeleteAllergy(parsed)

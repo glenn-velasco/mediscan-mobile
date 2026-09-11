@@ -14,7 +14,7 @@ export type ApiEnvelope<T> = {
 };
 
 export type User = {
-  id: number;
+  id: string;
   first_name: string;
   middle_name: string | null;
   last_name: string;
@@ -58,7 +58,7 @@ export type Condition = {
 };
 
 export type DiagnosedBy = {
-  id: number;
+  id: string | number;
   fullname: string;
 };
 
@@ -90,9 +90,11 @@ export type MedicalInformation = {
   blood_type: BloodType | null;
   religion: Religion | null;
   no_blood_transfusion: boolean;
+  avatar?: string | null;
   allergies: Allergy[];
   conditions: Condition[];
   diagnoses: Diagnosis[];
+  medications: Medication[];
   emergency_contacts: EmergencyContact[];
 };
 
@@ -209,8 +211,8 @@ export type PaginatedResponse<T> = {
 };
 
 export type DeviceKey = {
-  id: number;
-  user_id: number;
+  id: string | number;
+  user_id: string | number;
   public_key: string;
   label: string | null;
   is_active: boolean;
@@ -222,12 +224,12 @@ export type DeviceKeyPayload = {
   label?: string;
 };
 
-export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'condition_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update' | 'emergency_contact_verification';
+export type EnvelopeType = 'allergy_verification' | 'diagnosis_verification' | 'medication_verification' | 'condition_verification' | 'transfusion_witness' | 'general_note' | 'medical_information_update' | 'emergency_contact_verification' | 'scan_event';
 
 export type PendingSyncEnvelope = {
-  id: number;
-  sender_id: number;
-  recipient_id: number;
+  id: string | number;
+  sender_id: string | number;
+  recipient_id: string | number;
   envelope_type: EnvelopeType;
   ciphertext: string;
   status: string;
@@ -250,7 +252,7 @@ export type ProfessionalApplicationStatus =
   | 'denied';
 
 export type ProfessionalApplication = {
-  id: number;
+  id: string | number;
   id_type: ProfessionalApplicationIdType;
   issuing_country: string;
   profession: string | null;
@@ -261,6 +263,33 @@ export type ProfessionalApplication = {
   rejection_reason: string | null;
   role_granted: string | null;
   created_at: string;
+};
+
+export type ScanSummary = {
+  id: string | number;
+  fullname: string;
+  avatar: string | null;
+  age: number | null;
+  gender: Gender | null;
+  dob: string | null;
+  notes: string | null;
+  scan_count: number;
+  last_scanned_at: string;
+};
+
+export type ScanNote = {
+  id: string | number;
+  professional_id: string | number;
+  patient_id: string | number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ScanActivity = {
+  id: string | number;
+  scanner_fullname: string;
+  scanned_at: string;
 };
 
 

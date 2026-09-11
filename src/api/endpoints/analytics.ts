@@ -1,5 +1,5 @@
-import { apiClient } from '@/api/client';
+import { invokeFunction } from '@/api/supabase';
 
-export function logEmergencyQrEvent(payload: { action: 'shown' | 'scanned'; patient_id: number; context?: string }) {
-  return apiClient.post<null>('api/v1/emergency-qr/events', payload);
+export function logEmergencyQrEvent(payload: { action: 'shown' | 'scanned'; patient_id: string | number; context?: string }) {
+  return invokeFunction<null>('audit-emergency-qr', payload);
 }

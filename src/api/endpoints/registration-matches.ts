@@ -1,20 +1,20 @@
-import { apiClient } from '@/api/client';
+import { invokeFunction } from '@/api/supabase';
 
 export type RegistrationMatch = {
-  id: number;
+  id: string | number;
   status: 'pending' | 'approved' | 'denied' | 'expired';
   created_at: string;
 };
 
 /** Pending matches awaiting the authenticated user's decision (as a candidate record's primary user). */
 export function listPendingRegistrationMatches() {
-  return apiClient.get<RegistrationMatch[]>('api/v1/medical-information-registration-matches');
+  return invokeFunction<RegistrationMatch[]>('registration-matches-list');
 }
 
-export function acceptRegistrationMatch(id: number) {
-  return apiClient.post<null>(`api/v1/medical-information-registration-matches/${id}/accept`);
+export function acceptRegistrationMatch(id: string | number) {
+  return invokeFunction<null>('registration-match-decide', { id, decision: 'accept' });
 }
 
-export function denyRegistrationMatch(id: number) {
-  return apiClient.post<null>(`api/v1/medical-information-registration-matches/${id}/deny`);
+export function denyRegistrationMatch(id: string | number) {
+  return invokeFunction<null>('registration-match-decide', { id, decision: 'deny' });
 }

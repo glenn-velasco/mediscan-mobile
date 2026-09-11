@@ -1,11 +1,10 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { registerUnauthenticatedHandler } from '@/api/client';
 import { login as apiLogin, logout as apiLogout, me as apiMe, register as apiRegister } from '@/api/endpoints/auth';
 import { updateMedicalInformation } from '@/api/endpoints/medical-information';
 import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
 import { getDeviceName } from '@/auth/device-name';
-import { clearToken, loadToken, setToken } from '@/auth/token-storage';
+import { clearToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
 import { setCurrentUserId } from '@/db/context';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
@@ -17,6 +16,7 @@ import { clearLastSyncedAt, forcePushBeforeLogout } from '@/services/patient-syn
 import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import { forceSyncBeforeLogout } from '@/services/verification-sync.service';
 import { useAvatarStore } from '@/stores/avatar-store';
+import { supabase } from '@/lib/supabase';
 
 type AuthStatus = 'idle' | 'authenticating' | 'authenticated' | 'unauthenticated';
 
@@ -44,7 +44,7 @@ type AuthContextValue = {
 // react-doctor-disable-next-line react-doctor/only-export-components
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function backfillUserId(userId: number): Promise<void> {
+async function backfillUserId(userId: string | number): Promise<void> {
   const { getDb } = await import('@/db/client');
   const db = await getDb();
   await db.runAsync('UPDATE medical_information SET user_id = ? WHERE user_id = 0', userId);
@@ -82,16 +82,20 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   useEffect(() => {
-    registerUnauthenticatedHandler(() => {
-      void handleUnauthenticated();
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.access_token) void setToken(session.access_token);
+      if (event === 'SIGNED_OUT') void handleUnauthenticated();
     });
+    return () => listener.subscription.unsubscribe();
   }, [handleUnauthenticated]);
 
   // react-doctor-disable-next-line react-hooks-js/no-set-state-after-await-in-effect, react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const token = await loadToken();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token ?? null;
+      if (token) await setToken(token);
       if (cancelled) return;
       if (!token) {
         console.log('[Auth] boot: no token → unauthenticated');
@@ -221,16 +225,6 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const logout = useCallback(async () => {
-    const LOGOUT_TIMEOUT_MS = 5_000;
-    try {
-      await Promise.race([
-        apiLogout(),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('logout timeout')), LOGOUT_TIMEOUT_MS)),
-      ]);
-    } catch {
-      // Best-effort: the user's intent is to log out locally regardless of connectivity.
-    }
-
     // Flush all pending data before clearing auth — allergies, conditions, diagnoses,
     // medications, emergency contacts, medical information, and verification toggles.
     // If the server is unreachable, pending changes stay in the local DB and will sync
@@ -246,6 +240,16 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       ]);
     } catch {
       // Best-effort: some data may not have synced if the server is unreachable.
+    }
+
+    const LOGOUT_TIMEOUT_MS = 5_000;
+    try {
+      await Promise.race([
+        apiLogout(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('logout timeout')), LOGOUT_TIMEOUT_MS)),
+      ]);
+    } catch {
+      // Best-effort: the user's intent is to log out locally regardless of connectivity.
     }
 
     await clearPrivateKey();

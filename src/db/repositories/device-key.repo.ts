@@ -2,9 +2,9 @@ import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
 import type { DeviceKeyRow } from '@/db/schema';
 
-export async function getLocal(userId?: number): Promise<DeviceKeyRow | null> {
+export async function getLocal(userId?: string | number): Promise<DeviceKeyRow | null> {
   const db = await getDb();
-  let uid: number;
+  let uid: string | number;
   try {
     uid = userId ?? getCurrentUserId();
   } catch {
@@ -36,7 +36,7 @@ export async function saveLocal(params: { publicKey: string; label: string }): P
 
 /** Writes a newly-registered device key, replacing whatever was there before (rotation calls this too). */
 export async function saveRegistered(params: {
-  serverDeviceKeyId: number;
+  serverDeviceKeyId: string | number;
   publicKey: string;
   label: string | null;
   registeredAt: string;
@@ -64,7 +64,7 @@ export async function saveRegistered(params: {
 }
 
 /** Marks the previous server key id as awaiting a DELETE confirmation during rotation. */
-export async function markPendingRevoke(oldServerDeviceKeyId: number): Promise<void> {
+export async function markPendingRevoke(oldServerDeviceKeyId: string | number): Promise<void> {
   const db = await getDb();
   const userId = getCurrentUserId();
   await db.runAsync(
@@ -77,7 +77,7 @@ export async function markPendingRevoke(oldServerDeviceKeyId: number): Promise<v
 
 export async function clearPendingRevoke(): Promise<void> {
   const db = await getDb();
-  let userId: number;
+  let userId: string | number;
   try {
     userId = getCurrentUserId();
   } catch {
@@ -90,9 +90,9 @@ export async function clearPendingRevoke(): Promise<void> {
   );
 }
 
-export async function clear(userId?: number): Promise<void> {
+export async function clear(userId?: string | number): Promise<void> {
   const db = await getDb();
-  let uid: number;
+  let uid: string | number;
   try {
     uid = userId ?? getCurrentUserId();
   } catch {

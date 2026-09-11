@@ -3,28 +3,31 @@ import { InteractionManager } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { useBlePeripheralPermission } from '@/hooks/use-ble-permission';
-import { useBleAdvertisingToggleStore } from '@/features/ble-sync/ble-advertising-toggle.store';
 import * as blePeripheralService from '@/services/ble-peripheral.service';
 import { ensureBluetoothEnabled } from '@/services/ble-manager';
 import { ensureLocationEnabled } from '../../../modules/ble-location/src/ensureLocationEnabled';
 
 /**
- * Global hook that resumes BLE advertising on cold start if the user previously enabled it.
- * Mount once at the app root (inside AuthProvider) so advertising resumes regardless of
- * which screen the user opens.
+ * Global hook that auto-starts BLE advertising when the user is authenticated.
+ * Mount once at the app root (inside AuthProvider) so advertising starts regardless of
+ * which screen the user opens. Advertising stops on logout.
  */
 export function useBleAdvertisingResume() {
   const { user } = useAuth();
   const [permission, requestPermission] = useBlePeripheralPermission();
-  const toggle = useBleAdvertisingToggleStore();
-  const resumedRef = useRef(false);
+  const startedRef = useRef(false);
 
   useEffect(() => {
-    if (resumedRef.current) return;
-    if (!toggle.loaded || !toggle.enabled) return;
-    if (!user) return;
-    if (blePeripheralService.isAdvertising()) return;
-    resumedRef.current = true;
+    if (!user) {
+      startedRef.current = false;
+      return;
+    }
+    if (startedRef.current) return;
+    if (blePeripheralService.isAdvertising()) {
+      startedRef.current = true;
+      return;
+    }
+    startedRef.current = true;
 
     const handle = InteractionManager.runAfterInteractions(() => {
       void (async () => {
@@ -37,10 +40,10 @@ export function useBleAdvertisingResume() {
           if (!locationEnabled) return;
           await blePeripheralService.startAdvertising(user.id);
         } catch {
-          // Silently fail — the Account page toggle will show the error state if the user visits it.
+          // Silent fail — BLE advertising will not be available but the app still works.
         }
       })();
     });
     return () => handle.cancel();
-  }, [toggle.loaded, toggle.enabled, user, permission, requestPermission]);
+  }, [user, permission, requestPermission]);
 }

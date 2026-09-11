@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/client';
+import { invokeFunction } from '@/api/supabase';
 import type { EnvelopeSubmitPayload, PendingSyncEnvelope } from '@/api/types';
 
 export type VerificationStatusResponse = {
@@ -8,35 +8,27 @@ export type VerificationStatusResponse = {
   medications: { item: string; verified: boolean; verified_at: string | null }[];
 };
 
-export function getPatientPublicKey(patientId: number) {
-  return apiClient.get<{ public_key: string }>(`api/v1/professional/patients/${patientId}/public-key`);
+export function getPatientPublicKey(patientId: string | number) {
+  return invokeFunction<{ public_key: string }>('professional-patient-public-key', { patient_id: patientId });
 }
 
 export function submitEnvelope(
-  patientId: number,
+  patientId: string | number,
   payload: EnvelopeSubmitPayload & {
     item_identifier?: string;
     verified?: boolean;
   }
 ) {
-  return apiClient.post<PendingSyncEnvelope>(
-    `api/v1/professional/patients/${patientId}/envelopes`,
-    payload
-  );
+  return invokeFunction<PendingSyncEnvelope>('professional-submit-envelope', { patient_id: patientId, ...payload });
 }
 
-export function getPatientVerifications(patientId: number) {
-  return apiClient.get<VerificationStatusResponse>(
-    `api/v1/professional/patients/${patientId}/verifications`
-  );
+export function getPatientVerifications(patientId: string | number) {
+  return invokeFunction<VerificationStatusResponse>('professional-patient-verifications', { patient_id: patientId });
 }
 
 export function trackVerification(
-  patientId: number,
+  patientId: string | number,
   payload: { envelope_type: string; item_identifier: string; verified: boolean }
 ) {
-  return apiClient.post<null>(
-    `api/v1/professional/patients/${patientId}/verifications`,
-    payload
-  );
+  return invokeFunction<null>('professional-track-verification', { patient_id: patientId, ...payload });
 }

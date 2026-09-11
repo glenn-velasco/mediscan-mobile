@@ -234,7 +234,7 @@ export function medInfoFromScanned(info: ScannedEmergencyInfo): MedInfoFormState
   };
 }
 
-export function buildAllergyEnvelope(item: ManageAllergy, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: number; fullname: string }): AllergyVerificationEnvelope {
+export function buildAllergyEnvelope(item: ManageAllergy, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: string | number; fullname: string }): AllergyVerificationEnvelope {
   const base = {
     type: 'allergy_verification' as const,
     version: 1 as const,
@@ -249,7 +249,7 @@ export function buildAllergyEnvelope(item: ManageAllergy, action: 'create' | 'up
   return base;
 }
 
-export function buildConditionEnvelope(item: ManageCondition, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: number; fullname: string }): ConditionVerificationEnvelope {
+export function buildConditionEnvelope(item: ManageCondition, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: string | number; fullname: string }): ConditionVerificationEnvelope {
   const base = {
     type: 'condition_verification' as const,
     version: 1 as const,
@@ -262,7 +262,7 @@ export function buildConditionEnvelope(item: ManageCondition, action: 'create' |
   return base;
 }
 
-export function buildDiagnosisEnvelope(item: ManageDiagnosis, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: number; fullname: string }): DiagnosisVerificationEnvelope {
+export function buildDiagnosisEnvelope(item: ManageDiagnosis, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: string | number; fullname: string }): DiagnosisVerificationEnvelope {
   const base = {
     type: 'diagnosis_verification' as const,
     version: 1 as const,
@@ -277,7 +277,7 @@ export function buildDiagnosisEnvelope(item: ManageDiagnosis, action: 'create' |
   return base;
 }
 
-export function buildMedicationEnvelope(item: ManageMedication, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: number; fullname: string }): MedicationVerificationEnvelope {
+export function buildMedicationEnvelope(item: ManageMedication, action: 'create' | 'update' | 'delete' | 'revoke', user: { id: string | number; fullname: string }): MedicationVerificationEnvelope {
   const base = {
     type: 'medication_verification' as const,
     version: 1 as const,
@@ -293,7 +293,7 @@ export function buildMedicationEnvelope(item: ManageMedication, action: 'create'
   return base;
 }
 
-export function buildContactEnvelope(item: ManageEmergencyContact, action: 'create' | 'update' | 'delete', user: { id: number; fullname: string }): EmergencyContactVerificationEnvelope {
+export function buildContactEnvelope(item: ManageEmergencyContact, action: 'create' | 'update' | 'delete', user: { id: string | number; fullname: string }): EmergencyContactVerificationEnvelope {
   return {
     type: 'emergency_contact_verification',
     version: 1,

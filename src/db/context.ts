@@ -1,10 +1,12 @@
-let currentUserId: number | null = null;
+export type LocalUserId = string | number;
 
-export function setCurrentUserId(id: number | null): void {
+let currentUserId: LocalUserId | null = null;
+
+export function setCurrentUserId(id: LocalUserId | null): void {
   currentUserId = id;
 }
 
-export function getCurrentUserId(): number {
+export function getCurrentUserId(): LocalUserId {
   if (currentUserId === null) {
     throw new Error('No user is currently logged in');
   }

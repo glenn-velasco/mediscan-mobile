@@ -1,15 +1,15 @@
-import { apiClient, postMultipart } from '@/api/client';
+import { invokeFunction } from '@/api/supabase';
 import type { ProfessionalApplication } from '@/api/types';
 
 export function submitProfessionalApplication(formData: FormData) {
-  return postMultipart<ProfessionalApplication>('api/v1/professional-applications', formData);
+  return invokeFunction<ProfessionalApplication>('professional-application-submit', formData);
 }
 
-export function getProfessionalApplication(id: number) {
-  return apiClient.get<ProfessionalApplication>(`api/v1/professional-applications/${id}`);
+export function getProfessionalApplication(id: string | number) {
+  return invokeFunction<ProfessionalApplication>('professional-application-get', { id });
 }
 
 export async function getMyProfessionalApplication() {
-  const applications = await apiClient.get<ProfessionalApplication[]>('api/v1/professional-applications');
+  const applications = await invokeFunction<ProfessionalApplication[]>('professional-applications-mine');
   return applications[0] ?? null;
 }

@@ -7,11 +7,11 @@ import { useAuth } from '@/auth/useAuth';
 import { queryClient } from '@/lib/query-client';
 import { ensureDeviceKeyServerRegistered, retryPendingRevoke } from '@/services/device-key.service';
 import { pullPatientChanges, pushPatientChanges } from '@/services/patient-sync.service';
-
-const PERIODIC_INTERVAL_MS = 60_000;
+import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
+import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
 
 /**
- * Foreground, NetInfo reconnect, and the periodic interval can all fire in quick succession
+ * Foreground and NetInfo reconnect can fire in quick succession
  * (e.g. NetInfo re-reporting "connected" a few times as the OS settles, right as the app comes to
  * the foreground) — without a shared cooldown each one kicks off its own full push+pull cycle,
  * and retries of already-failing items pile on top, which is enough to trip the backend's
@@ -28,10 +28,12 @@ const MIN_TRIGGER_INTERVAL_MS = 10_000;
 async function syncPatientData(): Promise<void> {
   await pushPatientChanges();
   await pullPatientChanges();
+  await pullScannedPatients();
+  await pullMyScanActivity();
 }
 
 /**
- * Same NetInfo/AppState/interval trigger pattern the old mutation-queue processor used - now
+ * Event-driven NetInfo/AppState trigger pattern - now
  * drives both the pending-sync (BLE/envelope/professional-attestation) pull *and*, separately, the
  * patient-authored CRUD push/pull (see patient-sync.service.ts and the backend repo's docs/SYNC.md
  * for why these are two independent sync systems, not one).
@@ -98,17 +100,12 @@ export function useSyncTriggers(): void {
       }
     });
 
-    const interval = setInterval(() => {
-      if (mountedRef.current) runTriggeredSync();
-    }, PERIODIC_INTERVAL_MS);
-
     return () => {
       mountedRef.current = false;
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
       netInfoUnsubscribe();
       appStateSubscription.remove();
-      clearInterval(interval);
       initializedRef.current = false;
     };
   }, [status, refreshUser]);

@@ -51,6 +51,7 @@ import { showLocalNotification } from '@/lib/notifications';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 import { useOnboardingData } from '@/onboarding/useOnboardingData';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () => void; topInset: number }) {
@@ -503,7 +504,7 @@ function MedicationsSection({ medications, sheetRef, verifiedCount }: { medicati
   );
 }
 
-function BottomTabBar({ medicalInformation, guardedPush, bottomInset }: { medicalInformation: any; guardedPush: (href: Href) => void; bottomInset: number }) {
+function BottomTabBar({ medicalInformation, guardedPush, bottomInset, isVerifiedProfessional }: { medicalInformation: any; guardedPush: (href: Href) => void; bottomInset: number; isVerifiedProfessional: boolean }) {
   const theme = useTheme();
 
   return (
@@ -515,6 +516,14 @@ function BottomTabBar({ medicalInformation, guardedPush, bottomInset }: { medica
         <Pressable hitSlop={12} accessibilityLabel="Home" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
           <Ionicons name="home" size={24} color={theme.primary} />
         </Pressable>
+        <Pressable onPress={() => guardedPush('/who-scanned-me' as any)} hitSlop={12} accessibilityLabel="Who scanned me" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+          <Ionicons name="people-outline" size={24} color={theme.foreground} />
+        </Pressable>
+        {isVerifiedProfessional ? (
+          <Pressable onPress={() => guardedPush('/professional-scans')} hitSlop={12} accessibilityLabel="Scans" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+            <Ionicons name="scan-outline" size={24} color={theme.foreground} />
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
           <Ionicons name="settings-outline" size={24} color={theme.foreground} />
         </Pressable>
@@ -712,8 +721,9 @@ export default function HomeScreen() {
         religion: mi.religion ?? undefined,
         address: mi.address ?? undefined,
         no_blood_transfusion: mi.no_blood_transfusion,
-      }).then(() => {
+      }, 'pending').then(() => {
         queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+        void pushPatientChanges();
       }).catch(() => {
         // Even on error, stop reconciling to avoid stuck skeleton
         reconcilingRef.current = false;
@@ -817,7 +827,7 @@ export default function HomeScreen() {
         <DiagnosesSection diagnoses={diagnoses} sheetRef={diagnosesSheetRef} verifiedCount={diagnosisVerifiedCount} isVerifiedProfessional={isVerifiedProfessional} />
         <MedicationsSection medications={medications} sheetRef={medicationsSheetRef} verifiedCount={medicationVerifiedCount} />
       </AppLayout>
-      <BottomTabBar medicalInformation={medicalInformation} guardedPush={guardedPush} bottomInset={insets.bottom} />
+      <BottomTabBar medicalInformation={medicalInformation} guardedPush={guardedPush} bottomInset={insets.bottom} isVerifiedProfessional={isVerifiedProfessional} />
       <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />

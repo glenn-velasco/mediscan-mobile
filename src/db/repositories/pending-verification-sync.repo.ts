@@ -2,7 +2,7 @@ import { getDb } from '@/db/client';
 
 export type PendingVerificationSync = {
   local_id: string;
-  patient_id: number;
+  patient_id: string | number;
   envelope_type: string;
   item_identifier: string;
   verified: boolean;
@@ -16,7 +16,7 @@ export type PendingVerificationSync = {
  */
 export async function insert(params: {
   localId: string;
-  patientId: number;
+  patientId: string | number;
   envelopeType: string;
   itemIdentifier: string;
   verified: boolean;
@@ -42,7 +42,7 @@ export async function getUnsynced(): Promise<PendingVerificationSync[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{
     local_id: string;
-    patient_id: number;
+    patient_id: string | number;
     envelope_type: string;
     item_identifier: string;
     verified: number;
@@ -72,11 +72,11 @@ export async function markSynced(localId: string): Promise<void> {
  * Get all pending verification records for a specific patient.
  * Returns both synced and unsynced records.
  */
-export async function getForPatient(patientId: number): Promise<PendingVerificationSync[]> {
+export async function getForPatient(patientId: string | number): Promise<PendingVerificationSync[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{
     local_id: string;
-    patient_id: number;
+    patient_id: string | number;
     envelope_type: string;
     item_identifier: string;
     verified: number;
@@ -99,7 +99,7 @@ export async function getForPatient(patientId: number): Promise<PendingVerificat
  * Returns a map of item_identifier -> verified status.
  */
 async function getLatestVerificationsForPatient(
-  patientId: number,
+  patientId: string | number,
 ): Promise<Map<string, Map<string, boolean>>> {
   const records = await getForPatient(patientId);
 

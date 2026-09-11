@@ -29,7 +29,7 @@ export type ScannedMedication = {
 };
 
 export type ScannedEmergencyInfo = {
-  patientId: number | null;
+  patientId: string | number | null;
   generatedAt: string;
   name: string;
   firstName: string;
@@ -221,7 +221,7 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
     switch (key) {
       case 'Patient ID': {
         const id = Number(value);
-        info.patientId = Number.isInteger(id) && id > 0 ? id : null;
+        info.patientId = Number.isInteger(id) && id > 0 ? id : (value.length > 0 ? value : null);
         break;
       }
       case 'Generated':

@@ -6,12 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
 import { useAuth } from '@/auth/useAuth';
+import type { Suffix } from '@/constants/suffix';
 import { EmptyState } from '@/components/empty-state';
 import { PrimaryButton } from '@/components/primary-button';
 import { QrCodeView } from '@/components/qr-code-view';
 import { QrScannerView } from '@/components/qr-scanner-view';
 import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
 import { ThemedText } from '@/components/themed-text';
+import { buildFullName } from '@/lib/build-full-name';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
@@ -26,8 +28,43 @@ import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-em
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import { useBiometricAuth } from '@/lib/use-biometric-auth';
+import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
+import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
+import { queryClient } from '@/lib/query-client';
+import { professionalScansQueryKey, myScanActivityQueryKey } from '@/lib/query-keys';
+import { submitToPatient, PatientKeyNotFoundError } from '@/services/professional-submission.service';
+import { scanForPatient, connectAndSubmit, type DiscoveredPeer } from '@/services/ble-central.service';
+import { seal } from '@/services/sealed-box.service';
+import { useDisconnectBondedDevices } from '@/features/ble-sync/useDisconnectBondedDevices';
 
 type Mode = 'show' | 'scan';
+
+async function sendScanEventEnvelope(
+  patientId: string | number,
+  envelope: { type: 'scan_event'; version: 1; patient_server_id: string | number; scanner: { user_id: string | number; name: string }; scanned_at: string },
+): Promise<void> {
+  let bleCancelled = false;
+  const bleAttempt = (async () => {
+    let peer: DiscoveredPeer | null = null;
+    try {
+      peer = await scanForPatient(patientId, 3000);
+    } catch {
+      // BLE scan failed
+    }
+    if (!peer || bleCancelled) return false;
+    const ciphertext = await seal(envelope, peer.publicKeyBase64);
+    const result = await connectAndSubmit(peer, 'scan_event', ciphertext);
+    return result === 'acked';
+  })();
+
+  const relayAttempt = submitToPatient(patientId, 'scan_event', envelope).then(() => true);
+
+  const won = await Promise.race([bleAttempt, relayAttempt]);
+  bleCancelled = true;
+  if (!won) {
+    await Promise.allSettled([bleAttempt, relayAttempt]);
+  }
+}
 
 /**
  * Landing screen for the Android Quick Settings tile (see plugins/withQrScannerTile.js). Reachable
@@ -44,6 +81,7 @@ export default function QuickScanScreen() {
   const biometric = useBiometricAuth();
   const { isLightweight, promoteToFullApp } = useLightweightMode();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
+  const { disconnectIfAndroid } = useDisconnectBondedDevices();
 
   const [mode, setMode] = useState<Mode>('show');
   const [summary, setSummary] = useState<string | null>(null);
@@ -122,13 +160,45 @@ export default function QuickScanScreen() {
     if (biometric.status === 'authenticated' && scanned?.patientId !== null && scanned && !loggedRef.current) {
       loggedRef.current = true;
       const context = isLightweight ? 'quick_scan_tile' : 'viewer';
-      logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId as number, context }).catch(() => {});
+      logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId as number, context })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: professionalScansQueryKey });
+          queryClient.invalidateQueries({ queryKey: myScanActivityQueryKey });
+          void pullScannedPatients();
+          void pullMyScanActivity();
+          if (user && scanned.patientId !== null) {
+            sendScanEventEnvelope(scanned.patientId, {
+              type: 'scan_event',
+              version: 1,
+              patient_server_id: scanned.patientId,
+              scanner: { user_id: user.id, name: buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) },
+              scanned_at: new Date().toISOString(),
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
     }
-  }, [biometric.status, scanned, isLightweight]);
+  }, [biometric.status, scanned, isLightweight, user]);
 
   const handleManageInfo = () => {
     if (!scanned || scanned.patientId === null) return;
-    logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId, context: 'professional_submit' }).catch(() => {});
+    logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId, context: 'professional_submit' })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: professionalScansQueryKey });
+        queryClient.invalidateQueries({ queryKey: myScanActivityQueryKey });
+        void pullScannedPatients();
+        void pullMyScanActivity();
+        if (user) {
+          sendScanEventEnvelope(scanned.patientId!, {
+            type: 'scan_event',
+            version: 1,
+            patient_server_id: scanned.patientId!,
+            scanner: { user_id: user.id, name: buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) },
+            scanned_at: new Date().toISOString(),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
     setPendingManageInfoQrData(scannedRawRef.current ?? '');
     router.push({ pathname: '/manage-info', params: { patientId: String(scanned.patientId) } });
   };
@@ -151,7 +221,10 @@ export default function QuickScanScreen() {
     biometric.reset();
   };
 
-  const switchMode = (next: Mode) => {
+  const switchMode = async (next: Mode) => {
+    if (next === 'scan') {
+      await disconnectIfAndroid();
+    }
     setMode(next);
     setScanned(null);
     scannedRawRef.current = null;

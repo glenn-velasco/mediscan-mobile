@@ -84,7 +84,7 @@ export default function EditMedicationScreen() {
             Verified by professionals
           </ThemedText>
           {(() => {
-            const attestationMap = new Map<number, { name: string; verified_at: string; note?: string }>();
+            const attestationMap = new Map<string | number, { name: string; verified_at: string; note?: string }>();
             attestations.forEach((a) => {
               if (a.payload.type === 'medication_verification') {
                 attestationMap.set(a.payload.verified_by.user_id, {

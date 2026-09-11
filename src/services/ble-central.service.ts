@@ -24,7 +24,7 @@ export type SubmitResult = 'acked' | 'failed';
  * QR-scanned patientId before being accepted — the connection stays alive and is re-used by
  * connectAndSubmit. Resolves null on timeout.
  */
-export async function scanForPatient(patientId: number, timeoutMs = 15000): Promise<DiscoveredPeer | null> {
+export async function scanForPatient(patientId: string | number, timeoutMs = 15000): Promise<DiscoveredPeer | null> {
   const bleManager = getManager();
   const expected = String(patientId);
   const attempted = new Set<string>();

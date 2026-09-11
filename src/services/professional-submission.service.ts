@@ -16,7 +16,7 @@ export class PatientKeyNotFoundError extends Error {
  * which performs its own seal step using the public key read directly off the patient's peripheral.
  */
 export async function submitToPatient(
-  patientId: number,
+  patientId: string | number,
   envelopeType: EnvelopeType,
   payload: unknown,
   itemIdentifier?: string,

@@ -4,7 +4,7 @@ import { submitToPatient } from '@/services/professional-submission.service';
 import type { EnvelopeType } from '@/api/types';
 
 export type SubmitEnvelopeParams = {
-  patientId: number;
+  patientId: string | number;
   envelopeType: EnvelopeType;
   payload: unknown;
   itemIdentifier?: string;

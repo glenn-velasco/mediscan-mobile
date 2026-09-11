@@ -252,7 +252,7 @@ export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry
 /**
  * Remove a verification entry for a specific user from a medication record.
  */
-export async function removeVerifiedBy(localUuid: string, userId: number): Promise<void> {
+export async function removeVerifiedBy(localUuid: string, userId: string | number): Promise<void> {
   const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing || !existing.verified_by) return;
 

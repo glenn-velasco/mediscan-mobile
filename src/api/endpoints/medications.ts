@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/client';
+import { createEncrypted, softDeleteEncrypted, updateEncrypted } from '@/api/encrypted-crud';
 import type { MedicationPayload } from '@/api/types';
 
 export type MedicationApiRecord = MedicationPayload & {
@@ -8,13 +8,13 @@ export type MedicationApiRecord = MedicationPayload & {
 };
 
 export function createMedication(id: string, payload: MedicationPayload) {
-  return apiClient.post<MedicationApiRecord>('api/v1/medications', { id, ...payload });
+  return createEncrypted('medications', id, payload);
 }
 
 export function updateMedication(id: string, payload: MedicationPayload) {
-  return apiClient.put<MedicationApiRecord>(`api/v1/medications/${id}`, payload);
+  return updateEncrypted('medications', id, payload);
 }
 
 export function deleteMedication(id: string) {
-  return apiClient.delete<null>(`api/v1/medications/${id}`);
+  return softDeleteEncrypted('medications', id);
 }

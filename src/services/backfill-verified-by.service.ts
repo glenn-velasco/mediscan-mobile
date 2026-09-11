@@ -21,7 +21,7 @@ export async function backfillVerifiedBy(injectedDb?: SQLiteDatabase): Promise<v
   const allUpdates: Promise<void>[] = [];
 
   for (const att of attestations) {
-    const payload = att.payload as { verified_by?: { user_id: number; name: string }; verified_at?: string };
+    const payload = att.payload as { verified_by?: { user_id: string | number; name: string }; verified_at?: string };
     if (!payload.verified_by || !payload.verified_at) continue;
     
     const entry: VerifiedByEntry = {

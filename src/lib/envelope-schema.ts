@@ -24,7 +24,7 @@ export type AllergyVerificationEnvelope = {
   allergen: string;
   reaction: string | null;
   severity: 'mild' | 'moderate' | 'severe' | 'life-threatening';
-  verified_by: { user_id: number; name: string };
+  verified_by: { user_id: string | number; name: string };
   verified_at: string;
   note?: string;
 };
@@ -35,7 +35,7 @@ export type DiagnosisVerificationEnvelope = {
   condition: string;
   date_of_diagnosis: string | null;
   severity: DiagnosisSeverity;
-  verified_by: { user_id: number; name: string };
+  verified_by: { user_id: string | number; name: string };
   verified_at: string;
   note?: string;
 };
@@ -47,7 +47,7 @@ export type MedicationVerificationEnvelope = {
   dosage: string;
   frequency: string;
   notes: string | null;
-  verified_by: { user_id: number; name: string };
+  verified_by: { user_id: string | number; name: string };
   verified_at: string;
   note?: string;
 };
@@ -56,7 +56,7 @@ export type ConditionVerificationEnvelope = {
   type: 'condition_verification';
   version: 1;
   description: string;
-  verified_by: { user_id: number; name: string };
+  verified_by: { user_id: string | number; name: string };
   verified_at: string;
   note?: string;
 };
@@ -70,7 +70,7 @@ export type EmergencyContactVerificationEnvelope = {
   phone: string | null;
   is_primary: boolean;
   action: 'create' | 'update' | 'delete';
-  verified_by: { user_id: number; name: string };
+  verified_by: { user_id: string | number; name: string };
   verified_at: string;
 };
 
@@ -78,7 +78,7 @@ export type TransfusionWitnessEnvelope = {
   type: 'transfusion_witness';
   version: 1;
   consent_value: boolean;
-  witnessed_by: { user_id: number; name: string };
+  witnessed_by: { user_id: string | number; name: string };
   witnessed_at: string;
   note?: string;
 };
@@ -87,7 +87,7 @@ export type GeneralNoteEnvelope = {
   type: 'general_note';
   version: 1;
   note: string;
-  author: { user_id: number; name: string };
+  author: { user_id: string | number; name: string };
   created_at: string;
 };
 
@@ -110,11 +110,19 @@ export type MedicalInformationUpdateEnvelope = {
   type: 'medical_information_update';
   version: 1;
   fields: MedicalInformationPatch;
-  updated_by: { user_id: number; name: string };
+  updated_by: { user_id: string | number; name: string };
   updated_at: string;
 };
 
-export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | ConditionVerificationEnvelope | EmergencyContactVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope;
+export type ScanEventEnvelope = {
+  type: 'scan_event';
+  version: 1;
+  patient_server_id: string | number;
+  scanner: { user_id: string | number; name: string };
+  scanned_at: string;
+};
+
+export type EnvelopePlaintext = AllergyVerificationEnvelope | DiagnosisVerificationEnvelope | MedicationVerificationEnvelope | ConditionVerificationEnvelope | EmergencyContactVerificationEnvelope | TransfusionWitnessEnvelope | GeneralNoteEnvelope | MedicalInformationUpdateEnvelope | ScanEventEnvelope;
 
 const SEVERITIES = new Set(['mild', 'moderate', 'severe', 'life-threatening']);
 const DIAGNOSIS_SEVERITIES = new Set<string>(DIAGNOSIS_SEVERITY_OPTIONS);
@@ -132,11 +140,11 @@ function isAddressOrNull(value: unknown): value is MedicalInformationAddress | n
   return entries.every(([key, v]) => ADDRESS_KEYS.has(key) && (typeof v === 'string' || v === null));
 }
 
-function isPerson(value: unknown): value is { user_id: number; name: string } {
+function isPerson(value: unknown): value is { user_id: string | number; name: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
-    typeof (value as { user_id?: unknown }).user_id === 'number' &&
+    (typeof (value as { user_id?: unknown }).user_id === 'string' || typeof (value as { user_id?: unknown }).user_id === 'number') &&
     typeof (value as { name?: unknown }).name === 'string'
   );
 }
@@ -222,6 +230,16 @@ export function parseEnvelopePlaintext(envelopeType: EnvelopeType, plaintext: un
     case 'general_note':
       if (typeof p.note === 'string' && isPerson(p.author) && typeof p.created_at === 'string') {
         return p as unknown as GeneralNoteEnvelope;
+      }
+      return null;
+
+    case 'scan_event':
+      if (
+        (typeof p.patient_server_id === 'string' || typeof p.patient_server_id === 'number') &&
+        isPerson(p.scanner) &&
+        typeof p.scanned_at === 'string'
+      ) {
+        return p as unknown as ScanEventEnvelope;
       }
       return null;
 

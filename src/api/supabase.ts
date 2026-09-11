@@ -1,0 +1,36 @@
+import type { PostgrestError } from '@supabase/supabase-js';
+
+import { NetworkError, UnauthenticatedError, ValidationError } from '@/api/errors';
+import { supabase } from '@/lib/supabase';
+
+export { supabase };
+
+export function throwSupabaseError(error: PostgrestError | Error | null): never {
+  if (!error) throw new Error('Unknown Supabase error');
+  const status = 'code' in error && error.code === 'PGRST301' ? 401 : undefined;
+  if (status === 401) throw new UnauthenticatedError({ status: 401, message: error.message });
+  if ('code' in error && ['23505', '23503', '23514', 'PGRST116'].includes(error.code)) {
+    throw new ValidationError({ status: 422, message: error.message, errors: null });
+  }
+  if ('code' in error) throw Object.assign(new Error(error.message), { status: 400, code: error.code });
+  throw new NetworkError(error);
+}
+
+export async function requireAuthUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new UnauthenticatedError({ status: 401, message: 'Authentication required' });
+  return data.user.id;
+}
+
+export async function invokeFunction<T>(name: string, body?: BodyInit | Record<string, unknown>): Promise<T> {
+  let requestBody: BodyInit | Record<string, unknown>;
+  if (body instanceof FormData) {
+    body.set('action', name);
+    requestBody = body;
+  } else {
+    requestBody = { action: name, payload: body ?? {} };
+  }
+  const { data, error } = await supabase.functions.invoke<T>('mediscan-privileged', { body: requestBody });
+  if (error) throwSupabaseError(error);
+  return data as T;
+}

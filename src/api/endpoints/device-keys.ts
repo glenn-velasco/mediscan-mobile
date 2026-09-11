@@ -1,10 +1,10 @@
-import { apiClient } from '@/api/client';
+import { invokeFunction } from '@/api/supabase';
 import type { DeviceKey, DeviceKeyPayload } from '@/api/types';
 
 export function registerDeviceKey(payload: DeviceKeyPayload) {
-  return apiClient.post<DeviceKey>('api/v1/device-keys', payload);
+  return invokeFunction<DeviceKey>('device-key-register', payload);
 }
 
-export function revokeDeviceKey(id: number) {
-  return apiClient.delete<null>(`api/v1/device-keys/${id}`);
+export function revokeDeviceKey(id: string | number) {
+  return invokeFunction<null>('device-key-revoke', { id });
 }

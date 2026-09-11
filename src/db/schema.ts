@@ -26,7 +26,7 @@ export type MedicalInformationEncryptedFields = {
 
 /** The actual SQLite row shape — every `MedicalInformationEncryptedFields` column holds ciphertext at rest (see `encryptField`/`decryptField` in `src/lib/crypto.ts`), except `no_blood_transfusion` which isn't PHI on its own. */
 export type MedicalInformationRawRow = {
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   email: string;
   full_name: string | null;
@@ -49,7 +49,7 @@ export type MedicalInformationRawRow = {
 
 /** The decrypted shape repos return to the rest of the app — unchanged from before encryption was added. */
 export type MedicalInformationRow = MedicalInformationEncryptedFields & {
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   email: string;
   sync_status: SyncStatus;
@@ -64,7 +64,7 @@ export type AllergyEncryptedFields = {
 };
 
 export type VerifiedByEntry = {
-  user_id: number;
+  user_id: string | number;
   name: string;
   verified_at: string;
 };
@@ -72,7 +72,7 @@ export type VerifiedByEntry = {
 /** `allergen`/`reaction` hold ciphertext at rest; `severity` is a bounded enum, stored plaintext (see migration 011's table comment). */
 export type AllergyRawRow = {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   allergen: string;
   reaction: string | null;
@@ -85,7 +85,7 @@ export type AllergyRawRow = {
 
 export type AllergyRow = AllergyEncryptedFields & {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
@@ -100,7 +100,7 @@ export type ConditionEncryptedFields = {
 /** `description` holds ciphertext at rest. */
 export type ConditionRawRow = {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   description: string;
   verified_by: string | null;
@@ -111,7 +111,7 @@ export type ConditionRawRow = {
 
 export type ConditionRow = ConditionEncryptedFields & {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
@@ -130,7 +130,7 @@ export type EmergencyContactEncryptedFields = {
 /** `name`/`phone` hold ciphertext at rest; `relationship`/`phone_country_code`/`is_primary` are bounded/non-identifying, stored plaintext. */
 export type EmergencyContactRawRow = {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   name: string;
   relationship: string | null;
@@ -144,7 +144,7 @@ export type EmergencyContactRawRow = {
 
 export type EmergencyContactRow = EmergencyContactEncryptedFields & {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   sync_status: AllergySyncStatus;
   deleted_locally: 0 | 1;
@@ -160,12 +160,12 @@ export type DiagnosisEncryptedFields = {
 /** `condition` holds ciphertext at rest; `date_of_diagnosis`/`severity` are stored plaintext (see migration 011's table comment). */
 export type DiagnosisRawRow = {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   condition: string;
   date_of_diagnosis: string | null;
   severity: DiagnosisSeverity;
-  diagnosed_by_id: number | null;
+  diagnosed_by_id: string | number | null;
   diagnosed_by_name: string | null;
   verified_by: string | null;
   sync_status: AllergySyncStatus;
@@ -175,9 +175,9 @@ export type DiagnosisRawRow = {
 
 export type DiagnosisRow = DiagnosisEncryptedFields & {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
-  diagnosed_by_id: number | null;
+  diagnosed_by_id: string | number | null;
   diagnosed_by_name: string | null;
   verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
@@ -195,7 +195,7 @@ export type MedicationEncryptedFields = {
 /** `name`/`dosage`/`notes` hold ciphertext at rest; `frequency` is short structured text, stored plaintext. */
 export type MedicationRawRow = {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   name: string;
   dosage: string;
@@ -209,7 +209,7 @@ export type MedicationRawRow = {
 
 export type MedicationRow = MedicationEncryptedFields & {
   local_uuid: string;
-  user_id: number;
+  user_id: string | number;
   server_id: number | null;
   verified_by: VerifiedByEntry[] | null;
   sync_status: AllergySyncStatus;
@@ -218,13 +218,13 @@ export type MedicationRow = MedicationEncryptedFields & {
 };
 
 export type DeviceKeyRow = {
-  user_id: number;
-  server_device_key_id: number | null;
+  user_id: string | number;
+  server_device_key_id: string | number | null;
   public_key: string;
   label: string | null;
   is_active: 0 | 1;
   registered_at: string | null;
-  pending_revoke_server_id: number | null;
+  pending_revoke_server_id: string | number | null;
   updated_at_local: string;
 };
 
@@ -240,10 +240,10 @@ export type PendingSyncEnvelopeStatus =
 
 export type PendingSyncEnvelopeRow = {
   local_id: string;
-  user_id: number;
-  server_envelope_id: number | null;
+  user_id: string | number;
+  server_envelope_id: string | number | null;
   transport: EnvelopeTransport;
-  sender_id: number | null;
+  sender_id: string | number | null;
   envelope_type: string;
   ciphertext: string;
   status: PendingSyncEnvelopeStatus;
@@ -255,7 +255,7 @@ export type PendingSyncEnvelopeRow = {
 
 export type ProfessionalAttestationRow = {
   local_id: string;
-  user_id: number;
+  user_id: string | number;
   source_envelope_local_id: string;
   envelope_type: string;
   encrypted_payload: string;
@@ -264,4 +264,26 @@ export type ProfessionalAttestationRow = {
   matched_diagnosis_local_uuid: string | null;
   matched_medication_local_uuid: string | null;
   created_at: string;
+};
+
+export type ScannedPatientRow = {
+  patient_server_id: string | number;
+  professional_id: string | number;
+  fullname: string;
+  avatar_url: string | null;
+  age: number | null;
+  gender: string | null;
+  dob: string | null;
+  notes: string | null;
+  scan_count: number;
+  last_scanned_at: string;
+  synced_at: string;
+};
+
+export type MyScanActivityRow = {
+  id: string | number;
+  user_id: string | number;
+  scanner_fullname: string;
+  scanned_at: string;
+  synced_at: string;
 };

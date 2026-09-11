@@ -68,7 +68,7 @@ export async function getLocal(): Promise<MedicalInformationRow | null> {
   return raw ? decryptRow(raw) : null;
 }
 
-export async function getByUserId(userId: number): Promise<MedicalInformationRow | null> {
+export async function getByUserId(userId: string | number): Promise<MedicalInformationRow | null> {
   const db = await getDb();
   const raw = await db.getFirstAsync<MedicalInformationRawRow>(
     'SELECT * FROM medical_information WHERE user_id = ?',
@@ -80,7 +80,7 @@ export async function getByUserId(userId: number): Promise<MedicalInformationRow
 export async function saveLocalEdit(
   payload: MedicalInformationPayload,
   status: SyncStatus = 'synced',
-  userId?: number,
+  userId?: string | number,
 ): Promise<void> {
   const db = await getDb();
   const uid = userId ?? getCurrentUserId();
@@ -347,19 +347,19 @@ export async function saveFromServer(record: {
   );
 }
 
-export async function markSynced(userId?: number): Promise<void> {
+export async function markSynced(userId?: string | number): Promise<void> {
   const db = await getDb();
   const uid = userId ?? getCurrentUserId();
   await db.runAsync("UPDATE medical_information SET sync_status = 'synced' WHERE user_id = ?", uid);
 }
 
-export async function markConflict(userId?: number): Promise<void> {
+export async function markConflict(userId?: string | number): Promise<void> {
   const db = await getDb();
   const uid = userId ?? getCurrentUserId();
   await db.runAsync("UPDATE medical_information SET sync_status = 'conflict' WHERE user_id = ?", uid);
 }
 
-export async function clearLocal(userId?: number): Promise<void> {
+export async function clearLocal(userId?: string | number): Promise<void> {
   const db = await getDb();
   const uid = userId ?? getCurrentUserId();
   await db.runAsync('DELETE FROM medical_information WHERE user_id = ?', uid);

@@ -42,7 +42,7 @@ const mockSetToken = setToken as jest.Mock;
 async function registerWithMedicalInfo(
   payload: Omit<RegisterPayload, 'device_name'>,
   medicalInfo?: MedicalInformationPayload,
-): Promise<{ user: { id: number; fullname: string } } | { pending: true }> {
+): Promise<{ user: { id: string | number; fullname: string } } | { pending: true }> {
   const device_name = await getDeviceName();
   const response = await apiRegister({ ...payload, device_name });
 

@@ -12,7 +12,7 @@ import { formatPhoneWithCountryCode } from '@/lib/format-phone';
  * format after decrypting a scanned QR code.
  */
 export function buildEmergencySummary(
-  patientId: number,
+  patientId: string | number,
   generatedAt: Date,
   medicalInformation: NonNullable<ReturnType<typeof useMedicalInformation>['data']>,
   allergies: ReturnType<typeof useAllergies>['data'],

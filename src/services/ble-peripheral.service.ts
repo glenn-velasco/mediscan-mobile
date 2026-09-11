@@ -22,7 +22,8 @@ function isEnvelopeType(value: string): value is EnvelopeType {
          value === 'medication_verification' || 
          value === 'transfusion_witness' || 
          value === 'general_note' || 
-         value === 'medical_information_update';
+         value === 'medical_information_update' ||
+         value === 'scan_event';
 }
 
 async function handleCompleteEnvelope(wirePayload: string): Promise<void> {
@@ -92,7 +93,7 @@ function handleChunk(chunk: string): void {
  * submit a sealed envelope without a network round-trip (Scenario 1). Requires an already
  * -registered device key (see device-key.service.ensureDeviceKeyRegistered, run at app boot).
  */
-export async function startAdvertising(patientId: number): Promise<void> {
+export async function startAdvertising(patientId: string | number): Promise<void> {
   const localKey = await deviceKeyRepo.getLocal();
   if (!localKey) throw new NoDeviceKeyError();
 

@@ -78,7 +78,7 @@ export async function forceSyncBeforeLogout(): Promise<void> {
  * Stores locally and triggers background sync if online.
  */
 async function queueVerificationSync(params: {
-  patientId: number;
+  patientId: string | number;
   envelopeType: string;
   itemIdentifier: string;
   verified: boolean;
@@ -98,7 +98,7 @@ async function queueVerificationSync(params: {
  * Last write wins: local pending overrides server for immediate feedback.
  */
 export async function getEffectiveVerifications(
-  patientId: number,
+  patientId: string | number,
 ): Promise<{
   allergies: Map<string, boolean>;
   conditions: Map<string, boolean>;
@@ -149,7 +149,7 @@ export async function getEffectiveVerifications(
  * Returns Sets of item identifiers that are verified.
  */
 export async function getEffectiveVerificationSets(
-  patientId: number,
+  patientId: string | number,
 ): Promise<{
   verifiedAllergens: Set<string>;
   verifiedConditions: Set<string>;

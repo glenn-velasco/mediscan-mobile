@@ -15,7 +15,7 @@ export type OnboardingTask = {
 };
 
 type ChecklistInput = {
-  userId: number | undefined;
+  userId: string | number | undefined;
   emailVerified: boolean;
   hasEmergencyContacts: boolean;
   hasAllergies: boolean;
@@ -23,15 +23,15 @@ type ChecklistInput = {
   hasMedications: boolean;
 };
 
-function notifiedKey(userId: number) {
+function notifiedKey(userId: string | number) {
   return `onboarding_checklist_notified_${userId}`;
 }
 
-function promptedKey(userId: number) {
+function promptedKey(userId: string | number) {
   return `onboarding_checklist_prompted_${userId}`;
 }
 
-function skippedKey(userId: number) {
+function skippedKey(userId: string | number) {
   return `onboarding_checklist_skipped_${userId}`;
 }
 

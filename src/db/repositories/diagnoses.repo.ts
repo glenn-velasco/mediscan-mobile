@@ -67,7 +67,7 @@ export async function getByLocalUuid(localUuid: string): Promise<DiagnosisRow | 
 
 export async function createLocal(
   payload: DiagnosisPayload,
-  opts?: { diagnosed_by_id?: number | null; diagnosed_by_name?: string | null },
+  opts?: { diagnosed_by_id?: string | number | null; diagnosed_by_name?: string | null },
 ): Promise<string> {
   const db = await getDb();
   const userId = getCurrentUserId();
@@ -184,7 +184,7 @@ export async function upsertFromServer(record: {
   condition: string;
   date_of_diagnosis?: string;
   severity: DiagnosisRow['severity'];
-  diagnosed_by?: { id: number; fullname: string } | null;
+  diagnosed_by?: { id: string | number; fullname: string } | null;
   verified_by?: string | null;
   updated_at: string;
 }): Promise<void> {
@@ -219,7 +219,7 @@ export async function upsertFromServer(record: {
   );
 }
 
-export function toPayload(row: DiagnosisRow): DiagnosisPayload & { verified_by?: string | null; diagnosed_by?: { id: number; fullname: string } | null } {
+export function toPayload(row: DiagnosisRow): DiagnosisPayload & { verified_by?: string | null; diagnosed_by?: { id: string | number; fullname: string } | null } {
   return {
     condition: row.condition,
     date_of_diagnosis: row.date_of_diagnosis || undefined,
@@ -254,7 +254,7 @@ export async function updateVerifiedBy(localUuid: string, entry: VerifiedByEntry
 /**
  * Remove a verification entry for a specific user from a diagnosis record.
  */
-export async function removeVerifiedBy(localUuid: string, userId: number): Promise<void> {
+export async function removeVerifiedBy(localUuid: string, userId: string | number): Promise<void> {
   const [db, existing] = await Promise.all([getDb(), getByLocalUuid(localUuid)]);
   if (!existing || !existing.verified_by) return;
 

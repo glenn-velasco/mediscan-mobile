@@ -10,7 +10,6 @@ import { Card } from '@/components/card';
 import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
-import { useBleAdvertising } from '@/features/ble-sync/useBleAdvertising';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
 import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
@@ -29,7 +28,6 @@ export default function AccountScreen() {
   // same as having no application at all and let them reapply right away.
   const isApplicationActive = !!myApplication && myApplication.status !== 'denied' && myApplication.status !== 'auto_rejected';
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
-  const ble = useBleAdvertising();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
 
   const queryClient = useQueryClient();
@@ -138,27 +136,6 @@ export default function AccountScreen() {
             </Pressable>
           ) : null}
         </View>
-      </Card>
-
-      <Card className="mb-4 gap-1">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 pr-3">
-            <ThemedText className="font-semibold">Bluetooth sync</ThemedText>
-            <ThemedText type="small" color="mutedForeground">
-              Let a professional nearby submit an update directly to this device.
-            </ThemedText>
-          </View>
-          <Switch
-            value={ble.isAdvertising}
-            onValueChange={(next) => void (next ? ble.start() : ble.stop())}
-            disabled={ble.state === 'starting'}
-          />
-        </View>
-        {ble.error ? (
-          <ThemedText type="small" color="destructive">
-            {ble.error}
-          </ThemedText>
-        ) : null}
       </Card>
 
       <Card className="mb-4 gap-1">

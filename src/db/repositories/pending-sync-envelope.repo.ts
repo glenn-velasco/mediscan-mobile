@@ -5,9 +5,9 @@ import type { EnvelopeTransport, PendingSyncEnvelopeRow } from '@/db/schema';
 /** Idempotent on server_envelope_id (enforced by the partial unique index) — a re-poll of an un-acked envelope inserts nothing new. */
 export async function insertReceived(params: {
   localId: string;
-  serverEnvelopeId: number | null;
+  serverEnvelopeId: string | number | null;
   transport: EnvelopeTransport;
-  senderId: number | null;
+  senderId: string | number | null;
   envelopeType: string;
   ciphertext: string;
   expiresAt: string | null;
@@ -44,7 +44,7 @@ export async function getUnprocessed(): Promise<PendingSyncEnvelopeRow[]> {
   );
 }
 
-export async function getByServerEnvelopeId(serverEnvelopeId: number): Promise<PendingSyncEnvelopeRow | null> {
+export async function getByServerEnvelopeId(serverEnvelopeId: string | number): Promise<PendingSyncEnvelopeRow | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<PendingSyncEnvelopeRow>(
     'SELECT * FROM pending_sync_envelopes WHERE server_envelope_id = ?',

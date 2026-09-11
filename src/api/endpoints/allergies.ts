@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/client';
+import { createEncrypted, softDeleteEncrypted, updateEncrypted } from '@/api/encrypted-crud';
 import type { AllergyPayload } from '@/api/types';
 
 export type AllergyApiRecord = AllergyPayload & {
@@ -8,13 +8,13 @@ export type AllergyApiRecord = AllergyPayload & {
 };
 
 export function createAllergy(id: string, payload: AllergyPayload) {
-  return apiClient.post<AllergyApiRecord>('api/v1/allergies', { id, ...payload });
+  return createEncrypted('allergies', id, payload);
 }
 
 export function updateAllergy(id: string, payload: AllergyPayload) {
-  return apiClient.put<AllergyApiRecord>(`api/v1/allergies/${id}`, payload);
+  return updateEncrypted('allergies', id, payload);
 }
 
 export function deleteAllergy(id: string) {
-  return apiClient.delete<null>(`api/v1/allergies/${id}`);
+  return softDeleteEncrypted('allergies', id);
 }

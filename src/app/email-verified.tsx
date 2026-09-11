@@ -34,7 +34,7 @@ export default function EmailVerifiedScreen() {
       try {
         await refreshUser();
       } catch {
-        // Offline or network error — Pusher event will catch it later.
+        // Offline or network error — Supabase Auth will refresh later.
       } finally {
         if (!cancelled) setRefreshed(true);
       }

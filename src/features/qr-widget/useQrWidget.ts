@@ -21,7 +21,7 @@ import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 /* Stable empty references so an unresolved query doesn't churn the effect deps. */
 const EMPTY_CONTACTS: EmergencyContactRow[] = [];
 
-export function useQrWidget(userId: number) {
+export function useQrWidget(userId: string | number) {
   const { enabled } = useQrWidgetToggle();
   const { data: medicalInformation } = useMedicalInformation();
   const { data: allergies } = useAllergies();

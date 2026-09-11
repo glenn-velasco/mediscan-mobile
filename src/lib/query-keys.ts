@@ -15,3 +15,5 @@ export const professionalApplicationQueryKey = ['professional-application'] as c
 export const myProfessionalApplicationQueryKey = ['professional-application', 'mine'] as const;
 export const professionalApplicationBroadcastStatusQueryKey = ['professional-application-broadcast-status'] as const;
 export const accountRetrievalRequestQueryKey = ['account-retrieval-request'] as const;
+export const professionalScansQueryKey = ['professional-scans'] as const;
+export const myScanActivityQueryKey = ['my-scan-activity'] as const;
