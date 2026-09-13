@@ -40,12 +40,17 @@ export function QrScannerView({
   const [permission, requestPermission] = useCameraPermissions();
   const [enabled, setEnabled] = useState(true);
   const lastScanned = useRef<string | null>(null);
+  const candidate = useRef<{ data: string; count: number } | null>(null);
   const { width } = useWindowDimensions();
   const frameSize = Math.min(Math.round(width * 0.7), 280);
   const lockProgress = useSharedValue(0);
 
   const handleBarcodeScanned = (result: BarcodeScanningResult) => {
-    if (!enabled || lastScanned.current === result.data) return;
+    if (!enabled) return;
+    if (candidate.current?.data === result.data) candidate.current.count += 1;
+    else candidate.current = { data: result.data, count: 1 };
+    if (candidate.current.count < 2) return;
+    if (lastScanned.current === result.data) return;
     lastScanned.current = result.data;
     setEnabled(false);
     onScanned(result.data);

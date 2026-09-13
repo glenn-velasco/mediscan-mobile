@@ -1,9 +1,9 @@
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Modal, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetScrollView, type BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 
 import { Text } from '@/components/ui/text';
 import { ThemedText } from '@/components/themed-text';
@@ -38,6 +38,7 @@ export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: s
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   const imageUri = localUri ?? serverUrl;
@@ -133,20 +134,29 @@ export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: s
         setPreviewUri(null);
       }}
     >
-      <BottomSheetView className="items-center gap-4 px-6 pb-10 pt-4">
+      <BottomSheetScrollView
+        contentContainerStyle={{ alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingBottom: 40, paddingTop: 16 }}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* VIEW MODE: avatar preview + action buttons */}
         {mode === 'view' && (
           <>
-            <View style={{ width: 160, height: 160, borderRadius: 80, overflow: 'hidden', backgroundColor: theme.accent }}>
+            <Pressable
+              onPress={() => {
+                if (hasImage) setImageViewerVisible(true);
+              }}
+              accessibilityLabel={hasImage ? 'View profile photo' : 'Profile photo placeholder'}
+              style={{ width: 160, height: 160, borderRadius: 80, overflow: 'hidden', backgroundColor: theme.accent }}
+            >
               {hasImage ? (
                 <Image source={{ uri: imageUri }} style={{ width: 160, height: 160 }} contentFit="cover" transition={200} cachePolicy="memory-disk" onError={() => setImageError(true)} />
               ) : (
                 <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: theme.accentForeground, fontSize: 48, fontWeight: '600' }}>{initials}</Text>
+                  <Text numberOfLines={1} style={{ width: 160, color: theme.accentForeground, fontFamily: 'sans-serif', fontSize: 48, fontWeight: '600', lineHeight: 58, textAlign: 'center', letterSpacing: 1, flexShrink: 0 }}>{initials}</Text>
                 </View>
               )}
-            </View>
+            </Pressable>
 
             <ThemedText type="heading">{name}</ThemedText>
 
@@ -186,7 +196,16 @@ export const AvatarPreviewSheet = forwardRef<AvatarPreviewSheetHandle, { name: s
           </>
         )}
 
-      </BottomSheetView>
+      </BottomSheetScrollView>
+      <Modal visible={imageViewerVisible && hasImage} transparent animationType="fade" onRequestClose={() => setImageViewerVisible(false)}>
+        <Pressable
+          onPress={() => setImageViewerVisible(false)}
+          accessibilityLabel="Close profile photo"
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.92)', padding: 20 }}
+        >
+          {imageUri ? <Image source={{ uri: imageUri }} style={{ width: '100%', aspectRatio: 1, maxWidth: 420, borderRadius: 12 }} contentFit="contain" /> : null}
+        </Pressable>
+      </Modal>
     </BottomSheetModal>
   );
 });

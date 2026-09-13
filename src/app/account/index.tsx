@@ -95,6 +95,18 @@ export default function AccountScreen() {
       </View>
 
       <Card className="mb-4 p-0">
+        <Link href="/profile/edit" asChild>
+          <Pressable className="flex-row items-center justify-between px-4 py-3.5">
+            <View className="flex-1 pr-3">
+              <ThemedText className="font-semibold">Edit profile</ThemedText>
+              <ThemedText type="small" color="mutedForeground">Update your photo, identity, contact, and medical details.</ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+          </Pressable>
+        </Link>
+      </Card>
+
+      <Card className="mb-4 p-0">
         {!user?.permissions?.includes('verified professional') ? (
           <Link
             href={isApplicationActive ? `/professional-application/${myApplication!.id}` : '/professional-application/create'}
@@ -136,6 +148,15 @@ export default function AccountScreen() {
             </Pressable>
           ) : null}
         </View>
+      </Card>
+
+      <Card className="mb-4 p-0">
+        <Link href="/emergency-wallet-card" asChild>
+          <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
+            <View className="flex-1 pr-3"><ThemedText className="font-semibold">Printable emergency wallet card</ThemedText><ThemedText type="small" color="mutedForeground">Print once and keep its disclosed emergency information current.</ThemedText></View>
+            <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+          </Pressable>
+        </Link>
       </Card>
 
       <Card className="mb-4 gap-1">

@@ -2,17 +2,24 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+const CARD_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const MAX_SNAPSHOT_BYTES = 24_000;
+
+async function sha256(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function randomCardToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
-  const auth = req.headers.get('Authorization');
-  if (!auth) return json({ message: 'Authentication required' }, 401);
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
-  const { data: { user }, error: userError } = await userClient.auth.getUser();
-  if (userError || !user) return json({ message: 'Invalid session' }, 401);
 
   const contentType = req.headers.get('content-type') ?? '';
   let action: string;
@@ -24,6 +31,45 @@ Deno.serve(async (req) => {
     const body = await req.json(); action = String(body.action ?? ''); payload = body.payload ?? {};
   }
 
+  // This is the sole anonymous action. It returns the same response for missing, malformed,
+  // revoked, and unpublished cards so callers cannot probe patient existence.
+  if (action === 'emergency-card-resolve') {
+    const token = typeof payload.token === 'string' ? payload.token : '';
+    const requester = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const requesterHash = await sha256(`${serviceKey}:${requester}`);
+    const tokenPrefixHash = await sha256(token.slice(0, 8));
+    const since = new Date(Date.now() - 60_000).toISOString();
+    const { count } = await admin.from('dynamic_emergency_card_lookup_attempts')
+      .select('id', { count: 'exact', head: true }).eq('requester_hash', requesterHash).gte('created_at', since);
+    if ((count ?? 0) >= 60) return json({ message: 'Emergency card unavailable' }, 429);
+
+    let snapshot: { snapshot_payload: string; snapshot_generated_at: string; published_at: string } | null = null;
+    if (CARD_TOKEN_PATTERN.test(token)) {
+      const tokenHash = await sha256(token);
+      const { data } = await admin.from('dynamic_emergency_cards')
+        .select('snapshot_payload,snapshot_generated_at,published_at')
+        .eq('token_hash', tokenHash).is('revoked_at', null).not('snapshot_payload', 'is', null).maybeSingle();
+      snapshot = data;
+    }
+    await admin.from('dynamic_emergency_card_lookup_attempts').insert({
+      requester_hash: requesterHash,
+      token_prefix_hash: tokenPrefixHash,
+      succeeded: Boolean(snapshot),
+    });
+    if (!snapshot) return json({ message: 'Emergency card unavailable' }, 404);
+    return json({
+      qr_payload: snapshot.snapshot_payload,
+      snapshot_generated_at: snapshot.snapshot_generated_at,
+      published_at: snapshot.published_at,
+    });
+  }
+
+  const auth = req.headers.get('Authorization');
+  if (!auth) return json({ message: 'Authentication required' }, 401);
+  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
+  const { data: { user }, error: userError } = await userClient.auth.getUser();
+  if (userError || !user) return json({ message: 'Invalid session' }, 401);
+
   const professional = async () => {
     const { data } = await admin.from('profiles').select('professional_verified_at').eq('id', user.id).single();
     if (!data?.professional_verified_at) throw new Error('Verified professional access required');
@@ -31,6 +77,47 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
+      case 'emergency-card-create': {
+        const { data: existing } = await admin.from('dynamic_emergency_cards')
+          .select('id,issued_at,published_at').eq('patient_id', user.id).is('revoked_at', null).maybeSingle();
+        if (existing) return json({ status: 'already_exists', issued_at: existing.issued_at, published_at: existing.published_at }, 409);
+        const token = randomCardToken();
+        const tokenHash = await sha256(token);
+        const { data, error } = await admin.from('dynamic_emergency_cards')
+          .insert({ patient_id: user.id, token_hash: tokenHash }).select('issued_at').single();
+        if (error) throw error;
+        return json({ token, issued_at: data.issued_at });
+      }
+      case 'emergency-card-status': {
+        const { data, error } = await admin.from('dynamic_emergency_cards')
+          .select('issued_at,published_at,snapshot_generated_at').eq('patient_id', user.id).is('revoked_at', null).maybeSingle();
+        if (error) throw error;
+        return json(data ? { active: true, ...data } : { active: false });
+      }
+      case 'emergency-card-publish': {
+        const qrPayload = typeof payload.qr_payload === 'string' ? payload.qr_payload : '';
+        if (!qrPayload.startsWith('MEDISCAN:v2:') || new TextEncoder().encode(qrPayload).byteLength > MAX_SNAPSHOT_BYTES) {
+          return json({ message: 'Invalid emergency snapshot' }, 422);
+        }
+        const generatedAt = typeof payload.snapshot_generated_at === 'string' && !Number.isNaN(Date.parse(payload.snapshot_generated_at))
+          ? payload.snapshot_generated_at : null;
+        if (!generatedAt) return json({ message: 'Invalid emergency snapshot' }, 422);
+        const publishedAt = new Date().toISOString();
+        const { data, error } = await admin.from('dynamic_emergency_cards')
+          .update({ snapshot_payload: qrPayload, snapshot_generated_at: generatedAt, published_at: publishedAt, updated_at: publishedAt })
+          .eq('patient_id', user.id).is('revoked_at', null).select('published_at').maybeSingle();
+        if (error) throw error;
+        if (!data) return json({ message: 'Emergency card unavailable' }, 404);
+        return json(data);
+      }
+      case 'emergency-card-revoke': {
+        const revokedAt = new Date().toISOString();
+        const { error } = await admin.from('dynamic_emergency_cards')
+          .update({ revoked_at: revokedAt, snapshot_payload: null, updated_at: revokedAt })
+          .eq('patient_id', user.id).is('revoked_at', null);
+        if (error) throw error;
+        return json(null);
+      }
       case 'device-key-register': {
         const { data, error } = await admin.from('device_keys').insert({ user_id: user.id, public_key: payload.public_key, label: payload.label ?? null }).select().single();
         if (error) throw error; return json({ ...data, is_active: true, registered_at: data.created_at });

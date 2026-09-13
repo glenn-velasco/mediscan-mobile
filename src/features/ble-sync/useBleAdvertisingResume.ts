@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { InteractionManager } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { useBlePeripheralPermission } from '@/hooks/use-ble-permission';
@@ -29,7 +28,9 @@ export function useBleAdvertisingResume() {
     }
     startedRef.current = true;
 
-    const handle = InteractionManager.runAfterInteractions(() => {
+    const schedule = (globalThis as unknown as { requestIdleCallback?: (callback: () => void) => number }).requestIdleCallback;
+    const cancelIdle = (globalThis as unknown as { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+    const handle = schedule ? schedule(() => {
       void (async () => {
         try {
           const granted = permission?.granted || (await requestPermission());
@@ -43,7 +44,19 @@ export function useBleAdvertisingResume() {
           // Silent fail — BLE advertising will not be available but the app still works.
         }
       })();
-    });
-    return () => handle.cancel();
+    }) : setTimeout(() => {
+      void (async () => {
+        try {
+          const granted = permission?.granted || (await requestPermission());
+          if (!granted) return;
+          const bluetoothEnabled = await ensureBluetoothEnabled();
+          if (!bluetoothEnabled) return;
+          const locationEnabled = await ensureLocationEnabled();
+          if (!locationEnabled) return;
+          await blePeripheralService.startAdvertising(user.id);
+        } catch { /* BLE remains optional. */ }
+      })();
+    }, 0);
+    return () => schedule ? cancelIdle?.(handle as number) : clearTimeout(handle as ReturnType<typeof setTimeout>);
   }, [user, permission, requestPermission]);
 }

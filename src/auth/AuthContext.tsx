@@ -1,3 +1,4 @@
+import NetInfo from '@react-native-community/netinfo';
 import { createContext, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
 import { login as apiLogin, logout as apiLogout, me as apiMe, register as apiRegister } from '@/api/endpoints/auth';
@@ -8,7 +9,6 @@ import { clearToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
 import { setCurrentUserId } from '@/db/context';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
-import { getIsOffline } from '@/lib/network-state';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
 import { clearPrivateKey } from '@/services/device-key-storage';
@@ -128,8 +128,10 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         void backfillUserId(cached.id);
       }
 
+      const network = await NetInfo.fetch();
+      const isOnline = network.isInternetReachable ?? network.isConnected ?? false;
       // react-doctor-disable-next-line react-hooks-js/todo
-      if (getIsOffline()) {
+      if (!isOnline) {
         if (!cached) {
           await handleUnauthenticated();
           setIsInitialLoading(false);
@@ -266,7 +268,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   }, []);
 
   const refreshUser = useCallback(async () => {
-    if (getIsOffline()) return;
+    const network = await NetInfo.fetch();
+    if (!(network.isInternetReachable ?? network.isConnected ?? false)) return;
     const { user: fetchedUser } = await apiMe();
     setCurrentUserId(fetchedUser.id);
     setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(fetchedUser) ? prev : fetchedUser));

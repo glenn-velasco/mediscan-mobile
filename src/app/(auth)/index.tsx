@@ -50,7 +50,7 @@ export default function LoginScreen() {
           accessibilityLabel="MediScan"
         />
         <ThemedText type="body" color="mutedForeground" className="mt-2 text-center">
-          When you can&apos;t explain, your QR will.
+          One consistent emergency scan when every second matters.
         </ThemedText>
       </View>
 
@@ -60,6 +60,10 @@ export default function LoginScreen() {
       <PasswordField label="Password" leftIcon="lock-closed-outline" value={password} onChangeText={setPassword} error={validationErrors.password || fieldErrors.password} />
 
       <PrimaryButton label="Log in" loading={isPending} onPress={onSubmit} className="mt-2" />
+
+      <Link href="/responder-scan" asChild>
+        <PrimaryButton label="Scan emergency QR" variant="ghost" accessibilityHint="No account is required" />
+      </Link>
 
       <View className="mt-6 items-center gap-3">
         <Link href="/register">

@@ -1,8 +1,17 @@
 import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import type { ConditionRow, DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
-import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
+
+function parseStoredAddress(value: string | null): { street?: string; unit?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return typeof parsed === 'object' && parsed !== null ? parsed as ReturnType<typeof parseStoredAddress> : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Builds the plaintext emergency summary encoded in the QR. This stays plain, testable text —

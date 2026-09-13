@@ -55,12 +55,10 @@ export async function getMedicalInformation() {
   return { id: 1, avatar: signed.signedUrl };
 }
 
-export async function uploadMedicalInformationAvatar(_id: number, formData: FormData) {
+export async function uploadMedicalInformationAvatar(_id: number, bytes: ArrayBuffer, contentType: string) {
   const userId = await requireAuthUserId();
-  const file = formData.get('avatar');
-  if (!(file instanceof Blob)) throw new Error('Avatar is required');
   const path = `${userId}/avatar-${Date.now()}`;
-  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' });
+  const { error } = await supabase.storage.from('avatars').upload(path, bytes, { upsert: true, contentType: contentType || 'image/jpeg' });
   if (error) throwSupabaseError(error);
   const { error: profileError } = await supabase.from('profiles').update({ avatar_path: path, updated_at: new Date().toISOString() }).eq('id', userId);
   if (profileError) throwSupabaseError(profileError);

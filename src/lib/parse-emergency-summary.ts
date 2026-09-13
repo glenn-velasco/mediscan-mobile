@@ -1,4 +1,7 @@
 import { decryptQrPayload } from '@/lib/qr-cipher';
+import type { QrVerificationResult } from '@/types/emergency';
+
+const QR_V2_PREFIX = 'MEDISCAN:v2:';
 
 export type ScannedAllergy = {
   allergen: string;
@@ -31,6 +34,8 @@ export type ScannedMedication = {
 export type ScannedEmergencyInfo = {
   patientId: string | number | null;
   generatedAt: string;
+  lastUpdatedAt?: string;
+  age?: number | null;
   name: string;
   firstName: string;
   middleName: string;
@@ -54,6 +59,12 @@ export type ScannedEmergencyInfo = {
   diagnoses: ScannedDiagnosis[];
   medications: ScannedMedication[];
   emergencyContacts: ScannedEmergencyContact[];
+  knowledge?: {
+    allergies: 'recorded' | 'confirmed_none' | 'not_recorded';
+    medications: 'recorded' | 'confirmed_none' | 'not_recorded';
+    diagnoses: 'recorded' | 'confirmed_none' | 'not_recorded';
+    conditions: 'recorded' | 'confirmed_none' | 'not_recorded';
+  };
 };
 
 const FIELD_PATTERN =
@@ -285,4 +296,31 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
   }
 
   return info;
+}
+
+export async function parseEmergencyQr(rawScannedText: string): Promise<{
+  info: ScannedEmergencyInfo;
+  verification: QrVerificationResult;
+} | null> {
+  if (rawScannedText.startsWith(QR_V2_PREFIX)) {
+    const { parseEmergencyQrV2 } = await import('@/lib/emergency-qr-v2');
+    return parseEmergencyQrV2(rawScannedText);
+  }
+  const info = await parseEmergencySummary(rawScannedText);
+  if (!info) return null;
+  info.lastUpdatedAt ??= info.generatedAt;
+  info.knowledge ??= {
+    allergies: info.allergies.length ? 'recorded' : 'not_recorded',
+    medications: info.medications.length ? 'recorded' : 'not_recorded',
+    diagnoses: info.diagnoses.length ? 'recorded' : 'not_recorded',
+    conditions: info.conditions.length ? 'recorded' : 'not_recorded',
+  };
+  return {
+    info,
+    verification: {
+      status: 'legacy',
+      authenticity: 'unverified',
+      message: 'Legacy QR — authenticity has not been verified.',
+    },
+  };
 }

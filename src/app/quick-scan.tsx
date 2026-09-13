@@ -22,6 +22,7 @@ import { useMedicalInformation } from '@/features/medical-information/useMedical
 import { useMedications } from '@/features/medications/useMedications';
 import { useTheme } from '@/hooks/use-theme';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
+import { QR_V3_REFERENCE_PREFIX } from '@/lib/emergency-qr-reference';
 import { useLightweightMode } from '@/lib/lightweight-mode-context';
 import { consumeUpdatedScannedInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
@@ -125,6 +126,12 @@ export default function QuickScanScreen() {
   const displaySummary = user && medicalInformation ? summary : null;
 
   const handleScanned = (data: string) => {
+    // Dynamic wallet-card references require the public responder workflow,
+    // which resolves the token online and does not apply the legacy auth gate.
+    if (data.trim().startsWith(QR_V3_REFERENCE_PREFIX)) {
+        router.replace({ pathname: '/responder-scan', params: { raw: data } });
+      return;
+    }
     parseEmergencySummary(data).then((parsed) => {
       if (!parsed) {
         setScanError(true);

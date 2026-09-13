@@ -25,8 +25,17 @@ function normalizeAddress(value: unknown): MedicalInformationAddress | null {
 }
 
 async function currentUser(): Promise<User> {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) throwSupabaseError(authError ?? new Error('Authentication required'));
+  let { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    // Restored mobile sessions can contain an expired access token while still
+    // having a valid refresh token. Recover in place without signing the user out.
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed.session) {
+      throwSupabaseError(refreshError ?? authError ?? new Error('Authentication required'));
+    }
+    authData = { user: refreshed.session.user };
+    authError = null;
+  }
   const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
   if (error) throwSupabaseError(error);
   const row = profile as ProfileRow;

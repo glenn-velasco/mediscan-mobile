@@ -148,9 +148,9 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
           <Stack.Screen name="emergency-contacts" />
           <Stack.Screen name="conditions" />
           <Stack.Screen name="account" />
+          <Stack.Screen name="emergency-wallet-card" options={{ headerShown: true, title: 'Emergency wallet card' }} />
           <Stack.Screen name="professional-application" />
           <Stack.Screen name="professional-scans" />
-          <Stack.Screen name="who-scanned-me" />
           <Stack.Screen name="manage-info" options={{ headerShown: true, title: 'Manage info', presentation: 'modal' }} />
           <Stack.Screen name="registration-match" />
           <Stack.Screen name="account-retrieval" />
@@ -163,6 +163,8 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
         </Stack.Protected>
         <Stack.Protected guard={ready}>
           <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="responder-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+          <Stack.Screen name="responder-history" />
           {/* Supabase Auth callback targets are accessible regardless of auth state. */}
           <Stack.Screen name="email-verified" />
           <Stack.Screen name="auth/callback" />
@@ -205,6 +207,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
+    void import('@/db/repositories/recent-emergency-scans.repo').then(({ purgeExpired }) => purgeExpired());
     return () => AvoidSoftInput.setEnabled(false);
   }, []);
 

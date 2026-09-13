@@ -9,6 +9,8 @@ import { ensureDeviceKeyServerRegistered, retryPendingRevoke } from '@/services/
 import { pullPatientChanges, pushPatientChanges } from '@/services/patient-sync.service';
 import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
 import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
+import { queueDynamicEmergencyCardPublication, retryPendingDynamicEmergencyCard } from '@/services/dynamic-emergency-card.service';
+import { getCurrentUserId, hasCurrentUser } from '@/db/context';
 
 /**
  * Foreground and NetInfo reconnect can fire in quick succession
@@ -28,6 +30,7 @@ const MIN_TRIGGER_INTERVAL_MS = 10_000;
 async function syncPatientData(): Promise<void> {
   await pushPatientChanges();
   await pullPatientChanges();
+  if (hasCurrentUser()) await queueDynamicEmergencyCardPublication(getCurrentUserId());
   await pullScannedPatients();
   await pullMyScanActivity();
 }
@@ -39,7 +42,7 @@ async function syncPatientData(): Promise<void> {
  * for why these are two independent sync systems, not one).
  */
 export function useSyncTriggers(): void {
-  const { status, refreshUser } = useAuth();
+  const { status, user, refreshUser } = useAuth();
   const initializedRef = useRef(false);
   const lastTriggerAtRef = useRef(0);
   const mountedRef = useRef(true);
@@ -80,6 +83,7 @@ export function useSyncTriggers(): void {
       safeRefreshUser();
       if (extras?.retryRevoke) void retryPendingRevoke();
       if (extras?.registerDeviceKey) void ensureDeviceKeyServerRegistered();
+      if (user) void retryPendingDynamicEmergencyCard(user.id);
       if (extras?.invalidateQueries) {
         scheduleTimer(() => {
           if (mountedRef.current) void queryClient.invalidateQueries();
@@ -108,5 +112,5 @@ export function useSyncTriggers(): void {
       appStateSubscription.remove();
       initializedRef.current = false;
     };
-  }, [status, refreshUser]);
+  }, [status, user, refreshUser]);
 }

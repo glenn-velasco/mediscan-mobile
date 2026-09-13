@@ -150,8 +150,14 @@ Before production use, validate RLS with at least two patient accounts and one v
 
 ## Research framing
 
-MediScan should be evaluated on whether it improves emergency-information retrieval—not merely on whether it stores medical details. Useful study measures include time to first critical information, interaction count, successful retrieval rate, missed or incorrectly interpreted fields, offline completion rate, and perceived usability compared with native emergency-information interfaces.
+The July 2026 capstone paper evaluated a broader system: emergency retrieval, professional verification, clinical updates, privacy controls, and software quality. Its three-specialist heuristic evaluation reported an overall mean of 4.07/5 ("Acceptable"). It did not report a controlled comparison against Apple Medical ID or Android Emergency Information. Therefore, faster retrieval than native features is a hypothesis for follow-up testing, not an established result of that paper.
+
+Professional verification and clinical editing remain relevant to the paper's original objectives. The current Supabase implementation must be re-evaluated against those requirements after the Laravel-to-Supabase migration; an implemented workflow in the old Laravel system is not evidence that the replacement workflow is complete.
+
+For a follow-up retrieval study, useful measures include time to first critical information, interaction count, successful retrieval rate, missed or incorrectly interpreted fields, offline completion rate, and perceived usability. Compare equivalent patient profiles and clearly distinguish an on-phone offline QR from a printed dynamic card that requires connectivity.
 
 A suitable research question is:
 
 > Can a standardized, local-first QR workflow reduce the time and interaction cost required to retrieve critical patient information compared with native smartphone emergency-information interfaces?
+
+See the [research-to-implementation alignment checklist](docs/RESEARCH_ALIGNMENT.md) for claims that need updating and features that need end-to-end validation.

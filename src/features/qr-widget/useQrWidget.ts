@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 import type { EmergencyContactRow } from '@/db/schema';
-import { buildEmergencySummary } from '@/lib/build-emergency-summary';
-import { encryptQrPayload } from '@/lib/qr-cipher';
+import { buildEmergencyQrV2 } from '@/lib/emergency-qr-v2';
+import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
@@ -17,6 +17,7 @@ import {
   hideQrNotification,
 } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
+import { queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
 
 /* Stable empty references so an unresolved query doesn't churn the effect deps. */
 const EMPTY_CONTACTS: EmergencyContactRow[] = [];
@@ -31,6 +32,14 @@ export function useQrWidget(userId: string | number) {
   const { data: emergencyContacts } = useEmergencyContacts();
 
   useEffect(() => {
+    if (!medicalInformation) return;
+    const timer = setTimeout(() => {
+      void queueDynamicEmergencyCardPublication(userId);
+    }, 750);
+    return () => clearTimeout(timer);
+  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
+
+  useEffect(() => {
     if (!enabled || !medicalInformation) return;
 
     /* Re-runs whenever the profile data changes (React Query hands a new reference
@@ -38,18 +47,17 @@ export function useQrWidget(userId: string | number) {
        writes the QR, so a mid-flight edit is never dropped. */
     let cancelled = false;
 
-    const plaintext = buildEmergencySummary(
-      userId,
-      new Date(),
-      medicalInformation,
-      allergies,
-      emergencyContacts ?? EMPTY_CONTACTS,
-      diagnoses,
-      medications,
-      conditions,
-    );
-
-    encryptQrPayload(plaintext)
+    buildEmergencyQrV2({
+      patientId: userId,
+      medical: medicalInformation,
+      allergies: allergies ?? [],
+      contacts: emergencyContacts ?? EMPTY_CONTACTS,
+      diagnoses: diagnoses ?? [],
+      medications: medications ?? [],
+      conditions: conditions ?? [],
+      disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
+      confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
+    })
       .then((encrypted) => generateQrImage(encrypted))
       .then(async (imagePath) => {
         if (cancelled || !imagePath) return;

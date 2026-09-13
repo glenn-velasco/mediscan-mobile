@@ -510,37 +510,43 @@ function BottomTabBar({ medicalInformation, guardedPush, bottomInset, isVerified
   return (
     <View className="absolute inset-x-0 bottom-0 items-center">
       <View
-        className="w-full flex-row items-center justify-between rounded-t-3xl border-t px-10 pt-3"
+        className="w-full flex-row items-center rounded-t-3xl border-t px-2 pt-3"
         style={{ backgroundColor: theme.card, borderColor: theme.border, paddingBottom: bottomInset + 12 }}
       >
-        <Pressable hitSlop={12} accessibilityLabel="Home" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
-          <Ionicons name="home" size={24} color={theme.primary} />
-        </Pressable>
-        <Pressable onPress={() => guardedPush('/who-scanned-me' as any)} hitSlop={12} accessibilityLabel="Who scanned me" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-          <Ionicons name="people-outline" size={24} color={theme.foreground} />
-        </Pressable>
-        {isVerifiedProfessional ? (
-          <Pressable onPress={() => guardedPush('/professional-scans')} hitSlop={12} accessibilityLabel="Scans" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-            <Ionicons name="scan-outline" size={24} color={theme.foreground} />
+        <View className="flex-1 flex-row">
+          <Pressable hitSlop={12} accessibilityLabel="Home" className="flex-1 items-center justify-center">
+            <View className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.primary + '15' }}>
+              <Ionicons name="home" size={24} color={theme.primary} />
+            </View>
           </Pressable>
-        ) : null}
-        <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-          <Ionicons name="settings-outline" size={24} color={theme.foreground} />
-        </Pressable>
+          <Pressable onPress={() => guardedPush('/responder-history' as any)} hitSlop={12} accessibilityLabel="Scan activity" className="flex-1 items-center justify-center">
+            <View className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+              <Ionicons name="time-outline" size={24} color={theme.foreground} />
+            </View>
+          </Pressable>
+          <View className="flex-1" />
+        </View>
+        <View className="absolute inset-x-0 items-center" pointerEvents="box-none">
+          {medicalInformation ? <QrIconButton onPress={() => guardedPush('/quick-scan')} size={60} style={{ borderWidth: 4, borderColor: theme.background, boxShadow: '0px 2px 6px rgba(0,0,0,0.15)' }} /> : null}
+        </View>
+        <View className="flex-1 flex-row">
+          <View className="flex-1 items-center justify-center">
+            {isVerifiedProfessional ? (
+              <Pressable onPress={() => guardedPush('/professional-scans')} hitSlop={12} accessibilityLabel="Scans" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+                <Ionicons name="scan-outline" size={24} color={theme.foreground} />
+              </Pressable>
+            ) : null}
+          </View>
+          <View className="flex-1 items-center justify-center">
+            <NotificationBellButton onPress={() => guardedPush('/notifications')} />
+          </View>
+          <Pressable onPress={() => guardedPush('/account')} hitSlop={12} accessibilityLabel="Settings" className="flex-1 items-center justify-center">
+            <View className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
+              <Ionicons name="settings-outline" size={24} color={theme.foreground} />
+            </View>
+          </Pressable>
+        </View>
       </View>
-      {medicalInformation && (
-        <QrIconButton
-          onPress={() => guardedPush('/quick-scan')}
-          size={60}
-          style={{
-            position: 'absolute',
-            top: -22,
-            borderWidth: 4,
-            borderColor: theme.background,
-            boxShadow: '0px 2px 6px rgba(0,0,0,0.15)',
-          }}
-        />
-      )}
     </View>
   );
 }
@@ -550,9 +556,9 @@ export default function HomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const [isReconciling, setIsReconciling] = useState(true);
   const reconcilingRef = useRef(false);
-  const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
   const conditionsSheetRef = useRef<ConditionsBottomSheetHandle>(null);
@@ -792,7 +798,7 @@ export default function HomeScreen() {
       <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
         <GradientHeader edgeToEdge topInset={insets.top}>
           <View className="flex-row items-center gap-4">
-            <Pressable onPress={() => avatarSheetRef.current?.present()} hitSlop={8} accessibilityLabel="View profile picture">
+            <Pressable onPress={() => avatarSheetRef.current?.present()} hitSlop={8} accessibilityLabel="View or change profile photo">
               <Avatar
                 name={profile.full_name || 'Unnamed'}
                 size={48}
@@ -808,7 +814,6 @@ export default function HomeScreen() {
                 Here&apos;s your medical profile at a glance.
               </ThemedText>
             </View>
-            <NotificationBellButton onPress={() => guardedPush('/notifications')} />
           </View>
         </GradientHeader>
       </View>

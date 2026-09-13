@@ -91,5 +91,5 @@ if (__DEV__) {
 }
 
 // Kick off DB initialization at module load so it's ready by the time components mount.
-// All callers go through getDb() which returns this same cached promise.
-void getDb();
+// Jest repository tests inject their own adapter, so native SQLite must stay dormant there.
+if (process.env.NODE_ENV !== 'test') void getDb();
