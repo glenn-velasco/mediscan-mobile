@@ -23,8 +23,9 @@ import * as migration020 from '@/db/migrations/020_emergency_responder';
 import * as migration021 from '@/db/migrations/021_dynamic_emergency_card';
 import * as migration022 from '@/db/migrations/022_remove_scan_metrics';
 import * as migration023 from '@/db/migrations/023_remove_emergency_disclosure_settings';
+import * as migration024 from '@/db/migrations/024_emergency_field_history';
 
-const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012, migration013, migration014, migration015, migration016, migration017, migration018, migration019, migration020, migration021, migration022, migration023];
+const migrations = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012, migration013, migration014, migration015, migration016, migration017, migration018, migration019, migration020, migration021, migration022, migration023, migration024];
 
 export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   await db.execAsync(`

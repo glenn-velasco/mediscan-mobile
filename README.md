@@ -154,7 +154,7 @@ The July 2026 capstone paper evaluated a broader system: emergency retrieval, pr
 
 Professional verification and clinical editing remain relevant to the paper's original objectives. The current Supabase implementation must be re-evaluated against those requirements after the Laravel-to-Supabase migration; an implemented workflow in the old Laravel system is not evidence that the replacement workflow is complete.
 
-For a follow-up retrieval study, useful measures include time to first critical information, interaction count, successful retrieval rate, missed or incorrectly interpreted fields, offline completion rate, and perceived usability. Compare equivalent patient profiles and clearly distinguish an on-phone offline QR from a printed dynamic card that requires connectivity.
+For a follow-up retrieval study, useful measures include time to first critical information, interaction count, successful retrieval rate, missed or incorrectly interpreted fields, offline completion rate, and perceived usability. Compare equivalent patient profiles and distinguish the on-phone QR, the new [wallet card](docs/HYBRID_EMERGENCY_WALLET_CARD.md) (offline snapshot with optional online refresh), and older reference-only printed cards (internet required).
 
 A suitable research question is:
 

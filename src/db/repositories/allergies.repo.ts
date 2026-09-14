@@ -51,7 +51,7 @@ export async function getAllForPush(): Promise<AllergyRow[]> {
   const db = await getDb();
   const userId = getCurrentUserId();
   const rows = await db.getAllAsync<AllergyRawRow>(
-    'SELECT * FROM allergies WHERE user_id = ? ORDER BY updated_at_local DESC',
+    "SELECT * FROM allergies WHERE user_id = ? AND (server_id IS NULL OR sync_status = 'pending') ORDER BY updated_at_local DESC",
     userId,
   );
   return Promise.all(rows.map(decryptRow));
@@ -104,28 +104,27 @@ export async function updateLocal(localUuid: string, payload: Partial<AllergyPay
     await encryptField(payload.reaction ?? existing.reaction),
     payload.severity ?? existing.severity,
     dataChanged ? null : JSON.stringify(existing.verified_by ?? []),
-    dataChanged ? 'pending' : 'synced',
+    dataChanged ? 'pending' : existing.sync_status,
     new Date().toISOString(),
     localUuid,
   );
 }
 
-export async function markSyncedCreate(localUuid: string, serverId: number): Promise<void> {
+export async function markSyncedCreate(localUuid: string, serverId: number, expectedUpdatedAt?: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE allergies SET server_id = ?, sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    serverId,
-    new Date().toISOString(),
-    localUuid,
+    `UPDATE allergies SET server_id = ?,
+       sync_status = CASE WHEN ? IS NULL OR updated_at_local = ? THEN 'synced' ELSE sync_status END
+     WHERE local_uuid = ?`,
+    serverId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null, localUuid,
   );
 }
 
-export async function markSynced(localUuid: string): Promise<void> {
+export async function markSynced(localUuid: string, expectedUpdatedAt?: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE allergies SET sync_status = 'synced', updated_at_local = ? WHERE local_uuid = ?`,
-    new Date().toISOString(),
-    localUuid,
+    `UPDATE allergies SET sync_status = 'synced' WHERE local_uuid = ? AND (? IS NULL OR updated_at_local = ?)`,
+    localUuid, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null,
   );
 }
 

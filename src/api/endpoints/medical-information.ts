@@ -1,5 +1,5 @@
 import { requireAuthUserId, supabase, throwSupabaseError } from '@/api/supabase';
-import { encryptJson } from '@/lib/crypto';
+import { sealPatientPayload } from '@/api/patient-cloud-crypto';
 import type { MedicalInformationPayload } from '@/api/types';
 import type { MedicalInformationSyncRecord } from '@/api/endpoints/sync';
 
@@ -35,7 +35,7 @@ export function updateMedicalInformation(id: number, payload: MedicalInformation
 async function saveMedicalInformation(payload: MedicalInformationPayload): Promise<MedicalInformationSyncRecord> {
   const user_id = await requireAuthUserId();
   const normalized = toServerPayload(payload);
-  const encrypted_payload = await encryptJson(normalized);
+  const encrypted_payload = await sealPatientPayload(normalized);
   const updated_at = new Date().toISOString();
   const { error } = await supabase.from('medical_information').upsert({ user_id, encrypted_payload, updated_at }, { onConflict: 'user_id' });
   if (error) throwSupabaseError(error);

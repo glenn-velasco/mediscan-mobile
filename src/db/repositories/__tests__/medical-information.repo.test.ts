@@ -4,9 +4,14 @@ import { createNodeSqliteAdapter } from '@/db/test-utils/node-sqlite-adapter';
 
 import { getDb } from '@/db/client';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
 
 jest.mock('@/db/client', () => ({ getDb: jest.fn() }));
+jest.mock('expo-crypto', () => {
+  let counter = 0;
+  return { randomUUID: jest.fn(() => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`) };
+});
 
 beforeEach(async () => {
   const db = createNodeSqliteAdapter();
@@ -134,5 +139,33 @@ describe('medical-information.repo — applyProfessionalUpdate', () => {
 
     const row = await medicalInformationRepo.getLocal();
     expect(row?.sync_status).toBe('synced');
+  });
+});
+
+describe('patient-entered emergency field history', () => {
+  it('records changed emergency fields once and leaves unchanged saves out of the log', async () => {
+    await medicalInformationRepo.saveLocalEdit(basePayload, 'pending');
+    const initial = await emergencyHistoryRepo.getRecent(10);
+    expect(initial.map((event) => event.field).sort()).toEqual(['blood_type', 'date_of_birth']);
+    expect(initial.every((event) => event.syncStatus === 'pending')).toBe(true);
+
+    await medicalInformationRepo.saveLocalEdit(basePayload, 'pending');
+    expect(await emergencyHistoryRepo.getRecent(10)).toHaveLength(2);
+
+    await medicalInformationRepo.saveLocalEdit({ ...basePayload, blood_type: 'a_positive' }, 'pending');
+    const events = await emergencyHistoryRepo.getRecent(10);
+    expect(events).toHaveLength(3);
+    expect(events.find((event) => event.value === 'a_positive')).toMatchObject({ field: 'blood_type', syncStatus: 'pending' });
+
+    const syncedAt = new Date().toISOString();
+    await emergencyHistoryRepo.markSynced(events.map((event) => ({ id: event.id, server_recorded_at: syncedAt })));
+    expect(await emergencyHistoryRepo.getPending()).toHaveLength(0);
+    await emergencyHistoryRepo.cacheServerChanges(events.map((event) => ({ ...event, syncStatus: 'synced', serverRecordedAt: syncedAt })));
+    expect(await emergencyHistoryRepo.getRecent(10)).toHaveLength(3);
+
+    await medicalInformationRepo.saveLocalEdit({ ...basePayload, blood_type: 'a_positive', no_blood_transfusion: true }, 'pending');
+    expect(await emergencyHistoryRepo.getPending()).toEqual([
+      expect.objectContaining({ field: 'no_blood_transfusion', value: 'Yes' }),
+    ]);
   });
 });

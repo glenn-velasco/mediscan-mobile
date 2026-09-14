@@ -14,6 +14,7 @@ export function useUpdateMedicalInformation() {
     mutationFn: (payload: MedicalInformationPayload) => medicalInformationRepo.saveLocalEdit(payload, 'pending'),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
+      queryClient.invalidateQueries({ queryKey: ['emergency-field-history'] });
     },
   });
 }

@@ -10,7 +10,7 @@ describe('runMigrations', () => {
       'SELECT version FROM schema_migrations ORDER BY version ASC',
     );
     expect(versions.map((v) => v.version)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
     ]);
 
     const tables = await db.getAllAsync<{ name: string }>(
@@ -23,6 +23,7 @@ describe('runMigrations', () => {
     expect(tableNames).toContain('diagnoses');
     expect(tableNames).toContain('medications');
     expect(tableNames).toContain('dynamic_emergency_cards');
+    expect(tableNames).toContain('emergency_field_history');
     expect(tableNames).not.toContain('scan_metric_sessions');
     expect(tableNames).not.toContain('emergency_profile_settings');
     expect(tableNames).not.toContain('mutation_queue');
@@ -38,7 +39,7 @@ describe('runMigrations', () => {
     await runMigrations(db);
 
     const versions = await db.getAllAsync<{ version: number }>('SELECT version FROM schema_migrations');
-    expect(versions).toHaveLength(23);
+    expect(versions).toHaveLength(24);
   });
 
   it('accepts Supabase UUIDs in local primary-key tables', async () => {

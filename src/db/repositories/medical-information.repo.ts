@@ -5,6 +5,7 @@ import type { Religion } from '@/constants/religion';
 import type { Suffix } from '@/constants/suffix';
 import { getDb } from '@/db/client';
 import { getCurrentUserId } from '@/db/context';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import type {
   MedicalInformationEncryptedFields,
   MedicalInformationRawRow,
@@ -103,7 +104,18 @@ export async function saveLocalEdit(
   };
 
   const encrypted = await encryptFields(fields);
+  const changedAt = new Date().toISOString();
+  const historyChanges: Partial<Record<emergencyHistoryRepo.EmergencyHistoryField, string | null>> = {};
+  if (status === 'pending') {
+    if ((existing?.date_of_birth ?? null) !== fields.date_of_birth) historyChanges.date_of_birth = fields.date_of_birth;
+    if ((existing?.blood_type ?? null) !== fields.blood_type) historyChanges.blood_type = fields.blood_type;
+    if (existing ? existing.no_blood_transfusion !== fields.no_blood_transfusion : fields.no_blood_transfusion === 1) {
+      historyChanges.no_blood_transfusion = fields.no_blood_transfusion ? 'Yes' : 'No';
+    }
+  }
+  const preparedHistory = await emergencyHistoryRepo.prepareChanges(uid, historyChanges, changedAt);
 
+  await db.withTransactionAsync(async () => {
   await db.runAsync(
     `INSERT INTO medical_information (user_id, server_id, email, full_name, first_name, middle_name, last_name, suffix, date_of_birth, gender, phone_country_code, phone, blood_type, religion, address, no_blood_transfusion, sync_status, updated_at_local, server_updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -141,9 +153,11 @@ export async function saveLocalEdit(
     encrypted.address,
     encrypted.no_blood_transfusion,
     status,
-    new Date().toISOString(),
+    changedAt,
     existing?.server_updated_at ?? null,
   );
+  await emergencyHistoryRepo.insertPrepared(db, preparedHistory);
+  });
 }
 
 export async function applyProfessionalUpdate(patch: MedicalInformationPatch): Promise<void> {

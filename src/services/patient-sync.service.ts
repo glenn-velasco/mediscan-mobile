@@ -20,6 +20,7 @@ import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 
 import { createAllergy, deleteAllergy, updateAllergy } from '@/api/endpoints/allergies';
@@ -33,6 +34,7 @@ import {
 import { createMedicalInformation, updateMedicalInformation } from '@/api/endpoints/medical-information';
 import { createMedication, deleteMedication, updateMedication } from '@/api/endpoints/medications';
 import { pullSync } from '@/api/endpoints/sync';
+import { pullEmergencyFieldHistory, pushEmergencyFieldHistory } from '@/api/endpoints/emergency-field-history';
 
 const TAG = '[PatientSyncService]';
 
@@ -47,6 +49,32 @@ let isPushing = false;
 let isPulling = false;
 let consecutiveFailures = 0;
 let lastFailureAt = 0;
+const lastHistoryPullByUser = new Map<string, number>();
+const HISTORY_PULL_INTERVAL_MS = 5 * 60 * 1000;
+
+async function pushEmergencyHistory(): Promise<void> {
+  // Do not publish a change log ahead of the current patient record it describes.
+  if ((await medicalInformationRepo.getLocal())?.sync_status === 'pending') return;
+  while (true) {
+    const pending = await emergencyHistoryRepo.getPending();
+    if (!pending.length) return;
+    const result = await pushEmergencyFieldHistory(pending);
+    if (result.recorded.length !== pending.length) throw new Error('Some emergency history events were not accepted');
+    await emergencyHistoryRepo.markSynced(result.recorded);
+    void queryClient.invalidateQueries({ queryKey: ['emergency-field-history', String(getCurrentUserId())] });
+    if (pending.length < 50) return;
+  }
+}
+
+async function pullEmergencyHistoryIfDue(): Promise<void> {
+  const userId = String(getCurrentUserId());
+  const now = Date.now();
+  if (now - (lastHistoryPullByUser.get(userId) ?? 0) < HISTORY_PULL_INTERVAL_MS) return;
+  const events = await pullEmergencyFieldHistory();
+  const inserted = await emergencyHistoryRepo.cacheServerChanges(events);
+  lastHistoryPullByUser.set(userId, now);
+  if (inserted) void queryClient.invalidateQueries({ queryKey: ['emergency-field-history', userId] });
+}
 
 function withinBackoffWindow(): boolean {
   if (consecutiveFailures === 0) return false;
@@ -89,7 +117,7 @@ async function setLastSyncedAt(value: string): Promise<void> {
  * store there. See the `allergies` migration's comment for the id design.
  */
 async function pushRecord<TPayload>(
-  row: { local_uuid: string; server_id: number | null; deleted_locally: 0 | 1 },
+  row: { local_uuid: string; server_id: number | null; deleted_locally: 0 | 1; updated_at_local: string },
   payload: TPayload,
   api: {
     create: (id: string, payload: TPayload) => Promise<unknown>;
@@ -98,7 +126,8 @@ async function pushRecord<TPayload>(
   },
   repo: {
     hardDelete: (id: string) => Promise<void>;
-    markSyncedCreate: (id: string, serverId: number) => Promise<void>;
+    markSyncedCreate: (id: string, serverId: number, expectedUpdatedAt?: string) => Promise<void>;
+    markSynced: (id: string, expectedUpdatedAt?: string) => Promise<void>;
   },
 ): Promise<void> {
   if (row.deleted_locally) {
@@ -126,9 +155,10 @@ async function pushRecord<TPayload>(
         throw err;
       }
     }
-    await repo.markSyncedCreate(row.local_uuid, 1);
+    await repo.markSyncedCreate(row.local_uuid, 1, row.updated_at_local);
   } else {
     await api.update(row.local_uuid, payload);
+    await repo.markSynced(row.local_uuid, row.updated_at_local);
   }
 }
 
@@ -164,6 +194,7 @@ async function pushAllergies(): Promise<void> {
         pushRecord(row, allergiesRepo.toPayload(row), { create: createAllergy, update: updateAllergy, remove: deleteAllergy }, {
           hardDelete: allergiesRepo.hardDelete,
           markSyncedCreate: allergiesRepo.markSyncedCreate,
+          markSynced: allergiesRepo.markSynced,
         }),
       row.local_uuid,
       allergiesRepo.hardDelete,
@@ -180,6 +211,7 @@ async function pushConditions(): Promise<void> {
         pushRecord(row, conditionsRepo.toPayload(row), { create: createCondition, update: updateCondition, remove: deleteCondition }, {
           hardDelete: conditionsRepo.hardDelete,
           markSyncedCreate: conditionsRepo.markSyncedCreate,
+          markSynced: conditionsRepo.markSynced,
         }),
       row.local_uuid,
       conditionsRepo.hardDelete,
@@ -208,6 +240,7 @@ async function pushDiagnoses(): Promise<void> {
           {
             hardDelete: diagnosesRepo.hardDelete,
             markSyncedCreate: diagnosesRepo.markSyncedCreate,
+            markSynced: diagnosesRepo.markSynced,
           },
         ),
       row.local_uuid,
@@ -225,6 +258,7 @@ async function pushMedications(): Promise<void> {
         pushRecord(row, medicationsRepo.toPayload(row), { create: createMedication, update: updateMedication, remove: deleteMedication }, {
           hardDelete: medicationsRepo.hardDelete,
           markSyncedCreate: medicationsRepo.markSyncedCreate,
+          markSynced: medicationsRepo.markSynced,
         }),
       row.local_uuid,
       medicationsRepo.hardDelete,
@@ -242,7 +276,7 @@ async function pushEmergencyContacts(): Promise<void> {
           row,
           emergencyContactsRepo.toPayload(row),
           { create: createEmergencyContact, update: updateEmergencyContact, remove: deleteEmergencyContact },
-          { hardDelete: emergencyContactsRepo.hardDelete, markSyncedCreate: emergencyContactsRepo.markSyncedCreate },
+          { hardDelete: emergencyContactsRepo.hardDelete, markSyncedCreate: emergencyContactsRepo.markSyncedCreate, markSynced: emergencyContactsRepo.markSynced },
         ),
       row.local_uuid,
       emergencyContactsRepo.hardDelete,
@@ -284,6 +318,8 @@ export async function pushPatientChanges(): Promise<void> {
     await pushDiagnoses();
     await pushMedications();
     await pushEmergencyContacts();
+    try { await pushEmergencyHistory(); }
+    catch (error) { console.warn(TAG, 'emergency history remains pending', { error: String(error) }); }
     consecutiveFailures = 0;
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError) {
@@ -318,6 +354,8 @@ export async function forcePushBeforeLogout(): Promise<void> {
     await pushDiagnoses();
     await pushMedications();
     await pushEmergencyContacts();
+    try { await pushEmergencyHistory(); }
+    catch (error) { console.warn(TAG, 'emergency history remains pending on logout', { error: String(error) }); }
     consecutiveFailures = 0;
     console.log(TAG, 'forcePushBeforeLogout: done');
   } catch (err) {
@@ -353,7 +391,11 @@ export async function pullPatientChanges(): Promise<void> {
     });
 
     if (response.medical_information) {
-      await medicalInformationRepo.saveFromServer(response.medical_information);
+      const localMedical = await medicalInformationRepo.getLocal();
+      // A cloud snapshot must not erase an edit that has not reached the server yet.
+      if (localMedical?.sync_status !== 'pending') {
+        await medicalInformationRepo.saveFromServer(response.medical_information);
+      }
     }
 
     await Promise.all(response.allergies.map((record) =>
@@ -385,6 +427,9 @@ export async function pullPatientChanges(): Promise<void> {
         ? emergencyContactsRepo.hardDelete(record.id)
         : emergencyContactsRepo.upsertFromServer(record),
     ));
+
+    try { await pullEmergencyHistoryIfDue(); }
+    catch (error) { console.warn(TAG, 'emergency history refresh deferred', { error: String(error) }); }
 
     await setLastSyncedAt(response.server_time);
     consecutiveFailures = 0;

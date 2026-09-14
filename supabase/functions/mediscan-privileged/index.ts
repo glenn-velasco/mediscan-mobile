@@ -4,6 +4,106 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const CARD_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const MAX_SNAPSHOT_BYTES = 24_000;
+const HISTORY_FIELDS = new Set(['date_of_birth', 'blood_type', 'no_blood_transfusion']);
+const HISTORY_BLOOD_TYPES = new Set(['a_positive', 'a_negative', 'b_positive', 'b_negative', 'ab_positive', 'ab_negative', 'o_positive', 'o_negative']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const CLOUD_PREFIX = 'gcm1:';
+const MAX_CLOUD_ITEMS = 100;
+const MAX_CLOUD_JSON_BYTES = 64_000;
+
+function base64Bytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 8192) {
+    binary += String.fromCharCode(...bytes.slice(offset, offset + 8192));
+  }
+  return btoa(binary);
+}
+
+async function sealCloudValue(value: unknown, userId: string): Promise<string> {
+  const plaintext = new TextEncoder().encode(JSON.stringify(value));
+  if (plaintext.byteLength > MAX_CLOUD_JSON_BYTES) throw new Error('Patient record is too large');
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, additionalData: new TextEncoder().encode(`patient:${userId}`) },
+    await historyKey(), plaintext,
+  ));
+  const encoded = new Uint8Array(nonce.length + ciphertext.length);
+  encoded.set(nonce);
+  encoded.set(ciphertext, nonce.length);
+  return CLOUD_PREFIX + base64Bytes(encoded);
+}
+
+async function openCloudValue(value: string, userId: string): Promise<unknown> {
+  if (!value.startsWith(CLOUD_PREFIX) || value.length > MAX_CLOUD_JSON_BYTES * 2) {
+    throw new Error('Unsupported patient record encryption version');
+  }
+  const bytes = Uint8Array.from(atob(value.slice(CLOUD_PREFIX.length)), (character) => character.charCodeAt(0));
+  if (bytes.length < 29) throw new Error('Invalid patient record');
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: new TextEncoder().encode(`patient:${userId}`) },
+    await historyKey(), bytes.slice(12),
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+async function historyKey(): Promise<CryptoKey> {
+  const encoded = Deno.env.get('HISTORY_MASTER_KEY_B64');
+  if (!encoded) throw new Error('Emergency history encryption is not configured');
+  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  if (bytes.length !== 32) throw new Error('Emergency history encryption key must be 32 bytes');
+  return crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+async function sealHistoryValue(value: string | null): Promise<string> {
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce }, await historyKey(), new TextEncoder().encode(JSON.stringify(value)),
+  ));
+  return btoa(String.fromCharCode(...nonce, ...ciphertext));
+}
+
+async function openHistoryValue(encoded: string): Promise<string | null> {
+  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bytes.slice(0, 12) }, await historyKey(), bytes.slice(12),
+  );
+  const value = JSON.parse(new TextDecoder().decode(plaintext));
+  return typeof value === 'string' || value === null ? value : null;
+}
+
+async function decodeHistoryRows(rows: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const decoded: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    try {
+      decoded.push({
+        id: row.id, field: row.field_key,
+        value: await openHistoryValue(String(row.encrypted_value)),
+        changedAt: row.changed_at_local,
+        serverRecordedAt: row.server_recorded_at,
+        syncStatus: 'synced',
+      });
+    } catch {
+      // A damaged event is never exposed as a confirmed value.
+    }
+  }
+  return decoded;
+}
+
+function disclosedHistoryFields(qrPayload: string): Set<string> {
+  const allowed = new Set<string>();
+  try {
+    if (!qrPayload.startsWith('MEDISCAN:v2:')) return allowed;
+    const encoded = qrPayload.slice('MEDISCAN:v2:'.length).replaceAll('-', '+').replaceAll('_', '/');
+    const envelope = JSON.parse(atob(encoded)) as { data?: Record<string, unknown> };
+    if (envelope.data?.dateOfBirth) allowed.add('date_of_birth');
+    if (envelope.data?.bloodType) allowed.add('blood_type');
+    if (envelope.data?.noBloodTransfusion) allowed.add('no_blood_transfusion');
+  } catch {
+    // A malformed snapshot cannot grant history disclosure.
+  }
+  return allowed;
+}
 
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -43,11 +143,11 @@ Deno.serve(async (req) => {
       .select('id', { count: 'exact', head: true }).eq('requester_hash', requesterHash).gte('created_at', since);
     if ((count ?? 0) >= 60) return json({ message: 'Emergency card unavailable' }, 429);
 
-    let snapshot: { snapshot_payload: string; snapshot_generated_at: string; published_at: string } | null = null;
+    let snapshot: { patient_id: string; snapshot_payload: string; snapshot_generated_at: string; published_at: string } | null = null;
     if (CARD_TOKEN_PATTERN.test(token)) {
       const tokenHash = await sha256(token);
       const { data } = await admin.from('dynamic_emergency_cards')
-        .select('snapshot_payload,snapshot_generated_at,published_at')
+        .select('patient_id,snapshot_payload,snapshot_generated_at,published_at')
         .eq('token_hash', tokenHash).is('revoked_at', null).not('snapshot_payload', 'is', null).maybeSingle();
       snapshot = data;
     }
@@ -57,10 +157,19 @@ Deno.serve(async (req) => {
       succeeded: Boolean(snapshot),
     });
     if (!snapshot) return json({ message: 'Emergency card unavailable' }, 404);
+    const allowed = disclosedHistoryFields(snapshot.snapshot_payload);
+    const { data: historyRows } = allowed.size
+      ? await admin.from('emergency_field_history')
+        .select('id,field_key,encrypted_value,changed_at_local,server_recorded_at')
+        .eq('user_id', snapshot.patient_id).in('field_key', [...allowed])
+        .lte('server_recorded_at', snapshot.published_at)
+        .order('server_recorded_at', { ascending: false }).limit(5)
+      : { data: [] };
     return json({
       qr_payload: snapshot.snapshot_payload,
       snapshot_generated_at: snapshot.snapshot_generated_at,
       published_at: snapshot.published_at,
+      recent_history: await decodeHistoryRows(historyRows ?? []),
     });
   }
 
@@ -77,6 +186,55 @@ Deno.serve(async (req) => {
 
   try {
     switch (action) {
+      case 'patient-crypto-seal': {
+        if (!Object.hasOwn(payload, 'value')) return json({ message: 'Invalid patient record' }, 422);
+        return json({ encrypted_payload: await sealCloudValue(payload.value, user.id) });
+      }
+      case 'patient-crypto-open': {
+        const values = payload.values;
+        if (!Array.isArray(values) || values.length > MAX_CLOUD_ITEMS || values.some((value) => typeof value !== 'string')) {
+          return json({ message: 'Invalid patient record batch' }, 422);
+        }
+        return json({ values: await Promise.all(values.map((value) => openCloudValue(value, user.id))) });
+      }
+      case 'emergency-history-push': {
+        const events = payload.events;
+        if (!Array.isArray(events) || events.length < 1 || events.length > 50) return json({ message: 'Invalid history batch' }, 422);
+        const validated: Record<string, unknown>[] = [];
+        for (const event of events) {
+          if (!event || typeof event !== 'object') return json({ message: 'Invalid history event' }, 422);
+          const item = event as Record<string, unknown>;
+          if (typeof item.id !== 'string' || !UUID_PATTERN.test(item.id)
+            || typeof item.field !== 'string' || !HISTORY_FIELDS.has(item.field)
+            || (item.value !== null && (typeof item.value !== 'string' || item.value.length > 80))
+            || typeof item.changedAt !== 'string' || !Number.isFinite(Date.parse(item.changedAt))) {
+            return json({ message: 'Invalid history event' }, 422);
+          }
+          if (item.value !== null && (
+            (item.field === 'date_of_birth' && !/^\d{4}-\d{2}-\d{2}$/.test(item.value as string))
+            || (item.field === 'blood_type' && !HISTORY_BLOOD_TYPES.has(item.value as string))
+            || (item.field === 'no_blood_transfusion' && item.value !== 'Yes' && item.value !== 'No')
+          )) return json({ message: 'Invalid history value' }, 422);
+          validated.push(item);
+        }
+        const rows = await Promise.all(validated.map(async (item) => ({
+          id: item.id, user_id: user.id, field_key: item.field,
+          encrypted_value: await sealHistoryValue(item.value as string | null), changed_at_local: item.changedAt,
+        })));
+        const { error } = await admin.from('emergency_field_history').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+        if (error) throw error;
+        const { data: recorded, error: recordedError } = await admin.from('emergency_field_history')
+          .select('id,server_recorded_at').eq('user_id', user.id).in('id', rows.map((row) => row.id));
+        if (recordedError) throw recordedError;
+        return json({ recorded: recorded ?? [] });
+      }
+      case 'emergency-history-pull': {
+        const { data, error } = await admin.from('emergency_field_history')
+          .select('id,field_key,encrypted_value,changed_at_local,server_recorded_at')
+          .eq('user_id', user.id).order('server_recorded_at', { ascending: false }).limit(100);
+        if (error) throw error;
+        return json({ events: await decodeHistoryRows(data ?? []) });
+      }
       case 'emergency-card-create': {
         const { data: existing } = await admin.from('dynamic_emergency_cards')
           .select('id,issued_at,published_at').eq('patient_id', user.id).is('revoked_at', null).maybeSingle();

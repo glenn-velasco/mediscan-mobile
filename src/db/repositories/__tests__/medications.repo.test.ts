@@ -143,6 +143,30 @@ describe('medications.repo', () => {
     expect(row?.sync_status).toBe('synced');
   });
 
+  it('pushes only new or pending rows and stops after a successful update', async () => {
+    const id = await medicationsRepo.createLocal(basePayload);
+    expect((await medicationsRepo.getAllForPush()).map((row) => row.local_uuid)).toEqual([id]);
+    await medicationsRepo.markSyncedCreate(id, 1);
+    expect(await medicationsRepo.getAllForPush()).toEqual([]);
+    await medicationsRepo.updateLocal(id, { dosage: '200mg' });
+    const [pending] = await medicationsRepo.getAllForPush();
+    expect(pending.sync_status).toBe('pending');
+    await medicationsRepo.markSynced(id, pending.updated_at_local);
+    expect(await medicationsRepo.getAllForPush()).toEqual([]);
+  });
+
+  it('keeps a newer local edit pending when an older upload completes', async () => {
+    const id = await medicationsRepo.createLocal(basePayload);
+    await medicationsRepo.markSyncedCreate(id, 1);
+    await medicationsRepo.updateLocal(id, { dosage: '200mg' });
+    const older = (await medicationsRepo.getByLocalUuid(id))!;
+    await medicationsRepo.updateLocal(id, { dosage: '300mg' });
+    const db = await getDb();
+    await db.runAsync('UPDATE medications SET updated_at_local = ? WHERE local_uuid = ?', '2026-09-15T00:00:00.000Z', id);
+    await medicationsRepo.markSynced(id, older.updated_at_local);
+    expect((await medicationsRepo.getByLocalUuid(id))?.sync_status).toBe('pending');
+  });
+
   it('markConflict sets sync_status to conflict', async () => {
     const localUuid = await medicationsRepo.createLocal(basePayload);
 
@@ -161,6 +185,7 @@ describe('medications.repo', () => {
       dosage: '100mg',
       frequency: 'Once daily',
       notes: undefined,
+      verified_by: null,
     });
   });
 });

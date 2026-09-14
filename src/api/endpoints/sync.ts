@@ -1,6 +1,5 @@
-import { decode } from '@/api/encrypted-crud';
+import { openPatientPayloads } from '@/api/patient-cloud-crypto';
 import { requireAuthUserId, supabase, throwSupabaseError } from '@/api/supabase';
-import { decryptJson } from '@/lib/crypto';
 import type { AllergyApiRecord } from '@/api/endpoints/allergies';
 import type { ConditionApiRecord } from '@/api/endpoints/conditions';
 import type { DiagnosisApiRecord } from '@/api/endpoints/diagnoses';
@@ -57,14 +56,36 @@ async function pullSupabaseSync(since?: string): Promise<SyncResponse> {
     emergency_contacts: unknown[];
   };
   const medical = result.medical_information;
-  const payload = medical ? await decryptJson<Omit<MedicalInformationSyncRecord, 'id' | 'updated_at'>>(medical.encrypted_payload) : null;
+  const sections = ['allergies', 'conditions', 'diagnoses', 'medications', 'emergency_contacts'] as const;
+  const flattened = sections.flatMap((section) => result[section]);
+  const encryptedRows = flattened as { id: string; encrypted_payload: string; deleted_at: string | null; updated_at: string }[];
+  // Pre-change development rows were sealed with a device-only key. They cannot be
+  // recovered on another device; ignore them instead of blocking every newer row.
+  const ciphertexts = [medical?.encrypted_payload, ...encryptedRows.map((row) => row.encrypted_payload)]
+    .filter((value): value is string => typeof value === 'string' && value.startsWith('gcm1:'));
+  const decoded: unknown[] = [];
+  for (let index = 0; index < ciphertexts.length; index += 100) {
+    decoded.push(...await openPatientPayloads<unknown>(ciphertexts.slice(index, index + 100)));
+  }
+  const valuesByCiphertext = new Map(ciphertexts.map((ciphertext, index) => [ciphertext, decoded[index]]));
+  const payload = medical?.encrypted_payload.startsWith('gcm1:')
+    ? valuesByCiphertext.get(medical.encrypted_payload) as Omit<MedicalInformationSyncRecord, 'id' | 'updated_at'>
+    : null;
+  const take = <T extends object>(section: typeof sections[number]): T[] => {
+    const rows = result[section] as { id: string; encrypted_payload: string; deleted_at: string | null; updated_at: string }[];
+    return rows.filter((row) => row.deleted_at || row.encrypted_payload.startsWith('gcm1:'))
+      .map((row) => ({
+        ...(valuesByCiphertext.get(row.encrypted_payload) as T | undefined),
+        id: row.id, deleted_at: row.deleted_at, updated_at: row.updated_at,
+      } as T));
+  };
   return {
     server_time: result.server_time,
     medical_information: payload ? { ...payload, id: 1, updated_at: medical!.updated_at } : null,
-    allergies: await Promise.all(result.allergies.map((row) => decode<AllergyApiRecord>(row as never))),
-    conditions: await Promise.all(result.conditions.map((row) => decode<ConditionApiRecord>(row as never))),
-    diagnoses: await Promise.all(result.diagnoses.map((row) => decode<DiagnosisApiRecord>(row as never))),
-    medications: await Promise.all(result.medications.map((row) => decode<MedicationApiRecord>(row as never))),
-    emergency_contacts: await Promise.all(result.emergency_contacts.map((row) => decode<EmergencyContactApiRecord>(row as never))),
+    allergies: take<AllergyApiRecord>('allergies'),
+    conditions: take<ConditionApiRecord>('conditions'),
+    diagnoses: take<DiagnosisApiRecord>('diagnoses'),
+    medications: take<MedicationApiRecord>('medications'),
+    emergency_contacts: take<EmergencyContactApiRecord>('emergency_contacts'),
   };
 }
