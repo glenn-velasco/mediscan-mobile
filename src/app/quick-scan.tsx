@@ -12,6 +12,7 @@ import { PrimaryButton } from '@/components/primary-button';
 import { QrCodeView } from '@/components/qr-code-view';
 import { QrScannerView } from '@/components/qr-scanner-view';
 import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
+import { saveScan } from '@/db/repositories/recent-emergency-scans.repo';
 import { ThemedText } from '@/components/themed-text';
 import { buildFullName } from '@/lib/build-full-name';
 import { useAllergies } from '@/features/allergies/useAllergies';
@@ -22,7 +23,7 @@ import { useMedicalInformation } from '@/features/medical-information/useMedical
 import { useMedications } from '@/features/medications/useMedications';
 import { useTheme } from '@/hooks/use-theme';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
-import { QR_V3_REFERENCE_PREFIX } from '@/lib/emergency-qr-reference';
+import { isResponderQr } from '@/lib/emergency-qr-routing';
 import { useLightweightMode } from '@/lib/lightweight-mode-context';
 import { consumeUpdatedScannedInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
@@ -87,6 +88,7 @@ export default function QuickScanScreen() {
   const [mode, setMode] = useState<Mode>('show');
   const [summary, setSummary] = useState<string | null>(null);
   const [scanned, setScanned] = useState<ScannedEmergencyInfo | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
   const scannedRawRef = useRef<string | null>(null);
   const [scanError, setScanError] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -126,10 +128,14 @@ export default function QuickScanScreen() {
   const displaySummary = user && medicalInformation ? summary : null;
 
   const handleScanned = (data: string) => {
-    // Dynamic wallet-card references require the public responder workflow,
-    // which resolves the token online and does not apply the legacy auth gate.
-    if (data.trim().startsWith(QR_V3_REFERENCE_PREFIX)) {
-        router.replace({ pathname: '/responder-scan', params: { raw: data } });
+    const raw = data.trim();
+    // Signed on-phone QRs and both printed-card formats are handled by the responder flow.
+    // The decoder below only understands the legacy encrypted summary.
+    if (isResponderQr(raw)) {
+      void (async () => {
+        if (isLightweight) await promoteToFullApp();
+        router.replace({ pathname: '/responder-scan', params: { raw } });
+      })();
       return;
     }
     parseEmergencySummary(data).then((parsed) => {
@@ -139,6 +145,7 @@ export default function QuickScanScreen() {
       }
       setScanned(parsed);
       scannedRawRef.current = data;
+      void saveScan(data, parsed, { status: 'legacy', authenticity: 'unverified', message: 'Legacy emergency QR; contents are patient-provided.' }).then((id) => { if (scannedRawRef.current === data) setScanId(id); }).catch(() => {});
     });
   };
 
@@ -220,20 +227,13 @@ export default function QuickScanScreen() {
     }
   };
 
-  const resetScan = () => {
-    setScanned(null);
-    scannedRawRef.current = null;
-    setScanError(false);
-    loggedRef.current = false;
-    biometric.reset();
-  };
-
   const switchMode = async (next: Mode) => {
     if (next === 'scan') {
       await disconnectIfAndroid();
     }
     setMode(next);
     setScanned(null);
+    setScanId(null);
     scannedRawRef.current = null;
     setScanError(false);
     setTorchOn(false);
@@ -337,7 +337,7 @@ export default function QuickScanScreen() {
           </View>
         ) : biometric.status === 'authenticated' && scanned ? (
           <View className="gap-4">
-            <ScannedEmergencyCard info={scanned} onScanAnother={resetScan} showMedicalDetails />
+            <ScannedEmergencyCard info={scanned} source="qr" onRecordEncounter={() => scanId && router.push({ pathname: '/responder-history/[id]/encounter', params: { id: scanId } })} encounterReady={Boolean(scanId)} showMedicalDetails />
           </View>
         ) : (
           <View className="items-center gap-4 py-8">

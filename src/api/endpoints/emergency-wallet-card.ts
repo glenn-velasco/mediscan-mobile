@@ -1,4 +1,5 @@
 import { invokeFunction } from '@/api/supabase';
+import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
 
 export type DynamicCardStatus = {
   active: boolean;
@@ -30,6 +31,7 @@ export async function resolveEmergencyCard(token: string): Promise<{
   qr_payload: string;
   snapshot_generated_at: string;
   published_at: string;
+  recent_history?: EmergencyFieldChange[];
 }> {
   return invokeFunction('emergency-card-resolve', { token });
 }

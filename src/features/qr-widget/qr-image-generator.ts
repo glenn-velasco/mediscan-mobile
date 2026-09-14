@@ -4,6 +4,7 @@ import { Paths, Directory } from 'expo-file-system';
 import { widgetsDirectory } from 'expo-widgets';
 
 import { buildQrPath, createQrMatrix } from '@/lib/qr-matrix';
+import { QR_HYBRID_PREFIX } from '@/lib/emergency-qr-hybrid';
 
 const QR_IMAGE_FILENAME = 'emergency_qr.png';
 /**
@@ -21,7 +22,7 @@ export async function generateQrImage(encryptedText: string): Promise<string | n
     }
 
     const canvas = surface.getCanvas();
-    const matrix = createQrMatrix(encryptedText);
+    const matrix = createQrMatrix(encryptedText, encryptedText.startsWith(QR_HYBRID_PREFIX) ? 'M' : 'L');
     const padding = (QR_IMAGE_SIZE / matrix.length) * 4;
     const qrArea = QR_IMAGE_SIZE - padding * 2;
 

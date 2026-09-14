@@ -42,16 +42,18 @@ const allergy = {
 } as AllergyRow;
 
 describe('emergency QR v2', () => {
-  it('round-trips a signed minimum-disclosure payload', async () => {
+  it('round-trips a signed emergency payload with date of birth and phone', async () => {
     const encoded = await buildEmergencyQrV2({ patientId: 7, medical, allergies: [allergy], conditions: [], diagnoses: [], medications: [], contacts: [], disclosure: DEFAULT_EMERGENCY_DISCLOSURE });
     const parsed = await parseEmergencyQrV2(encoded);
     expect(parsed?.verification.status).toBe('valid');
     expect(parsed?.info.allergies[0].allergen).toBe('Peanuts');
-    expect(parsed?.info.phone).toBe('');
+    expect(parsed?.info.phone).toBe('9123456789');
     expect(parsed?.info.street).toBe('Private address');
     expect(parsed?.info.city).toBe('Cebu');
     expect(parsed?.info.religion).toBe('');
-    expect(parsed?.info.dateOfBirth).toBe('');
+    expect(parsed?.info.dateOfBirth).toBe('1990-01-01');
+    expect(parsed?.info.withheld).toEqual({ dateOfBirth: false, bloodType: false, phone: false });
+    expect(parsed?.info.bloodType).toBe('o_positive');
     expect(parsed?.info.age).toBeGreaterThan(0);
     expect(parsed?.info.gender).toBe('female');
   });
@@ -67,5 +69,15 @@ describe('emergency QR v2', () => {
     const encoded = await buildEmergencyQrV2({ patientId: 7, medical, allergies: [], conditions: [], diagnoses: [], medications: [], contacts: [], disclosure: DEFAULT_EMERGENCY_DISCLOSURE });
     const parsed = await parseEmergencyQrV2(encoded);
     expect(parsed?.info.knowledge?.allergies).toBe('not_recorded');
+  });
+
+  it('includes only history for fields disclosed in the emergency QR', async () => {
+    const recentHistory = [
+      { id: 'dob-change', field: 'date_of_birth' as const, value: '1990-01-01', changedAt: new Date().toISOString(), serverRecordedAt: null, syncStatus: 'pending' as const },
+      { id: 'blood-change', field: 'blood_type' as const, value: 'o_positive', changedAt: new Date().toISOString(), serverRecordedAt: null, syncStatus: 'pending' as const },
+    ];
+    const encoded = await buildEmergencyQrV2({ patientId: 7, medical, allergies: [], conditions: [], diagnoses: [], medications: [], contacts: [], disclosure: DEFAULT_EMERGENCY_DISCLOSURE, recentHistory });
+    const parsed = await parseEmergencyQrV2(encoded);
+    expect(parsed?.info.recentHistory?.map((event) => event.field)).toEqual(['date_of_birth', 'blood_type']);
   });
 });

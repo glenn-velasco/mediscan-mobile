@@ -1,8 +1,8 @@
 import QRCode from 'qrcode';
 
 /** Generates the boolean module matrix for a QR code — pure JS, no native rendering dependency. */
-export function createQrMatrix(text: string): boolean[][] {
-  const qr = QRCode.create(text, { errorCorrectionLevel: 'L' });
+export function createQrMatrix(text: string, errorCorrectionLevel: 'L' | 'M' = 'L'): boolean[][] {
+  const qr = QRCode.create(text, { errorCorrectionLevel });
   const { size, data } = qr.modules;
 
   const matrix: boolean[][] = [];

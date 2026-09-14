@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
 import { decryptRecentScan, encryptRecentScan } from '@/services/recent-scan-crypto.service';
-import type { QrVerificationResult, RecentEmergencyScan, ResponderNote, ResponderNoteBlock } from '@/types/emergency';
+import type { QrVerificationResult, RecentEmergencyScan, ResponderEncounter, ResponderNote, ResponderNoteBlock } from '@/types/emergency';
 import type { ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -10,7 +10,9 @@ const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 type StoredSnapshot = {
   info: ScannedEmergencyInfo;
   verification: QrVerificationResult;
+  source?: 'qr' | 'dynamic-card' | 'printable-offline';
   note: ResponderNote | null;
+  encounter?: ResponderEncounter | null;
 };
 
 type ScanRow = {
@@ -32,11 +34,13 @@ async function decode(row: ScanRow): Promise<RecentEmergencyScan | null> {
       payloadHash: row.payload_hash,
       info: snapshot.info,
       verification: snapshot.verification,
+      source: snapshot.source ?? 'qr',
       scannedAt: row.scanned_at,
       lastViewedAt: row.last_viewed_at,
       expiresAt: row.expires_at,
       scanCount: row.scan_count,
       note: snapshot.note,
+      encounter: snapshot.encounter ?? null,
     };
   } catch {
     return null;
@@ -48,7 +52,7 @@ export async function purgeExpired(now = new Date()): Promise<void> {
   await db.runAsync('DELETE FROM recent_emergency_scans WHERE expires_at <= ?', now.toISOString());
 }
 
-export async function saveScan(rawPayload: string, info: ScannedEmergencyInfo, verification: QrVerificationResult): Promise<string> {
+export async function saveScan(rawPayload: string, info: ScannedEmergencyInfo, verification: QrVerificationResult, source: 'qr' | 'dynamic-card' | 'printable-offline' = 'qr'): Promise<string> {
   const db = await getDb();
   const now = new Date();
   await purgeExpired(now);
@@ -65,7 +69,7 @@ export async function saveScan(rawPayload: string, info: ScannedEmergencyInfo, v
   }
 
   const id = Crypto.randomUUID();
-  const encrypted = await encryptRecentScan({ info, verification, note: null } satisfies StoredSnapshot);
+  const encrypted = await encryptRecentScan({ info, verification, source, note: null, encounter: null } satisfies StoredSnapshot);
   await db.runAsync(
     `INSERT INTO recent_emergency_scans
       (id, payload_hash, encrypted_snapshot, scanned_at, last_viewed_at, expires_at, scan_count)
@@ -119,6 +123,16 @@ export async function setNoteBlocks(id: string, blocks: ResponderNoteBlock[], ti
   if (!snapshot) return;
   const normalized = blocks.filter((block) => block.type === 'image' || block.text.trim()).slice(0, 40);
     snapshot.note = normalized.length || title.trim() ? { text: normalized.filter((block) => block.type === 'text').map((block) => block.text).join('\n\n'), updatedAt: new Date().toISOString(), title: title.trim() || undefined, blocks: normalized } : null;
+  await db.runAsync('UPDATE recent_emergency_scans SET encrypted_snapshot = ? WHERE id = ?', await encryptRecentScan(snapshot), id);
+}
+
+export async function setEncounter(id: string, encounter: ResponderEncounter): Promise<void> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<ScanRow>('SELECT * FROM recent_emergency_scans WHERE id = ?', id);
+  if (!row || row.expires_at <= new Date().toISOString()) throw new Error('This scan has expired.');
+  const snapshot = await decryptRecentScan<StoredSnapshot>(row.encrypted_snapshot);
+  if (!snapshot) throw new Error('Unable to open this scan.');
+  snapshot.encounter = encounter;
   await db.runAsync('UPDATE recent_emergency_scans SET encrypted_snapshot = ? WHERE id = ?', await encryptRecentScan(snapshot), id);
 }
 

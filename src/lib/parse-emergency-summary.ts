@@ -1,5 +1,6 @@
 import { decryptQrPayload } from '@/lib/qr-cipher';
 import type { QrVerificationResult } from '@/types/emergency';
+import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
 
 const QR_V2_PREFIX = 'MEDISCAN:v2:';
 
@@ -32,6 +33,8 @@ export type ScannedMedication = {
 };
 
 export type ScannedEmergencyInfo = {
+  recentHistory?: EmergencyFieldChange[];
+  withheld?: { dateOfBirth: boolean; bloodType: boolean; phone: boolean };
   patientId: string | number | null;
   generatedAt: string;
   lastUpdatedAt?: string;

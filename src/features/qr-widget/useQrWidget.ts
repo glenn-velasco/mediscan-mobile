@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 
 import type { EmergencyContactRow } from '@/db/schema';
@@ -18,6 +19,7 @@ import {
 } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 
 /* Stable empty references so an unresolved query doesn't churn the effect deps. */
 const EMPTY_CONTACTS: EmergencyContactRow[] = [];
@@ -30,6 +32,10 @@ export function useQrWidget(userId: string | number) {
   const { data: diagnoses } = useDiagnoses();
   const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
+  const { data: recentHistory } = useQuery({
+    queryKey: ['emergency-field-history', String(userId)],
+    queryFn: () => emergencyHistoryRepo.getRecent(5, userId),
+  });
 
   useEffect(() => {
     if (!medicalInformation) return;
@@ -37,7 +43,7 @@ export function useQrWidget(userId: string | number) {
       void queueDynamicEmergencyCardPublication(userId);
     }, 750);
     return () => clearTimeout(timer);
-  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
+  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory]);
 
   useEffect(() => {
     if (!enabled || !medicalInformation) return;
@@ -57,6 +63,7 @@ export function useQrWidget(userId: string | number) {
       conditions: conditions ?? [],
       disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
       confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
+      recentHistory,
     })
       .then((encrypted) => generateQrImage(encrypted))
       .then(async (imagePath) => {
@@ -100,7 +107,7 @@ export function useQrWidget(userId: string | number) {
     return () => {
       cancelled = true;
     };
-  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
+  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory]);
 
   useEffect(() => {
     const hide = () => {

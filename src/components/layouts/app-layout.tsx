@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, RefreshControl, ScrollView, View, type ViewProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
+import { KeyboardAwareLayout } from '@/components/layouts/keyboard-aware-layout';
 
 type AppLayoutProps = ViewProps & {
   /** Renders a plain View instead of a ScrollView — use for screens with their own scrollable list (e.g. FlatList). */
@@ -73,12 +74,9 @@ export function AppLayout({ children, className, scrollable = true, onRefresh, m
 
   if (avoidKeyboard) {
     return (
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: theme.background }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAwareLayout>
         {scrollView}
-      </KeyboardAvoidingView>
+      </KeyboardAwareLayout>
     );
   }
 

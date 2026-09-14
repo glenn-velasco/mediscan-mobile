@@ -80,6 +80,24 @@ export type ResponderNote = {
   blocks?: ResponderNoteBlock[];
 };
 
+export type EncounterVital = {
+  kind: 'blood_pressure' | 'heart_rate' | 'respiratory_rate' | 'temperature' | 'oxygen_saturation';
+  value: string;
+  unit: string;
+  measuredAt: string;
+  recordedBy: string;
+};
+
+export type ResponderEncounter = {
+  authorName: string;
+  authorIdentity: 'self_declared';
+  observations: string;
+  actionsTaken: string;
+  vitals: EncounterVital[];
+  recordedAt: string;
+  updatedAt: string;
+};
+
 export type ResponderNoteBlock =
   | { id: string; type: 'text'; text: string; createdAt: string }
   | { id: string; type: 'image'; uri: string; createdAt: string };
@@ -89,17 +107,19 @@ export type RecentEmergencyScan = {
   payloadHash: string;
   info: import('@/lib/parse-emergency-summary').ScannedEmergencyInfo;
   verification: QrVerificationResult;
+  source: 'qr' | 'dynamic-card' | 'printable-offline';
   scannedAt: string;
   lastViewedAt: string;
   expiresAt: string;
   scanCount: number;
   note: ResponderNote | null;
+  encounter: ResponderEncounter | null;
 };
 
 export const DEFAULT_EMERGENCY_DISCLOSURE: EmergencyDisclosureSettings = {
   name: true,
   gender: true,
-  dateOfBirth: false,
+  dateOfBirth: true,
   bloodType: true,
   allergies: true,
   medications: true,
@@ -107,7 +127,7 @@ export const DEFAULT_EMERGENCY_DISCLOSURE: EmergencyDisclosureSettings = {
   conditions: true,
   transfusionPreference: true,
   emergencyContacts: true,
-  phone: false,
+  phone: true,
   address: true,
   religion: false,
   staleAfterHours: 24 * 30,

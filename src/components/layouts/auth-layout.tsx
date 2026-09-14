@@ -1,8 +1,9 @@
-import { KeyboardAvoidingView, Platform, ScrollView, View, type ViewProps } from 'react-native';
+import { Platform, ScrollView, View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
+import { KeyboardAwareLayout } from '@/components/layouts/keyboard-aware-layout';
 
 /**
  * Shared container for unauthenticated screens (login, register, forgot/reset password):
@@ -13,11 +14,7 @@ export function AuthLayout({ children, className, ...rest }: ViewProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: theme.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={insets.top}
-    >
+    <KeyboardAwareLayout keyboardVerticalOffset={insets.top}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, ...(Platform.OS !== 'ios' ? { paddingTop: insets.top } : {}) }}
         contentInset={Platform.OS === 'ios' ? { top: insets.top } : undefined}
@@ -30,6 +27,6 @@ export function AuthLayout({ children, className, ...rest }: ViewProps) {
           {children}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareLayout>
   );
 }

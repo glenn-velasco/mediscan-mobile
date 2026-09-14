@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { View } from 'react-native';
+import * as Linking from 'expo-linking';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { InfoTile } from '@/components/info-tile';
@@ -7,6 +9,7 @@ import { PrimaryButton } from '@/components/primary-button';
 import { SeverityBadge } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
+import { BloodTypeLabel, type BloodType } from '@/constants/blood-type';
 import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 import type { AllergyRow } from '@/db/schema';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,6 +18,15 @@ import { formatAddress } from '@/lib/format-address';
 import { formatIsoDate, formatIsoDateTime } from '@/lib/format-date';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import type { ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
+import type { QrVerificationResult } from '@/types/emergency';
+import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
+
+function formatHistoryValue(change: EmergencyFieldChange): string {
+  if (change.value === null) return 'Not recorded';
+  if (change.field === 'blood_type') return BloodTypeLabel[change.value as BloodType] ?? change.value;
+  if (change.field === 'date_of_birth') return formatIsoDate(change.value) || change.value;
+  return change.value;
+}
 
 function calculateAge(dob: string): number | null {
   if (!dob) return null;
@@ -30,69 +42,87 @@ function calculateAge(dob: string): number | null {
 
 export function ScannedEmergencyCard({
   info,
-  onScanAnother,
+  onRecordEncounter,
+  encounterReady = true,
+  encounterExists = false,
+  source,
+  verification,
   showMedicalDetails = true,
 }: {
   info: ScannedEmergencyInfo;
-  onScanAnother: () => void;
+  onRecordEncounter?: () => void;
+  encounterReady?: boolean;
+  encounterExists?: boolean;
+  source?: 'qr' | 'dynamic-card' | 'printable-offline';
+  verification?: QrVerificationResult;
   showMedicalDetails?: boolean;
 }) {
   const theme = useTheme();
-  const age = calculateAge(info.dateOfBirth);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const age = info.age ?? calculateAge(info.dateOfBirth);
+  const dateOfBirth = formatIsoDate(info.dateOfBirth);
+  const personalPhone = formatPhoneWithCountryCode(info.phoneCountryCode, info.phone);
+  const bloodType = BloodTypeLabel[info.bloodType as BloodType] ?? info.bloodType;
+  const missingBloodType = info.withheld?.bloodType ? 'Not shared' : info.withheld ? 'Not recorded' : 'Not in QR';
+  const omittedIdentity = [info.withheld?.dateOfBirth && 'date of birth', info.withheld?.phone && 'personal phone'].filter(Boolean).join(' and ');
+  const callableContact = info.emergencyContacts.find((contact) => (contact.phone ?? '').replace(/\D/g, '').length >= 3);
 
   return (
     <View className="gap-4">
       <ThemedText type="heading" className="text-center">{info.name || 'Unknown'}</ThemedText>
+      {source ? <Card><ThemedText selectable type="bodyBold">Emergency information</ThemedText><ThemedText selectable color="mutedForeground">{source === 'dynamic-card' ? 'Printed card · online published snapshot' : source === 'printable-offline' ? 'Printed card · offline snapshot' : 'On-phone QR · available offline'}</ThemedText><ThemedText selectable color="mutedForeground">Last updated {formatIsoDateTime(info.lastUpdatedAt || info.generatedAt) || 'unknown'}</ThemedText>{verification ? <ThemedText selectable color="mutedForeground">{verification.message}</ThemedText> : null}</Card> : null}
+      {onRecordEncounter ? <PrimaryButton label={encounterExists ? 'Open encounter and report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /> : null}
 
       <View className="gap-2">
-        <View className="flex-row gap-2">
-          <InfoTile
+        {dateOfBirth ? <InfoTile
+            fullWidth
             icon="calendar"
             iconColor={theme.mutedForeground}
             iconBgKey="muted"
             label="Date of birth"
-            value={formatIsoDate(info.dateOfBirth) || '—'}
-          />
-          <InfoTile
+            value={dateOfBirth}
+          /> : null}
+        {age !== null ? <InfoTile
+            fullWidth
             icon="hourglass"
             iconColor={theme.primary}
             iconBgKey="primary"
             label="Age"
-            value={age !== null ? `${age} yrs` : '—'}
-          />
-        </View>
-        <View className="flex-row gap-2">
-          <InfoTile
+            value={`${age} yrs`}
+          /> : null}
+        <InfoTile
+            fullWidth
             icon="male-female"
             iconColor={theme.warning}
             iconBgKey="warning"
             label="Gender"
-            value={(GENDER_OPTIONS.includes(info.gender as Gender) ? GenderLabel[info.gender as Gender] : info.gender) || '—'}
+            value={(GENDER_OPTIONS.includes(info.gender as Gender) ? GenderLabel[info.gender as Gender] : info.gender) || (source === 'printable-offline' && info.withheld?.dateOfBirth ? 'Not on this printout' : 'Not recorded')}
           />
-          <InfoTile
+        <InfoTile
+            fullWidth
             icon="water"
             iconColor={theme.destructive}
             iconBgKey="destructive"
             label="Blood type"
-            value={info.bloodType || '—'}
+            value={bloodType || missingBloodType}
           />
-        </View>
-        <View className="flex-row gap-2">
-          <InfoTile
+        {personalPhone ? <InfoTile
+            fullWidth
             icon="call"
             iconColor={theme.primary}
             iconBgKey="primary"
             label="Phone"
-            value={formatPhoneWithCountryCode(info.phoneCountryCode, info.phone) || '—'}
-          />
-          <InfoTile
+            value={personalPhone}
+          /> : null}
+        <InfoTile
+            fullWidth
             icon={info.noBloodTransfusion === 'Yes' ? 'shield-checkmark' : 'shield-outline'}
             iconColor={theme.success}
             iconBgKey="success"
             label="No blood transfusion"
-            value={info.noBloodTransfusion || '—'}
+            value={info.noBloodTransfusion || 'Not recorded'}
           />
-        </View>
+        {omittedIdentity ? <ThemedText selectable type="small" color="mutedForeground">This QR does not share {omittedIdentity}.</ThemedText> : null}
         <Card className="flex-row items-center gap-3">
           <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
             <Ionicons name="location" size={18} color={theme.primary} />
@@ -114,11 +144,12 @@ export function ScannedEmergencyCard({
           </View>
         </Card>
         <InfoTile
-          icon="time"
-          iconColor={theme.mutedForeground}
-          iconBgKey="muted"
-          label="Generated"
-          value={formatIsoDateTime(info.generatedAt) || '—'}
+            fullWidth
+            icon="time"
+            iconColor={theme.mutedForeground}
+            iconBgKey="muted"
+            label="Generated"
+            value={formatIsoDateTime(info.generatedAt) || '—'}
         />
       </View>
 
@@ -140,34 +171,55 @@ export function ScannedEmergencyCard({
                 <View
                   key={`contact-${contact.name}-${contact.phone || contact.relationship || 'none'}`}
                   className={cn(
-                    'flex-row items-center gap-3 px-4 py-3.5',
+                    'flex-row items-start gap-3 px-4 py-3.5',
                     i < arr.length - 1 && 'border-b border-border',
                   )}
                 >
                   <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.destructive + '15' }}>
                     <Ionicons name="person" size={18} color={theme.destructive} />
                   </View>
-                  <View className="flex-1">
-                    <ThemedText className="font-semibold">{contact.name}</ThemedText>
-                    {contact.relationship ? (
-                      <View className="mt-1 flex-row items-center gap-1.5">
-                        <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: theme.muted }}>
-                          <ThemedText type="detail" color="mutedForeground">
-                            {RELATION_TO_PATIENT_OPTIONS.includes(contact.relationship as RelationToPatient)
-                              ? RelationToPatientLabel[contact.relationship as RelationToPatient]
-                              : contact.relationship}
-                          </ThemedText>
+                  <View className="flex-1 gap-1">
+                    <View className="flex-row items-start justify-between gap-2">
+                      <ThemedText selectable className="flex-1 font-semibold">{contact.name}</ThemedText>
+                      {contact.phone && contact.phone.replace(/\D/g, '').length >= 3 ? (
+                        <View className="flex-row items-center" style={{ marginTop: -10, marginRight: -8 }}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Call ${contact.name}`}
+                            onPress={() => void Linking.openURL(`tel:${contact.phone!.replace(/[^+\d]/g, '')}`)}
+                            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Ionicons name="call-outline" size={18} color={theme.mutedForeground} />
+                          </Pressable>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Message ${contact.name}`}
+                            onPress={() => void Linking.openURL(`sms:${contact.phone!.replace(/[^+\d]/g, '')}`)}
+                            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Ionicons name="chatbubble-outline" size={18} color={theme.mutedForeground} />
+                          </Pressable>
                         </View>
+                      ) : null}
+                    </View>
+                    {contact.relationship || contact.phone ? (
+                      <View className="flex-row flex-wrap items-center gap-x-4 gap-y-1">
+                        {contact.relationship ? (
+                          <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: theme.muted }}>
+                            <ThemedText type="detail" color="mutedForeground">
+                              {RELATION_TO_PATIENT_OPTIONS.includes(contact.relationship as RelationToPatient)
+                                ? RelationToPatientLabel[contact.relationship as RelationToPatient]
+                                : contact.relationship}
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                        {contact.phone ? <ThemedText selectable type="small" color="primary">{contact.phone}</ThemedText> : null}
                       </View>
                     ) : null}
                   </View>
-                  {contact.phone ? (
-                    <ThemedText type="small" color="primary">
-                      {contact.phone}
-                    </ThemedText>
-                  ) : null}
                 </View>
               ))}
+              {!callableContact ? <ThemedText selectable color="mutedForeground" style={{ padding: 12 }}>No callable phone number in this QR.</ThemedText> : null}
             </Card>
           )}
         </View>
@@ -182,7 +234,7 @@ export function ScannedEmergencyCard({
                 <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                   <Ionicons name="medical" size={18} color={theme.mutedForeground} />
                 </View>
-                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">None recorded.</ThemedText>
+                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">{info.knowledge?.allergies === 'confirmed_none' ? 'None reported by patient.' : 'Not recorded.'}</ThemedText>
               </View>
             </Card>
           ) : (
@@ -216,7 +268,7 @@ export function ScannedEmergencyCard({
                 <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                   <Ionicons name="fitness" size={18} color={theme.mutedForeground} />
                 </View>
-                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">None recorded.</ThemedText>
+                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">{info.knowledge?.conditions === 'confirmed_none' ? 'None reported by patient.' : 'Not recorded.'}</ThemedText>
               </View>
             </Card>
           ) : (
@@ -249,7 +301,7 @@ export function ScannedEmergencyCard({
                 <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
                   <Ionicons name="medical" size={18} color={theme.mutedForeground} />
                 </View>
-                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">None recorded.</ThemedText>
+                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">{info.knowledge?.medications === 'confirmed_none' ? 'None reported by patient.' : 'Not recorded.'}</ThemedText>
               </View>
             </Card>
           ) : (
@@ -280,7 +332,39 @@ export function ScannedEmergencyCard({
         </View>
       )}
 
-      <PrimaryButton label="Scan another" variant="ghost" onPress={onScanAnother} />
+      {showMedicalDetails && Boolean(info.recentHistory?.length) ? (
+        <Card className="gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Recent emergency information changes"
+            accessibilityState={{ expanded: historyExpanded }}
+            onPress={() => setHistoryExpanded((current) => !current)}
+            className="flex-row items-center justify-between"
+            style={{ minHeight: 44 }}
+          >
+            <ThemedText type="bodyBold">Recent information changes</ThemedText>
+            <Ionicons name={historyExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.mutedForeground} />
+          </Pressable>
+          {historyExpanded ? (
+            <View className="gap-3">
+              <ThemedText selectable type="small" color="mutedForeground">
+                Patient-entered history in this scan. Earlier values may no longer be current; confirm when possible.
+              </ThemedText>
+              {info.recentHistory?.map((change) => (
+                <View key={change.id} className="gap-0.5">
+                  <ThemedText selectable type="smallBold">
+                    {change.field === 'blood_type' ? 'Blood type' : change.field === 'date_of_birth' ? 'Date of birth' : 'No blood transfusion'}: {formatHistoryValue(change)}
+                  </ThemedText>
+                  <ThemedText selectable type="small" color="mutedForeground">
+                    Entered {formatIsoDateTime(change.changedAt) || 'at an unknown time'}{change.syncStatus === 'pending' ? ' · Pending sync' : ''}
+                  </ThemedText>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      ) : null}
+
     </View>
   );
 }

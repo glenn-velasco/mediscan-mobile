@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { EmergencyView } from '@/components/emergency-view';
+import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
+import { Card } from '@/components/card';
 import { PrimaryButton } from '@/components/primary-button';
 import { ResponderNoteCard } from '@/components/responder-note-card';
 import { ThemedText } from '@/components/themed-text';
@@ -23,7 +23,6 @@ export default function SavedScanScreen() {
   const [error, setError] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const preview = useImagePreview();
-  const imageTappedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -57,10 +56,22 @@ export default function SavedScanScreen() {
   const previewIndex = preview.uri ? previewImages.indexOf(preview.uri) : -1;
 
   return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}><ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 18 }}>
-    <EmergencyView info={item.info} verification={item.verification} savedSnapshot showScanAnother={false} onScanAnother={() => {}} />
-    <ResponderNoteCard onPress={() => router.push({ pathname: '/responder-history/[id]/note', params: { id: item.id } })} note={item.note} onImagePress={preview.open} />
+    <Card><ThemedText selectable color="mutedForeground">Saved scan — may not reflect the patient&apos;s current QR.</ThemedText></Card>
+    <ScannedEmergencyCard info={item.info} verification={item.verification} source={item.source} encounterExists={Boolean(item.encounter)} onRecordEncounter={() => router.push({ pathname: '/responder-history/[id]/encounter', params: { id: item.id } })} />
+    <ResponderNoteCard note={item.note} onImagePress={preview.open} />
     <Pressable accessibilityRole="button" onPress={() => Alert.alert('Delete saved scan?', 'This permanently deletes the snapshot and its local note.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void historyRepo.remove(item.id).then(() => router.back()) }])} style={{ height: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '12', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Ionicons name="trash-outline" size={18} color={theme.destructive} /><ThemedText selectable style={{ color: theme.destructive, fontWeight: '600' }}>Delete saved scan</ThemedText></Pressable>
-  </ScrollView><Modal visible={Boolean(preview.uri)} transparent animationType="fade" onRequestClose={() => preview.close()}><View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }}>{preview.uri ? <Image source={{ uri: preview.uri }} contentFit="contain" style={{ width: '92%', height: '72%' }} /> : null}<Pressable accessibilityLabel="Close image preview" onPress={() => preview.close()} style={{ position: 'absolute', top: 56, right: 20, width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}><Ionicons name="close" size={25} color="#fff" /></Pressable>{previewImages.length >= 2 ? <View style={{ position: 'absolute', bottom: 48, flexDirection: 'row', gap: 70 }}><Pressable disabled={previewIndex <= 0} onPress={() => previewIndex > 0 && preview.open(previewImages[previewIndex - 1])}><Ionicons name="chevron-back-circle" size={48} color={previewIndex > 0 ? '#fff' : '#666'} /></Pressable><Pressable disabled={previewIndex < 0 || previewIndex >= previewImages.length - 1} onPress={() => previewIndex >= 0 && previewIndex < previewImages.length - 1 && preview.open(previewImages[previewIndex + 1])}><Ionicons name="chevron-forward-circle" size={48} color={previewIndex >= 0 && previewIndex < previewImages.length - 1 ? '#fff' : '#666'} /></Pressable></View> : null}</View></Modal></KeyboardAvoidingView>;
+  </ScrollView>
+    <Modal visible={Boolean(preview.uri)} transparent animationType="fade" onRequestClose={preview.close}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }}>
+        {preview.uri ? <Image source={{ uri: preview.uri }} contentFit="contain" style={{ width: '92%', height: '72%' }} /> : null}
+        <Pressable accessibilityRole="button" accessibilityLabel="Close image preview" onPress={preview.close} style={{ position: 'absolute', top: 56, right: 20, width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}><Ionicons name="close" size={25} color="#fff" /></Pressable>
+        {previewImages.length > 1 ? <View style={{ position: 'absolute', bottom: 48, flexDirection: 'row', gap: 70 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Previous image" disabled={previewIndex <= 0} onPress={() => preview.open(previewImages[previewIndex - 1])}><Ionicons name="chevron-back-circle" size={48} color={previewIndex > 0 ? '#fff' : '#666'} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Next image" disabled={previewIndex < 0 || previewIndex >= previewImages.length - 1} onPress={() => preview.open(previewImages[previewIndex + 1])}><Ionicons name="chevron-forward-circle" size={48} color={previewIndex >= 0 && previewIndex < previewImages.length - 1 ? '#fff' : '#666'} /></Pressable>
+        </View> : null}
+      </View>
+    </Modal>
+  </KeyboardAvoidingView>;
 }
 
 

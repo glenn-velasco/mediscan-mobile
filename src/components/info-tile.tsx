@@ -29,6 +29,7 @@ export function InfoTile({
   label,
   value,
   className,
+  fullWidth = false,
 }: {
   icon: IconName;
   iconColor: string;
@@ -36,12 +37,13 @@ export function InfoTile({
   label: string;
   value: string;
   className?: string;
+  fullWidth?: boolean;
 }) {
   const theme = useTheme();
   const bgColor = hexToRgba(theme[iconBgKey], 0.12);
 
   return (
-    <Card className={cn('flex-1 gap-2.5', className)}>
+    <Card className={cn(fullWidth ? 'w-full gap-2.5' : 'flex-1 gap-2.5', className)}>
       <View className="flex-row items-center gap-3">
         <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: bgColor }}>
           <Ionicons name={icon} size={18} color={iconColor} />
@@ -50,7 +52,7 @@ export function InfoTile({
           <ThemedText type="small" color="mutedForeground">
             {label}
           </ThemedText>
-          <ThemedText type="bodyBold" numberOfLines={1}>
+          <ThemedText selectable type="bodyBold" numberOfLines={fullWidth ? undefined : 1}>
             {value}
           </ThemedText>
         </View>

@@ -17,11 +17,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/useAuth';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { OfflineBanner } from '@/components/offline-banner';
 import { NetworkProvider } from '@/hooks/use-network-status';
 
+import { useBleAdvertisingResume } from '@/features/ble-sync/useBleAdvertisingResume';
+import { usePendingAvatarUpload } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useAppUpdates } from '@/hooks/use-app-updates';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
+import { setAppReady } from '@/lib/app-ready';
 import { LightweightModeContext } from '@/lib/lightweight-mode-context';
 import { addQuickScanRouteListener, getPendingQuickScanRoute } from '@/lib/qr-scanner-tile-native';
 import { queryClient, queryPersister } from '@/lib/query-client';
@@ -30,10 +32,7 @@ import { useOnboarding } from '@/onboarding/useOnboarding';
 import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
 import { usePrimePermissions } from '@/onboarding/usePrimePermissions';
 import { BroadcastProvider } from '@/realtime/BroadcastProvider';
-import { setAppReady } from '@/lib/app-ready';
 import { useSyncTriggers } from '@/sync/triggers';
-import { usePendingAvatarUpload } from '@/features/medical-information/useMedicalInformationAvatar';
-import { useBleAdvertisingResume } from '@/features/ble-sync/useBleAdvertisingResume';
 
 type BootMode = 'pending' | 'lightweight' | 'full';
 
@@ -148,7 +147,7 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
           <Stack.Screen name="emergency-contacts" />
           <Stack.Screen name="conditions" />
           <Stack.Screen name="account" />
-          <Stack.Screen name="emergency-wallet-card" options={{ headerShown: true, title: 'Emergency wallet card' }} />
+          <Stack.Screen name="emergency-wallet-card" options={{ headerShown: true, title: 'Wallet card' }} />
           <Stack.Screen name="professional-application" />
           <Stack.Screen name="professional-scans" />
           <Stack.Screen name="manage-info" options={{ headerShown: true, title: 'Manage info', presentation: 'modal' }} />
@@ -255,7 +254,6 @@ export default function RootLayout() {
                 <BroadcastProvider>
                   <BottomSheetModalProvider>
                     <SystemBars style="auto" hidden={{ navigationBar: true }} />
-                    <OfflineBanner />
                     <RootNavigator onReady={handleFullTreeReady} />
                   </BottomSheetModalProvider>
                 </BroadcastProvider>

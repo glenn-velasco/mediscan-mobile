@@ -6,6 +6,7 @@ import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import { signEmergencyPayload, verifyEmergencyPayload } from '@/services/emergency-qr-signing.service';
 import type { EmergencyDisclosureSettings, EmergencyQrEnvelopeV2, EmergencyKnowledgeState, QrVerificationResult } from '@/types/emergency';
 import type { ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
+import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
 
 export const QR_V2_PREFIX = 'MEDISCAN:v2:';
 
@@ -50,6 +51,7 @@ export async function buildEmergencyQrV2(input: {
   contacts: EmergencyContactRow[];
   disclosure: EmergencyDisclosureSettings;
   confirmedNone?: Partial<Record<'allergies' | 'conditions' | 'diagnoses' | 'medications', boolean>>;
+  recentHistory?: EmergencyFieldChange[];
 }): Promise<string> {
   await ready;
   const { patientId, medical, allergies, conditions, diagnoses, medications, contacts, disclosure } = input;
@@ -64,6 +66,7 @@ export async function buildEmergencyQrV2(input: {
     medications: stateFor(medications, input.confirmedNone?.medications),
   };
   const info: ScannedEmergencyInfo = {
+    withheld: { dateOfBirth: !disclosure.dateOfBirth, bloodType: !disclosure.bloodType, phone: !disclosure.phone },
     patientId,
     generatedAt: generatedAt.toISOString(),
     lastUpdatedAt,
@@ -97,6 +100,11 @@ export async function buildEmergencyQrV2(input: {
           phone: contact.phone ? formatPhoneWithCountryCode(contact.phone_country_code ?? undefined, contact.phone) : null,
         }))
       : [],
+    recentHistory: (input.recentHistory ?? []).filter((change) =>
+      change.field === 'blood_type' ? disclosure.bloodType
+        : change.field === 'date_of_birth' ? disclosure.dateOfBirth
+          : disclosure.transfusionPreference,
+    ).slice(0, 5),
     knowledge,
   };
   const unsigned = {

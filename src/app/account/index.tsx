@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { Avatar } from '@/components/avatar';
@@ -11,36 +10,17 @@ import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
-import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
 import { buildFullName } from '@/lib/build-full-name';
-import { myProfessionalApplicationQueryKey } from '@/lib/query-keys';
 
 export default function AccountScreen() {
   const { user, logout, refreshUser } = useAuth();
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
-  const { data: myApplication } = useMyProfessionalApplication();
-  // A denied/auto-rejected application is soft-deleted but still returned by the API for a few
-  // days before pruning — the user already learned the outcome via notification, so treat it the
-  // same as having no application at all and let them reapply right away.
-  const isApplicationActive = !!myApplication && myApplication.status !== 'denied' && myApplication.status !== 'auto_rejected';
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
-
-  const queryClient = useQueryClient();
-  const appState = useRef(AppState.currentState);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      if (appState.current.match(/inactive|background/) && nextState === 'active') {
-        void queryClient.invalidateQueries({ queryKey: myProfessionalApplicationQueryKey });
-      }
-      appState.current = nextState;
-    });
-    return () => subscription.remove();
-  }, [queryClient]);
 
   const handleQrWidgetToggle = async (next: boolean) => {
     await setQrWidgetEnabled(next);
@@ -107,17 +87,6 @@ export default function AccountScreen() {
       </Card>
 
       <Card className="mb-4 p-0">
-        {!user?.permissions?.includes('verified professional') ? (
-          <Link
-            href={isApplicationActive ? `/professional-application/${myApplication!.id}` : '/professional-application/create'}
-            asChild
-          >
-            <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <ThemedText>{isApplicationActive ? 'View application status' : 'Get verified as a professional'}</ThemedText>
-              <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
-            </Pressable>
-          </Link>
-        ) : null}
         <Link href="/account/email" asChild>
           <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
             <ThemedText>Change email</ThemedText>
@@ -153,7 +122,7 @@ export default function AccountScreen() {
       <Card className="mb-4 p-0">
         <Link href="/emergency-wallet-card" asChild>
           <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-            <View className="flex-1 pr-3"><ThemedText className="font-semibold">Printable emergency wallet card</ThemedText><ThemedText type="small" color="mutedForeground">Print once and keep its disclosed emergency information current.</ThemedText></View>
+            <View className="flex-1 pr-3"><ThemedText className="font-semibold">Wallet card</ThemedText><ThemedText type="small" color="mutedForeground">Print a card with offline details and online updates.</ThemedText></View>
             <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
           </Pressable>
         </Link>

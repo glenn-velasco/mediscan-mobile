@@ -4,23 +4,26 @@ import { createEmergencyCard, publishEmergencyCard, revokeEmergencyCard } from '
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as contactsRepo from '@/db/repositories/emergency-contacts.repo';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as cardRepo from '@/db/repositories/dynamic-emergency-card.repo';
 import * as medicalRepo from '@/db/repositories/medical-information.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
-import { buildEmergencyQrV2 } from '@/lib/emergency-qr-v2';
+import { buildEmergencyQrV2, parseEmergencyQrV2 } from '@/lib/emergency-qr-v2';
+import { buildHybridEmergencyQr } from '@/lib/emergency-qr-hybrid';
 import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
 
 let publishPromise: Promise<boolean> | null = null;
 
 async function buildCurrentSnapshot(userId: string | number): Promise<{ payload: string; generatedAt: string } | null> {
-  const [medical, allergies, conditions, diagnoses, medications, contacts] = await Promise.all([
+  const [medical, allergies, conditions, diagnoses, medications, contacts, recentHistory] = await Promise.all([
     medicalRepo.getByUserId(userId),
     allergiesRepo.getAll(),
     conditionsRepo.getAll(),
     diagnosesRepo.getAll(),
     medicationsRepo.getAll(),
     contactsRepo.getAll(),
+    emergencyHistoryRepo.getRecent(5, userId),
   ]);
   if (!medical) return null;
   const payload = await buildEmergencyQrV2({
@@ -33,8 +36,17 @@ async function buildCurrentSnapshot(userId: string | number): Promise<{ payload:
     contacts,
     disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
     confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
+    recentHistory,
   });
   return { payload, generatedAt: new Date().toISOString() };
+}
+
+export async function buildPrintableEmergencyCardQr(userId: string | number, token: string): Promise<{ payload: string; lastUpdatedAt: string }> {
+  const snapshot = await buildCurrentSnapshot(userId);
+  if (!snapshot) throw new Error('Complete your emergency profile before printing a wallet card.');
+  const parsed = await parseEmergencyQrV2(snapshot.payload);
+  if (!parsed || parsed.verification.status === 'invalid') throw new Error('Unable to prepare the printed emergency snapshot.');
+  return { payload: await buildHybridEmergencyQr(userId, token, parsed.info), lastUpdatedAt: parsed.info.lastUpdatedAt || parsed.info.generatedAt };
 }
 
 export async function publishDynamicEmergencyCard(userId: string | number, options?: { throwOnError?: boolean }): Promise<boolean> {

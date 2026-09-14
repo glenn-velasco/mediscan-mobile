@@ -45,6 +45,7 @@
     "expo-updates": "~57.0.10",
     "expo-web-browser": "~57.0.2",
     "expo-widgets": "~57.0.3",
+    "fflate": "^0.8.3",
     "libphonenumber-js": "^1.13.8",
     "nativewind": "^5.0.0-preview.4",
     "qrcode": "^1.5.4",
