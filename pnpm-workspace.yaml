@@ -1,0 +1,4 @@
+allowBuilds:
+  '@shopify/react-native-skia': true
+  react-native-libsodium: true
+  unrs-resolver: true
