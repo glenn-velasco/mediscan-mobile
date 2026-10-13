@@ -1,7 +1,6 @@
 import { Platform, ScrollView, View, type ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/cn';
 import { KeyboardAwareLayout } from '@/components/layouts/keyboard-aware-layout';
 
@@ -11,15 +10,15 @@ import { KeyboardAwareLayout } from '@/components/layouts/keyboard-aware-layout'
  * covering inputs on smaller screens.
  */
 export function AuthLayout({ children, className, ...rest }: ViewProps) {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
+
   return (
-    <KeyboardAwareLayout keyboardVerticalOffset={insets.top}>
+    <KeyboardAwareLayout keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}>
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, ...(Platform.OS !== 'ios' ? { paddingTop: insets.top } : {}) }}
         contentInset={Platform.OS === 'ios' ? { top: insets.top } : undefined}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >

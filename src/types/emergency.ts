@@ -66,6 +66,7 @@ export type DynamicEmergencyCardStatus = {
 
 export type QrVerificationResult =
   | { status: 'valid'; authenticity: 'device_signed'; message: string }
+  | { status: 'valid'; authenticity: 'server_verified'; message: string }
   | { status: 'legacy'; authenticity: 'unverified'; message: string }
   | { status: 'stale'; authenticity: 'device_signed'; message: string }
   | { status: 'expired'; authenticity: 'device_signed'; message: string }
@@ -86,11 +87,15 @@ export type EncounterVital = {
   unit: string;
   measuredAt: string;
   recordedBy: string;
+  verifiedBy?: { userId: string; name: string };
 };
 
 export type ResponderEncounter = {
   authorName: string;
-  authorIdentity: 'self_declared';
+  authorIdentity: 'self_declared' | 'verified_professional';
+  authorId?: string;
+  verifiedBy?: { userId: string; name: string };
+  cloudEncounterId?: string;
   observations: string;
   actionsTaken: string;
   vitals: EncounterVital[];

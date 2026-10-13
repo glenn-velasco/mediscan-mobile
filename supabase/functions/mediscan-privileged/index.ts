@@ -11,6 +11,85 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const CLOUD_PREFIX = 'gcm1:';
 const MAX_CLOUD_ITEMS = 100;
 const MAX_CLOUD_JSON_BYTES = 64_000;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VITAL_KINDS = new Set(['blood_pressure', 'heart_rate', 'respiratory_rate', 'temperature', 'oxygen_saturation']);
+
+function isAdmin(user: { app_metadata?: Record<string, unknown> }): boolean {
+  return user.app_metadata?.role === 'admin';
+}
+
+function base64Url(input: Uint8Array | string): string {
+  const bytes = typeof input === 'string' ? new TextEncoder().encode(input) : input;
+  return base64Bytes(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+
+async function googleAccessToken(): Promise<string | null> {
+  const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+  const email = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  const privateKey = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY')?.replaceAll('\\n', '\n');
+  if (!projectId || !email || !privateKey) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const claim = base64Url(JSON.stringify({ iss: email, scope: 'https://www.googleapis.com/auth/cloud-vision', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 }));
+  const pem = privateKey.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+  const key = await crypto.subtle.importKey('pkcs8', Uint8Array.from(atob(pem), (c) => c.charCodeAt(0)), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${header}.${claim}`));
+  const response = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: `${header}.${claim}.${base64Url(new Uint8Array(signature))}` }) });
+  if (!response.ok) throw new Error('Google Cloud authentication failed');
+  const result = await response.json() as { access_token?: string };
+  if (!result.access_token) throw new Error('Google Cloud authentication failed');
+  return result.access_token;
+}
+
+function extractPrcFields(text: string): Record<string, string | null> {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const field = (labels: string[]): string | null => {
+    for (let index = 0; index < lines.length; index += 1) {
+      for (const label of labels) {
+        const match = lines[index].match(new RegExp(`^${label}\\s*[:.-]?\\s*(.*)$`, 'i'));
+        if (!match) continue;
+        return match[1]?.trim() || lines[index + 1]?.trim() || null;
+      }
+    }
+    return null;
+  };
+  const firstName = field(['FIRST\\s*NAME']);
+  const middleName = field(['MIDDLE\\s*NAME']);
+  const lastName = field(['LAST\\s*NAME', 'SURNAME']);
+  const stackedNames = collapsed.match(/LAST\s*NAME\s+FIRST\s*NAME\s+MIDDLE\s*NAME\s+(.+?)\s+REGISTRATION\s*(?:NO\.?|NUMBER|#)/i)?.[1]
+    ?.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ' -]/g, ' ').replace(/\s+/g, ' ').trim();
+  const stackedParts = stackedNames?.split(' ').filter(Boolean) ?? [];
+  const stackedLast = stackedParts.length >= 3 ? stackedParts[0] : null;
+  const stackedMiddle = stackedParts.length >= 3 ? stackedParts.at(-1) ?? null : null;
+  const stackedFirst = stackedParts.length >= 3 ? stackedParts.slice(1, -1).join(' ') : null;
+  const registrationNumber = collapsed.match(/REGISTRATION\s*(?:NO\.?|NUMBER|#)\s*[^A-Z0-9]*([A-Z0-9-]{5,20})/i)?.[1] ?? null;
+  const registrationDate = collapsed.match(/REGISTRATION\s*DATE\s*[^0-9]*([0-9]{1,4}[\/-][0-9]{1,2}[\/-][0-9]{1,4})/i)?.[1] ?? null;
+  return {
+    full_name: stackedFirst && stackedMiddle && stackedLast
+      ? [stackedFirst, stackedMiddle, stackedLast].join(' ')
+      : [firstName, middleName, lastName].filter((part) => part && !/\b(?:FIRST|MIDDLE|LAST)\s*NAME\b/i.test(part)).join(' ') || field(['FULL\\s*NAME', 'NAME']),
+    registration_number: registrationNumber ?? field(['REGISTRATION\\s*(?:NO\\.?|NUMBER|#)', 'LICENSE\\s*(?:NO\\.?|NUMBER|#)', 'LICENCE\\s*(?:NO\\.?|NUMBER|#)']),
+    registration_date: registrationDate ?? field(['REGISTRATION\\s*DATE', 'DATE\\s*OF\\s*REGISTRATION']),
+    id_type: 'Philippine PRC Professional Identification Card',
+    profession: field(['PROFESSION']),
+  };
+}
+
+async function screenPrcId(bytes: Uint8Array): Promise<{ status: 'passed' | 'failed' | 'unavailable'; result: Record<string, unknown>; reason?: string }> {
+  const token = await googleAccessToken();
+  if (!token) return { status: 'unavailable', result: { message: 'Google Cloud Vision is not configured' } };
+  const response = await fetch('https://vision.googleapis.com/v1/images:annotate', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: [{ image: { content: base64Bytes(bytes) }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }] }] }) });
+  if (!response.ok) throw new Error('ID screening service is unavailable');
+  const body = await response.json() as { responses?: Array<{ fullTextAnnotation?: { text?: string }; error?: { message?: string } }> };
+  const text = body.responses?.[0]?.fullTextAnnotation?.text?.trim() ?? '';
+  if (body.responses?.[0]?.error || text.length < 25) return { status: 'failed', result: { text_length: text.length }, reason: 'The PRC ID could not be read. Retake it in bright, even light with all edges visible.' };
+  const normalized = text.toUpperCase();
+  const looksLikePrc = normalized.includes('PROFESSIONAL REGULATION COMMISSION') || normalized.includes('PRC');
+  const fields = extractPrcFields(text);
+  if (!looksLikePrc) return { status: 'failed', result: { text_length: text.length }, reason: 'This does not appear to be a readable Philippine PRC ID. Please retake the correct ID.' };
+  return { status: 'passed', result: { ...fields, license_number: fields.registration_number } };
+}
 
 function base64Bytes(bytes: Uint8Array): string {
   let binary = '';
@@ -276,6 +355,55 @@ Deno.serve(async (req) => {
         if (error) throw error;
         return json(null);
       }
+      case 'patient-handoff-create': {
+        const info = payload.info;
+        if (!info || typeof info !== 'object' || Array.isArray(info)) return json({ message: 'Invalid patient handoff' }, 422);
+        const patientId = String((info as Record<string, unknown>).patientId ?? '');
+        if (!UUID_PATTERN.test(patientId)) return json({ message: 'This patient cannot be handed off online' }, 422);
+        const sharedBy = typeof payload.shared_by === 'string' ? payload.shared_by.trim().slice(0, 160) : '';
+        if (!sharedBy) return json({ message: 'The sending professional is required' }, 422);
+        const encoded = new TextEncoder().encode(JSON.stringify(info));
+        if (encoded.byteLength > MAX_CLOUD_JSON_BYTES) return json({ message: 'Patient handoff is too large' }, 422);
+        const token = randomCardToken();
+        const tokenHash = await sha256(token);
+        const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+        const encryptedSnapshot = await sealCloudValue(info, patientId);
+        const { error } = await admin.from('patient_handoffs').insert({
+          token_hash: tokenHash,
+          patient_id: patientId,
+          created_by: user.id,
+          encrypted_snapshot: encryptedSnapshot,
+          shared_by_name: sharedBy,
+          expires_at: expiresAt,
+        });
+        if (error) throw error;
+        return json({ token, expires_at: expiresAt });
+      }
+      case 'patient-handoff-resolve': {
+        const token = typeof payload.token === 'string' ? payload.token : '';
+        if (!CARD_TOKEN_PATTERN.test(token)) return json({ message: 'Patient handoff is invalid or expired' }, 404);
+        const tokenHash = await sha256(token);
+        const { data, error } = await admin.from('patient_handoffs')
+          .select('id,patient_id,encrypted_snapshot,shared_by_name,created_at,expires_at')
+          .eq('token_hash', tokenHash)
+          .is('revoked_at', null)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
+        if (error) throw error;
+        if (!data) return json({ message: 'Patient handoff is invalid or expired' }, 404);
+        const info = await openCloudValue(data.encrypted_snapshot, data.patient_id);
+        const { error: auditError } = await admin.from('patient_handoff_accesses').insert({
+          handoff_id: data.id,
+          accessed_by: user.id,
+        });
+        if (auditError) throw auditError;
+        return json({
+          info,
+          shared_by: data.shared_by_name,
+          shared_at: data.created_at,
+          expires_at: data.expires_at,
+        });
+      }
       case 'device-key-register': {
         const { data, error } = await admin.from('device_keys').insert({ user_id: user.id, public_key: payload.public_key, label: payload.label ?? null }).select().single();
         if (error) throw error; return json({ ...data, is_active: true, registered_at: data.created_at });
@@ -324,22 +452,87 @@ Deno.serve(async (req) => {
         const { data, error } = await admin.from('professional_applications').select('*').eq('id', payload.id).eq('user_id', user.id).single();
         if (error) throw error; return json(data);
       }
+      case 'admin-professional-applications-list': {
+        if (!isAdmin(user)) return json({ message: 'Admin access required' }, 403);
+        const { data, error } = await admin.from('professional_applications').select('*').eq('status', 'pending_review').order('created_at', { ascending: true }).limit(100);
+        if (error) throw error;
+        const userIds = [...new Set((data ?? []).map((item) => item.user_id))];
+        const { data: profiles } = userIds.length ? await admin.from('profiles').select('id,first_name,middle_name,last_name').in('id', userIds) : { data: [] };
+        const names = new Map((profiles ?? []).map((profile) => [profile.id, [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ')]));
+        return json((data ?? []).map((item) => ({ ...item, applicant_name: names.get(item.user_id) ?? 'Applicant' })));
+      }
+      case 'admin-professional-application-get': {
+        if (!isAdmin(user)) return json({ message: 'Admin access required' }, 403);
+        const { data, error } = await admin.from('professional_applications').select('*').eq('id', payload.id).maybeSingle();
+        if (error) throw error;
+        if (!data) return json({ message: 'Application not found. Refresh the verification queue.' }, 404);
+        const evidence = Array.isArray(data.document_paths) ? data.document_paths : [];
+        const signedEvidence = await Promise.all(evidence.map(async (entry: unknown) => {
+          const item = typeof entry === 'string' ? { kind: 'evidence', path: entry } : entry as { kind?: unknown; path?: unknown };
+          if (typeof item.path !== 'string' || !item.path.startsWith(`${data.user_id}/`)) throw new Error('Invalid evidence path');
+          const { data: signed, error: signedError } = await admin.storage.from('professional-applications').createSignedUrl(item.path, 300);
+          if (signedError) throw signedError;
+          return { kind: typeof item.kind === 'string' ? item.kind : 'evidence', url: signed.signedUrl };
+        }));
+        const { data: profile } = await admin.from('profiles').select('first_name,middle_name,last_name,dob').eq('id', data.user_id).single();
+        const storedScreening = data.screening_result && typeof data.screening_result === 'object' ? data.screening_result as Record<string, unknown> : {};
+        const legacyText = typeof storedScreening.extracted_text === 'string' ? storedScreening.extracted_text : '';
+        const structuredScreening = legacyText ? { ...extractPrcFields(legacyText), ...storedScreening } : storedScreening;
+        delete structuredScreening.extracted_text;
+        return json({ ...data, screening_result: structuredScreening, applicant_name: [profile?.first_name, profile?.middle_name, profile?.last_name].filter(Boolean).join(' '), applicant_dob: profile?.dob ?? null, evidence: signedEvidence });
+      }
       case 'professional-application-review': {
-        if (user.app_metadata?.role !== 'admin') return json({ message: 'Admin access required' }, 403);
+        if (!isAdmin(user)) return json({ message: 'Admin access required' }, 403);
         const status = String(payload.status);
         if (!['approved', 'denied'].includes(status)) return json({ message: 'Invalid review status' }, 422);
-        const { data: application, error } = await admin.from('professional_applications').update({ status, rejection_reason: payload.rejection_reason ?? null, role_granted: status === 'approved' ? payload.role_granted ?? 'professional' : null, updated_at: new Date().toISOString() }).eq('id', payload.id).select().single();
+        const reason = typeof payload.rejection_reason === 'string' ? payload.rejection_reason.trim() : '';
+        if (status === 'denied' && !reason) return json({ message: 'A denial reason is required' }, 422);
+        const { data: application, error } = await admin.rpc('review_professional_application', { p_application_id: payload.id, p_reviewer_id: user.id, p_decision: status, p_reason: reason });
         if (error) throw error;
-        if (status === 'approved') await admin.from('profiles').update({ is_professional: true, professional_verified_at: new Date().toISOString() }).eq('id', application.user_id);
-        await admin.from('notifications').insert({ user_id: application.user_id, type: 'professional_application_status', payload: { application_id: application.id, status } });
         return json(application);
       }
       case 'professional-application-submit': {
-        const fields = Object.fromEntries([...Object.entries(payload)].filter(([, value]) => typeof value === 'string' && value !== action));
-        const paths: string[] = [];
-        if (form) for (const [name, value] of form.entries()) if (value instanceof File) { const path = `${user.id}/${crypto.randomUUID()}-${value.name}`; const { error } = await admin.storage.from('professional-applications').upload(path, value); if (error) throw error; paths.push(path); }
-        const { data, error } = await admin.from('professional_applications').insert({ ...fields, user_id: user.id, document_paths: paths, status: 'pending_review' }).select().single();
-        if (error) throw error; return json(data);
+        if (!form || form.get('id_type') !== 'ph_prc') return json({ message: 'A Philippine PRC ID is required' }, 422);
+        const { data: active } = await admin.from('professional_applications').select('id').eq('user_id', user.id).in('status', ['processing', 'pending_review', 'approved']).maybeSingle();
+        if (active) return json({ message: 'You already have an active professional application' }, 409);
+        const idPhoto = form.get('id_photo');
+        const selfies = form.getAll('selfie_frames[]').filter((value): value is File => value instanceof File);
+        const flashes = form.getAll('flash_frames[]').filter((value): value is File => value instanceof File);
+        if (!(idPhoto instanceof File) || selfies.length < 1 || flashes.length < 3 || form.get('blink_detected') !== '1') return json({ message: 'Complete the ID and liveness capture before submitting' }, 422);
+        const files = [{ kind: 'id_photo', file: idPhoto }, ...selfies.map((file, index) => ({ kind: `selfie_${index + 1}`, file })), ...flashes.map((file, index) => ({ kind: `flash_${index + 1}`, file }))];
+        if (files.some(({ file }) => !['image/jpeg', 'image/png'].includes(file.type) || file.size > 4_000_000)) return json({ message: 'Evidence images must be JPEG or PNG and no larger than 4 MB each' }, 422);
+        const paths: Array<{ kind: string; path: string }> = [];
+        for (const { kind, file } of files) { const path = `${user.id}/${crypto.randomUUID()}-${kind}.jpg`; const { error } = await admin.storage.from('professional-applications').upload(path, file, { contentType: file.type, upsert: false }); if (error) throw error; paths.push({ kind, path }); }
+        const { data: created, error } = await admin.from('professional_applications').insert({ user_id: user.id, id_type: 'ph_prc', issuing_country: 'PH', document_paths: paths, status: 'processing', screening_status: 'processing' }).select().single();
+        if (error) throw error;
+        try {
+          const screening = await screenPrcId(new Uint8Array(await idPhoto.arrayBuffer()));
+          const status = screening.status === 'failed' ? 'auto_rejected' : 'pending_review';
+          const { data, error: updateError } = await admin.from('professional_applications').update({ status, screening_status: screening.status, screening_result: screening.result, rejection_reason: screening.reason ?? null, license_number: screening.result.license_number ?? null, updated_at: new Date().toISOString() }).eq('id', created.id).select().single();
+          if (updateError) throw updateError;
+          return json(data);
+        } catch (screeningError) {
+          await admin.from('professional_applications').update({ status: 'pending_review', screening_status: 'unavailable', screening_result: { message: 'Automated screening was unavailable' }, updated_at: new Date().toISOString() }).eq('id', created.id);
+          console.error('Professional application screening failed', screeningError instanceof Error ? screeningError.message : 'unknown error');
+          return json({ ...created, status: 'pending_review', screening_status: 'unavailable' });
+        }
+      }
+      case 'admin-invite': {
+        if (!isAdmin(user)) return json({ message: 'Admin access required' }, 403);
+        const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+        if (!EMAIL_PATTERN.test(email) || email.length > 254) return json({ message: 'Enter a valid email address' }, 422);
+        const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (listError) throw listError;
+        let invited = usersPage.users.find((candidate) => candidate.email?.toLowerCase() === email) ?? null;
+        if (!invited) {
+          const { data, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: 'mediscanmobile://auth/callback' });
+          if (inviteError) throw inviteError;
+          invited = data.user;
+        }
+        if (!invited) throw new Error('Unable to invite admin');
+        const { error: roleError } = await admin.auth.admin.updateUserById(invited.id, { app_metadata: { ...invited.app_metadata, role: 'admin' } });
+        if (roleError) throw roleError;
+        return json({ email, invited: !invited.last_sign_in_at });
       }
       case 'audit-emergency-qr': {
         await professional();
@@ -367,6 +560,52 @@ Deno.serve(async (req) => {
         const { data, error } = await admin.from('profiles').select('*').eq('id', payload.patient_id).single();
         if (error) throw error;
         return json({ id: data.id, full_name: [data.first_name,data.middle_name,data.last_name].filter(Boolean).join(' '), date_of_birth: data.dob, gender: data.gender, phone: data.phone_number ?? '', address: data.address, blood_type: null, religion: null, no_blood_transfusion: false, avatar: data.avatar_path, allergies: [], conditions: [], diagnoses: [], medications: [], emergency_contacts: [] });
+      }
+      case 'professional-encounter-save': {
+        await professional();
+        const patientId = typeof payload.patient_id === 'string' && UUID_PATTERN.test(payload.patient_id) ? payload.patient_id : '';
+        if (!patientId) return json({ message: 'Invalid patient' }, 422);
+        const { error: relationshipError } = await admin.from('patient_professional_relationships').upsert(
+          { patient_id: patientId, professional_id: user.id, active: true, permissions: { emergency: true } },
+          { onConflict: 'patient_id,professional_id' },
+        );
+        if (relationshipError) throw relationshipError;
+        const rawVitals = Array.isArray(payload.vitals) ? payload.vitals.slice(-100) : [];
+        const vitals = rawVitals.map((value) => value as Record<string, unknown>).filter((vital) => VITAL_KINDS.has(String(vital.kind)) && typeof vital.value === 'string' && vital.value.length <= 12).map((vital) => ({ kind: String(vital.kind), value: String(vital.value), unit: String(vital.unit ?? '').slice(0, 20), measuredAt: typeof vital.measuredAt === 'string' ? vital.measuredAt : new Date().toISOString() }));
+        if (vitals.length !== rawVitals.length) return json({ message: 'Invalid vital signs' }, 422);
+        const { data: profile } = await admin.from('profiles').select('first_name,middle_name,last_name').eq('id', user.id).single();
+        const professionalName = [profile?.first_name, profile?.middle_name, profile?.last_name].filter(Boolean).join(' ') || 'Verified professional';
+        const encounterPayload = { observations: typeof payload.observations === 'string' ? payload.observations.trim().slice(0, 4000) : '', actionsTaken: typeof payload.actions_taken === 'string' ? payload.actions_taken.trim().slice(0, 4000) : '', vitals: vitals.map((vital) => ({ ...vital, recordedBy: professionalName, verifiedBy: { userId: user.id, name: professionalName } })), recordedAt: typeof payload.recorded_at === 'string' ? payload.recorded_at : new Date().toISOString(), updatedAt: new Date().toISOString(), verifiedBy: { userId: user.id, name: professionalName } };
+        const encryptedPayload = await sealCloudValue(encounterPayload, patientId);
+        const encounterId = typeof payload.id === 'string' && UUID_PATTERN.test(payload.id) ? payload.id : null;
+        const operation = encounterId
+          ? admin.from('professional_encounters').update({ encrypted_payload: encryptedPayload, updated_at: new Date().toISOString() }).eq('id', encounterId).eq('patient_id', patientId).eq('professional_id', user.id).select().single()
+          : admin.from('professional_encounters').insert({ patient_id: patientId, professional_id: user.id, encrypted_payload: encryptedPayload }).select().single();
+        const { data: saved, error } = await operation;
+        if (error) throw error;
+        await admin.from('notifications').insert({ user_id: patientId, type: 'professional_encounter_updated', payload: { encounter_id: saved.id, professional_id: user.id } });
+        return json({ id: saved.id, patient_id: patientId, professional_id: user.id, ...encounterPayload });
+      }
+      case 'professional-encounters-list': {
+        const requestedPatientId = typeof payload.patient_id === 'string' ? payload.patient_id : user.id;
+        if (!UUID_PATTERN.test(requestedPatientId)) return json({ message: 'Invalid patient' }, 422);
+        if (requestedPatientId !== user.id) {
+          await professional();
+          const { data: relationship } = await admin.from('patient_professional_relationships').select('id').eq('patient_id', requestedPatientId).eq('professional_id', user.id).eq('active', true).maybeSingle();
+          if (!relationship) return json({ message: 'Encounter access required' }, 403);
+        }
+        let query = admin.from('professional_encounters').select('*').eq('patient_id', requestedPatientId).order('updated_at', { ascending: false }).limit(100);
+        if (requestedPatientId !== user.id) query = query.eq('professional_id', user.id);
+        const { data, error } = await query;
+        if (error) throw error;
+        const professionalIds = [...new Set((data ?? []).map((row) => row.professional_id))];
+        const { data: profiles } = professionalIds.length ? await admin.from('profiles').select('id,first_name,middle_name,last_name').in('id', professionalIds) : { data: [] };
+        const names = new Map((profiles ?? []).map((row) => [row.id, [row.first_name, row.middle_name, row.last_name].filter(Boolean).join(' ')]));
+        const decoded = [];
+        for (const row of data ?? []) {
+          try { decoded.push({ id: row.id, patient_id: row.patient_id, professional_id: row.professional_id, professional_name: names.get(row.professional_id) ?? 'Verified professional', ...(await openCloudValue(row.encrypted_payload, row.patient_id) as Record<string, unknown>) }); } catch { /* Never expose damaged clinical data. */ }
+        }
+        return json(decoded);
       }
       case 'professional-scan-notes-get': {
         await professional();
@@ -399,7 +638,11 @@ Deno.serve(async (req) => {
       default: return json({ message: `Unknown action: ${action}` }, 404);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error
+      ? error.message
+      : error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : 'The request could not be completed';
     return json({ message }, message.includes('professional') ? 403 : 400);
   }
 });

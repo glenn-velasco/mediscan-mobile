@@ -1,4 +1,5 @@
 import { decryptQrPayload } from '@/lib/qr-cipher';
+import type { ProfessionalEncounter } from '@/api/types';
 import type { QrVerificationResult } from '@/types/emergency';
 import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
 
@@ -32,6 +33,16 @@ export type ScannedMedication = {
   frequency: string | null;
 };
 
+export type ScannedVerifiedEncounter = {
+  professionalName: string;
+  professionalId: string;
+  recordedAt: string;
+  updatedAt: string;
+  observations: string;
+  actionsTaken: string;
+  vitals: { kind: string; value: string; unit: string; measuredAt: string; recordedBy: string }[];
+};
+
 export type ScannedEmergencyInfo = {
   recentHistory?: EmergencyFieldChange[];
   withheld?: { dateOfBirth: boolean; bloodType: boolean; phone: boolean };
@@ -53,6 +64,7 @@ export type ScannedEmergencyInfo = {
   phoneCountryCode: string;
   street: string;
   unit: string;
+  barangay?: string;
   city: string;
   province: string;
   postalCode: string;
@@ -62,6 +74,7 @@ export type ScannedEmergencyInfo = {
   diagnoses: ScannedDiagnosis[];
   medications: ScannedMedication[];
   emergencyContacts: ScannedEmergencyContact[];
+  latestVerifiedEncounter?: ScannedVerifiedEncounter;
   knowledge?: {
     allergies: 'recorded' | 'confirmed_none' | 'not_recorded';
     medications: 'recorded' | 'confirmed_none' | 'not_recorded';
@@ -70,8 +83,33 @@ export type ScannedEmergencyInfo = {
   };
 };
 
+export function withLatestVerifiedEncounter(
+  info: ScannedEmergencyInfo,
+  encounter: ProfessionalEncounter | undefined,
+): ScannedEmergencyInfo {
+  if (!encounter) return info;
+  return {
+    ...info,
+    latestVerifiedEncounter: {
+      professionalName: encounter.verifiedBy.name || encounter.professional_name,
+      professionalId: encounter.verifiedBy.userId || encounter.professional_id,
+      recordedAt: encounter.recordedAt,
+      updatedAt: encounter.updatedAt,
+      observations: encounter.observations,
+      actionsTaken: encounter.actionsTaken,
+      vitals: encounter.vitals.map((vital) => ({
+        kind: vital.kind,
+        value: vital.value,
+        unit: vital.unit,
+        measuredAt: vital.measuredAt,
+        recordedBy: vital.verifiedBy?.name || vital.recordedBy || encounter.professional_name,
+      })),
+    },
+  };
+}
+
 const FIELD_PATTERN =
-  /^(Patient ID|Generated|Name|First name|Middle name|Last name|Suffix|DOB|Gender|Blood type|Religion|No blood transfusion|Phone country code|Phone|Street|Unit|City|Province|Postal code|Country):\s*(.*)$/;
+  /^(Patient ID|Generated|Name|First name|Middle name|Last name|Suffix|DOB|Gender|Blood type|Religion|No blood transfusion|Phone country code|Phone|Street|Unit|Barangay|City|Province|Postal code|Country):\s*(.*)$/;
 const ALLERGY_PATTERN = /^-\s*(.+?)\s*\(([^,)]+)(?:,\s*([^)]+))?\)$/;
 const CONDITION_PATTERN = /^-\s*(.+)$/;
 const DIAGNOSIS_PATTERN = /^-\s*([^,]+),\s*(\S+)(?:,\s*(.+))?$/;
@@ -108,6 +146,7 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
     phoneCountryCode: '',
     street: '',
     unit: '',
+    barangay: '',
     city: '',
     province: '',
     postalCode: '',
@@ -126,6 +165,30 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
   let inEmergencyContacts = false;
 
   for (const line of lines.slice(1)) {
+    if (line.startsWith('Verified encounter: ')) {
+      inAllergies = inConditions = inDiagnoses = inMedications = inEmergencyContacts = false;
+      try {
+        const value = JSON.parse(line.slice('Verified encounter: '.length)) as Record<string, unknown>;
+        const vitals = Array.isArray(value.vitals) ? value.vitals : [];
+        info.latestVerifiedEncounter = {
+          professionalName: typeof value.by === 'string' ? value.by : 'Verified professional',
+          professionalId: typeof value.byId === 'string' ? value.byId : '',
+          recordedAt: typeof value.at === 'string' ? value.at : '',
+          updatedAt: typeof value.updated === 'string' ? value.updated : '',
+          observations: typeof value.observations === 'string' ? value.observations : '',
+          actionsTaken: typeof value.actions === 'string' ? value.actions : '',
+          vitals: vitals.slice(0, 5).flatMap((item) => {
+            if (!item || typeof item !== 'object') return [];
+            const vital = item as Record<string, unknown>;
+            if (typeof vital.kind !== 'string' || typeof vital.value !== 'string') return [];
+            return [{ kind: vital.kind, value: vital.value, unit: typeof vital.unit === 'string' ? vital.unit : '', measuredAt: typeof vital.at === 'string' ? vital.at : '', recordedBy: typeof vital.by === 'string' ? vital.by : '' }];
+          }),
+        };
+      } catch {
+        // Keep the rest of the emergency QR usable if this optional section is malformed.
+      }
+      continue;
+    }
     if (line === 'Allergies:' || line === 'Allergies: none recorded') {
       inAllergies = true;
       inConditions = false;
@@ -283,6 +346,9 @@ export async function parseEmergencySummary(rawScannedText: string): Promise<Sca
       case 'Unit':
         info.unit = value;
         break;
+      case 'Barangay':
+        info.barangay = value;
+        break;
       case 'City':
         info.city = value;
         break;
@@ -305,6 +371,10 @@ export async function parseEmergencyQr(rawScannedText: string): Promise<{
   info: ScannedEmergencyInfo;
   verification: QrVerificationResult;
 } | null> {
+  if (rawScannedText.startsWith('MEDISCAN:handoff:1:')) {
+    const { parsePatientHandoff } = await import('@/lib/patient-handoff');
+    return parsePatientHandoff(rawScannedText);
+  }
   if (rawScannedText.startsWith(QR_V2_PREFIX)) {
     const { parseEmergencyQrV2 } = await import('@/lib/emergency-qr-v2');
     return parseEmergencyQrV2(rawScannedText);

@@ -23,7 +23,7 @@ function noteImages(scan: RecentEmergencyScan): { uri: string; addedAt: string |
   return (scan.note?.photoUris ?? []).map((uri) => ({ uri, addedAt: scan.note?.updatedAt ?? null }));
 }
 
-async function loadNotePhotos(scan: RecentEmergencyScan): Promise<ReportPhoto[]> {
+export async function loadNotePhotos(scan: RecentEmergencyScan): Promise<ReportPhoto[]> {
   const images = noteImages(scan);
   const photos: ReportPhoto[] = [];
   for (const [index, image] of images.entries()) {
@@ -81,7 +81,12 @@ export function buildResponderReportHtml(scan: RecentEmergencyScan, photos: Repo
 
 export async function shareResponderReport(scan: RecentEmergencyScan): Promise<void> {
   if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is unavailable on this device.');
+  const uri = await generateResponderReport(scan);
+  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Share encounter report' });
+}
+
+export async function generateResponderReport(scan: RecentEmergencyScan): Promise<string> {
   const photos = await loadNotePhotos(scan);
   const { uri } = await Print.printToFileAsync({ html: buildResponderReportHtml(scan, photos) });
-  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Share encounter report' });
+  return uri;
 }

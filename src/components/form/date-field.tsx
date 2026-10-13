@@ -65,6 +65,7 @@ export function DateField({ label, value, onChange, minimumDate, maximumDate, er
 
   const labelTextStyle = useAnimatedStyle(() => ({
     fontSize: field.fontSize - progress.value * 4,
+    lineHeight: field.lineHeight - progress.value * 10,
   }));
 
   const valueTextStyle = useAnimatedStyle(() => ({

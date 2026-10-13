@@ -31,11 +31,13 @@ export function QrScannerView({
   fullscreen = false,
   torchOn = false,
   accentColor,
+  continuous = false,
 }: {
   onScanned: (data: string) => void;
   fullscreen?: boolean;
   torchOn?: boolean;
   accentColor: string;
+  continuous?: boolean;
 }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [enabled, setEnabled] = useState(true);
@@ -54,6 +56,12 @@ export function QrScannerView({
     lastScanned.current = result.data;
     setEnabled(false);
     onScanned(result.data);
+    if (continuous) {
+      setTimeout(() => {
+        candidate.current = null;
+        setEnabled(true);
+      }, 180);
+    }
   };
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { invokeFunction } from '@/api/supabase';
-import type { MedicalInformation, PaginatedResponse, ScanNote, ScanSummary } from '@/api/types';
+import type { MedicalInformation, PaginatedResponse, ProfessionalEncounter, ScanNote, ScanSummary } from '@/api/types';
+import type { EncounterVital } from '@/types/emergency';
 
 type GetScannedPatientsParams = {
   search?: string;
@@ -60,4 +61,12 @@ export async function saveScanNotes(
   notes: string,
 ): Promise<ScanNote> {
   return invokeFunction<ScanNote>('professional-scan-notes-save', { patient_id: patientId, notes });
+}
+
+export function saveProfessionalEncounter(payload: { id?: string; patient_id: string; observations: string; actions_taken: string; vitals: EncounterVital[]; recorded_at: string }) {
+  return invokeFunction<ProfessionalEncounter>('professional-encounter-save', payload);
+}
+
+export function getProfessionalEncounters(patientId?: string) {
+  return invokeFunction<ProfessionalEncounter[]>('professional-encounters-list', patientId ? { patient_id: patientId } : undefined);
 }

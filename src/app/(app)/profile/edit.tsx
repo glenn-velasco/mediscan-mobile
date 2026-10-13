@@ -25,6 +25,7 @@ import { SUFFIX_OPTIONS, SuffixLabel, type Suffix } from '@/constants/suffix';
 import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
 import { medicalInformationSchema } from '@/lib/validation/medical-information-schema';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
+import { normalizeLegacyPhilippineAddress } from '@/api/endpoints/ph-locations';
 import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
 import { zodResolver } from '@/lib/zod-resolver';
 
@@ -87,7 +88,7 @@ export default function EditProfileScreen() {
       religion: existing.religion ?? undefined,
       phone_country_code: existing.phone_country_code ?? 'PH',
       phone: existing.phone ?? '',
-      address: parseStoredAddress(existing.address ?? null) ?? EMPTY_ADDRESS,
+      address: normalizeLegacyPhilippineAddress(parseStoredAddress(existing.address ?? null) ?? EMPTY_ADDRESS),
       no_blood_transfusion: !!existing.no_blood_transfusion,
     });
   }, [existing, form.reset]);
@@ -150,8 +151,8 @@ export default function EditProfileScreen() {
       <Controller
         control={form.control}
         name="middle_name"
-        render={({ field }) => (
-          <TextField label="Middle name" value={field.value} onChangeText={field.onChange} />
+        render={({ field, fieldState }) => (
+          <TextField label="Middle name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
         )}
       />
       <Controller
@@ -236,6 +237,7 @@ export default function EditProfileScreen() {
               errors={{
                 street: addrErrors?.street?.message,
                 unit: addrErrors?.unit?.message,
+                barangay: addrErrors?.barangay?.message,
                 city: addrErrors?.city?.message,
                 province: addrErrors?.province?.message,
                 postal_code: addrErrors?.postal_code?.message,

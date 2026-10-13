@@ -11,7 +11,6 @@ type KeyboardAwareLayoutProps = KeyboardAvoidingViewProps & {
 /** Keeps the area exposed by Android's resized soft keyboard consistent with the page theme. */
 export function KeyboardAwareLayout({ children, contentStyle, behavior, keyboardVerticalOffset, style, ...rest }: KeyboardAwareLayoutProps) {
   const theme = useTheme();
-
   return (
     <KeyboardAvoidingView
       {...rest}

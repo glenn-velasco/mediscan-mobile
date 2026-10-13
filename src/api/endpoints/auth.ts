@@ -1,10 +1,13 @@
 import type { LoginPayload, LoginResponseData, MedicalInformationAddress, RegisterPayload, RegisterResponseData, User } from '@/api/types';
 import { supabase, throwSupabaseError } from '@/api/supabase';
+import { ageFromDateOfBirth } from '@/lib/age-from-date-of-birth';
 
 type ProfileRow = Omit<User, 'email' | 'email_verified_at' | 'fullname' | 'age' | 'roles' | 'permissions' | 'medical_information'> & {
   is_professional: boolean;
   professional_verified_at: string | null;
 };
+
+class MissingProfileError extends Error {}
 
 function normalizeAddress(value: unknown): MedicalInformationAddress | null {
   if (!value) return null;
@@ -17,6 +20,7 @@ function normalizeAddress(value: unknown): MedicalInformationAddress | null {
   return {
     street: text('street') ?? text('formatted'),
     unit: text('unit'),
+    barangay: text('barangay'),
     city: text('city'),
     province: text('province'),
     postal_code: text('postal_code'),
@@ -36,10 +40,12 @@ async function currentUser(): Promise<User> {
     authData = { user: refreshed.session.user };
     authError = null;
   }
-  const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', authData.user.id).single();
+  const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', authData.user.id).maybeSingle();
   if (error) throwSupabaseError(error);
+  if (!profile) throw new MissingProfileError('Your login still exists, but your profile is missing.');
   const row = profile as ProfileRow;
-  const roles = row.is_professional ? ['professional'] : ['patient'];
+  const isAdmin = authData.user.app_metadata?.role === 'admin';
+  const roles = [...(row.is_professional ? ['professional'] : ['patient']), ...(isAdmin ? ['admin'] : [])];
   const rawAddress = row.address as unknown;
   const medicalAddress = normalizeAddress(rawAddress);
   const address = typeof rawAddress === 'string'
@@ -53,10 +59,10 @@ async function currentUser(): Promise<User> {
     email: authData.user.email ?? '',
     email_verified_at: authData.user.email_confirmed_at ?? null,
     fullname: [row.first_name, row.middle_name, row.last_name, row.suffix].filter(Boolean).join(' '),
-    age: row.dob ? Math.max(0, new Date().getFullYear() - new Date(row.dob).getFullYear()) : null,
+    age: ageFromDateOfBirth(row.dob),
     address,
     roles,
-    permissions: row.professional_verified_at ? ['verified professional'] : [],
+    permissions: [...(row.professional_verified_at ? ['verified professional'] : []), ...(isAdmin ? ['admin'] : [])],
     // This uses the profile row already fetched above, so an older account can
     // initialize its encrypted local medical record without another request.
     // Once SQLite has a record, the UI continues to read that local copy.
@@ -84,8 +90,23 @@ async function currentUser(): Promise<User> {
 export function login(payload: LoginPayload) {
   return supabase.auth.signInWithPassword({ email: payload.email, password: payload.password }).then(async ({ data, error }) => {
     if (error || !data.session) throwSupabaseError(error ?? new Error('No session returned'));
-    return { token: data.session.access_token, user: await currentUser() } satisfies LoginResponseData;
+    try {
+      return { token: data.session.access_token, user: await currentUser() } satisfies LoginResponseData;
+    } catch (profileError) {
+      if (profileError instanceof MissingProfileError) await supabase.auth.signOut();
+      throw profileError;
+    }
   });
+}
+
+export async function isPhoneNumberAvailable(phoneNumber: string): Promise<boolean | null> {
+  const { data, error } = await supabase.rpc('phone_number_available', { candidate: phoneNumber });
+  if (error?.code === 'PGRST202') {
+    console.warn('[Registration] Phone availability check is not deployed yet');
+    return null;
+  }
+  if (error) throwSupabaseError(error);
+  return data === true;
 }
 
 export function register(payload: RegisterPayload) {

@@ -2,8 +2,9 @@ import type { useAllergies } from '@/features/allergies/useAllergies';
 import type { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import type { ConditionRow, DiagnosisRow, EmergencyContactRow, MedicationRow } from '@/db/schema';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
+import type { ProfessionalEncounter } from '@/api/types';
 
-function parseStoredAddress(value: string | null): { street?: string; unit?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
+function parseStoredAddress(value: string | null): { street?: string; unit?: string; barangay?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -29,10 +30,11 @@ export function buildEmergencySummary(
   diagnoses?: DiagnosisRow[],
   medications?: MedicationRow[],
   conditions?: ConditionRow[],
+  latestVerifiedEncounter?: ProfessionalEncounter | null,
 ): string {
   // Name and address are also carried as separate structured fields (below the human-readable
   // "Name" line) so parseEmergencySummary() can populate the "Manage info" form's discrete
-  // fields (first/middle/last name, suffix, street/unit/city/etc.) directly instead of having to
+  // fields (first/middle/last name, suffix, street/unit/barangay/city/etc.) directly instead of having to
   // reverse-guess them by splitting a single formatted display string.
   const address = parseStoredAddress(medicalInformation.address);
 
@@ -54,6 +56,7 @@ export function buildEmergencySummary(
     `Phone country code: ${medicalInformation.phone_country_code || '—'}`,
     `Street: ${address?.street || '—'}`,
     `Unit: ${address?.unit || '—'}`,
+    `Barangay: ${address?.barangay || '—'}`,
     `City: ${address?.city || '—'}`,
     `Province: ${address?.province || '—'}`,
     `Postal code: ${address?.postal_code || '—'}`,
@@ -104,6 +107,25 @@ export function buildEmergencySummary(
       const contactPhone = contact.phone ? formatPhoneWithCountryCode(contact.phone_country_code ?? undefined, contact.phone) : '';
       lines.push(`- ${contact.name}${contact.relationship ? ` (${contact.relationship})` : ''}${contactPhone ? ` — ${contactPhone}` : ''}`);
     }
+  }
+
+  if (latestVerifiedEncounter) {
+    const compactEncounter = {
+      by: latestVerifiedEncounter.verifiedBy.name || latestVerifiedEncounter.professional_name,
+      byId: latestVerifiedEncounter.verifiedBy.userId || latestVerifiedEncounter.professional_id,
+      at: latestVerifiedEncounter.recordedAt,
+      updated: latestVerifiedEncounter.updatedAt,
+      observations: latestVerifiedEncounter.observations.slice(0, 500),
+      actions: latestVerifiedEncounter.actionsTaken.slice(0, 500),
+      vitals: latestVerifiedEncounter.vitals.slice(-5).map((vital) => ({
+        kind: vital.kind,
+        value: vital.value,
+        unit: vital.unit,
+        at: vital.measuredAt,
+        by: vital.verifiedBy?.name || vital.recordedBy,
+      })),
+    };
+    lines.push(`Verified encounter: ${JSON.stringify(compactEncounter)}`);
   }
 
   return lines.join('\n');

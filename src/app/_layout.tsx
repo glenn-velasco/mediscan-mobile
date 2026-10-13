@@ -22,6 +22,7 @@ import { NetworkProvider } from '@/hooks/use-network-status';
 import { useBleAdvertisingResume } from '@/features/ble-sync/useBleAdvertisingResume';
 import { usePendingAvatarUpload } from '@/features/medical-information/useMedicalInformationAvatar';
 import { useAppUpdates } from '@/hooks/use-app-updates';
+import { useTheme } from '@/hooks/use-theme';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { setAppReady } from '@/lib/app-ready';
 import { LightweightModeContext } from '@/lib/lightweight-mode-context';
@@ -149,6 +150,8 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
           <Stack.Screen name="account" />
           <Stack.Screen name="emergency-wallet-card" options={{ headerShown: true, title: 'Wallet card' }} />
           <Stack.Screen name="professional-application" />
+          <Stack.Screen name="admin-verification" />
+          <Stack.Screen name="encounters" />
           <Stack.Screen name="professional-scans" />
           <Stack.Screen name="manage-info" options={{ headerShown: true, title: 'Manage info', presentation: 'modal' }} />
           <Stack.Screen name="registration-match" />
@@ -201,6 +204,7 @@ function LightweightQuickScan() {
 }
 
 export default function RootLayout() {
+  const theme = useTheme();
   const [mode, setMode] = useState<BootMode>('pending');
   const promoteResolversRef = useRef<(() => void)[]>([]);
 
@@ -246,7 +250,7 @@ export default function RootLayout() {
       {mode === 'lightweight' ? (
         <LightweightQuickScan />
       ) : (
-        <GestureHandlerRootView style={{ flex: 1 }}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
           <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
             <BootProvider>
               <AuthProvider>

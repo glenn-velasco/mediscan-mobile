@@ -223,6 +223,7 @@ export function medInfoFromScanned(info: ScannedEmergencyInfo): MedInfoFormState
     address: {
       street: scannedField(info.street) || null,
       unit: scannedField(info.unit) || null,
+      barangay: scannedField(info.barangay ?? '') || null,
       city: scannedField(info.city) || null,
       province: scannedField(info.province) || null,
       postal_code: scannedField(info.postalCode) || null,

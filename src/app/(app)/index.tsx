@@ -40,12 +40,15 @@ import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
+import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
+import type { ProfessionalEncounter } from '@/api/types';
 import { useQrWidget } from '@/features/qr-widget/useQrWidget';
 import { useTheme } from '@/hooks/use-theme';
 import { buildFullName } from '@/lib/build-full-name';
+import { ageFromDateOfBirth } from '@/lib/age-from-date-of-birth';
 import { cn } from '@/lib/cn';
 import { formatAddress } from '@/lib/format-address';
-import { formatIsoDate } from '@/lib/format-date';
+import { formatIsoDate, formatIsoDateTime } from '@/lib/format-date';
 import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import { showLocalNotification } from '@/lib/notifications';
 import { useGuardedPress } from '@/lib/use-guarded-press';
@@ -504,7 +507,59 @@ function MedicationsSection({ medications, sheetRef, verifiedCount }: { medicati
   );
 }
 
-function BottomTabBar({ medicalInformation, guardedPush, bottomInset, isVerifiedProfessional }: { medicalInformation: any; guardedPush: (href: Href) => void; bottomInset: number; isVerifiedProfessional: boolean }) {
+function LatestEncounterSection({ encounter, loading, error, onViewAll }: { encounter?: ProfessionalEncounter; loading: boolean; error: boolean; onViewAll: () => void }) {
+  const theme = useTheme();
+  const vitalOrder = ['blood_pressure', 'heart_rate', 'respiratory_rate', 'temperature', 'oxygen_saturation'] as const;
+  const vitalLabels = {
+    blood_pressure: 'Blood pressure',
+    heart_rate: 'Heart rate',
+    respiratory_rate: 'Respiratory rate',
+    temperature: 'Temperature',
+    oxygen_saturation: 'Oxygen saturation',
+  } as const;
+  const latestByKind = new Map((encounter?.vitals ?? []).map((vital) => [vital.kind, vital]));
+  const latestVitals = vitalOrder.flatMap((kind) => {
+    const vital = latestByKind.get(kind);
+    return vital ? [vital] : [];
+  });
+
+  return (
+    <View className="mb-6 gap-2">
+      <View className="mb-1 flex-row items-center justify-between">
+        <ThemedText type="overline">Latest verified vitals</ThemedText>
+        <Pressable onPress={onViewAll} hitSlop={8}><ThemedText type="smallBold" color="primary">View all</ThemedText></Pressable>
+      </View>
+      {!encounter ? <Card><ThemedText color={error ? 'destructive' : 'mutedForeground'}>{loading ? 'Loading verified vitals…' : error ? 'Unable to load verified vitals.' : 'No verified professional has recorded vitals yet.'}</ThemedText></Card> : null}
+      {encounter ? (
+        <Card className="p-0">
+          <Pressable onPress={onViewAll} accessibilityRole="button" accessibilityLabel="View verified encounter records">
+            <View className="flex-row items-center gap-3 px-4 py-3.5">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.success + '15' }}>
+                <Ionicons name="shield-checkmark" size={18} color={theme.success} />
+              </View>
+              <View className="flex-1">
+                <ThemedText type="bodyBold">Verified by {encounter.verifiedBy.name || encounter.professional_name}</ThemedText>
+                <ThemedText type="small" color="mutedForeground">{formatIsoDateTime(encounter.updatedAt || encounter.recordedAt) || 'Time unavailable'}</ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+            </View>
+            {latestVitals.map((vital, index) => (
+              <View key={`${vital.kind}-${vital.measuredAt}-${index}`} className="flex-row items-center justify-between gap-3 border-t border-border px-4 py-3.5">
+                <View className="flex-1">
+                  <ThemedText type="small" color="mutedForeground">{vitalLabels[vital.kind]}</ThemedText>
+                  <ThemedText type="detail" color="mutedForeground">{formatIsoDateTime(vital.measuredAt) || 'Time unavailable'} · {vital.verifiedBy?.name || vital.recordedBy || encounter.professional_name}</ThemedText>
+                </View>
+                <ThemedText type="bodyBold">{vital.value} {vital.unit}</ThemedText>
+              </View>
+            ))}
+          </Pressable>
+        </Card>
+      ) : null}
+    </View>
+  );
+}
+
+function BottomTabBar({ medicalInformation, guardedPush, bottomInset }: { medicalInformation: any; guardedPush: (href: Href) => void; bottomInset: number }) {
   const theme = useTheme();
 
   return (
@@ -519,7 +574,7 @@ function BottomTabBar({ medicalInformation, guardedPush, bottomInset, isVerified
               <Ionicons name="home" size={24} color={theme.primary} />
             </View>
           </Pressable>
-          <Pressable onPress={() => guardedPush('/responder-history' as any)} hitSlop={12} accessibilityLabel="Scan activity" className="flex-1 items-center justify-center">
+          <Pressable onPress={() => guardedPush('/responder-history' as Href)} hitSlop={12} accessibilityLabel="Scan activity" className="flex-1 items-center justify-center">
             <View className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
               <Ionicons name="time-outline" size={24} color={theme.foreground} />
             </View>
@@ -530,13 +585,7 @@ function BottomTabBar({ medicalInformation, guardedPush, bottomInset, isVerified
           {medicalInformation ? <QrIconButton onPress={() => guardedPush('/quick-scan')} size={60} style={{ borderWidth: 4, borderColor: theme.background, boxShadow: '0px 2px 6px rgba(0,0,0,0.15)' }} /> : null}
         </View>
         <View className="flex-1 flex-row">
-          <View className="flex-1 items-center justify-center">
-            {isVerifiedProfessional ? (
-              <Pressable onPress={() => guardedPush('/professional-scans')} hitSlop={12} accessibilityLabel="Scans" className="h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-                <Ionicons name="scan-outline" size={24} color={theme.foreground} />
-              </Pressable>
-            ) : null}
-          </View>
+          <View className="flex-1" />
           <View className="flex-1 items-center justify-center">
             <NotificationBellButton onPress={() => guardedPush('/notifications')} />
           </View>
@@ -571,6 +620,7 @@ export default function HomeScreen() {
   const { allergies, conditions, medications, emergencyContacts, isDataReady, checklist } = useOnboardingData();
   const { data: diagnoses = [] } = useDiagnoses();
   const { data: attestations = [] } = useAttestations();
+  const { data: professionalEncounters = [], isLoading: encountersLoading, isError: encountersError } = useProfessionalEncounters();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
   const [emailCooldown, setEmailCooldown] = useState(0);
   const emailSendCount = useRef(0);
@@ -662,7 +712,7 @@ export default function HomeScreen() {
   );
 
   const profile = medicalInformation ?? user?.medical_information ?? null;
-  const age = profile ? (user?.age ?? null) : null;
+  const age = ageFromDateOfBirth(profile?.date_of_birth);
 
   const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_condition_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
     const seen = new Set<string>();
@@ -826,13 +876,14 @@ export default function HomeScreen() {
           />
         ) : null}
         <PersonalInfoSection profile={profile} age={age} />
+        <LatestEncounterSection encounter={professionalEncounters[0]} loading={encountersLoading} error={encountersError} onViewAll={() => guardedPush('/encounters' as Href)} />
         <EmergencyContactsSection emergencyContacts={emergencyContacts} sheetRef={emergencyContactsSheetRef} />
         <AllergiesSection allergies={allergies} sheetRef={allergiesSheetRef} verifiedCount={allergyVerifiedCount} />
         <ConditionsSection conditions={conditions} sheetRef={conditionsSheetRef} verifiedCount={conditionVerifiedCount} />
         <DiagnosesSection diagnoses={diagnoses} sheetRef={diagnosesSheetRef} verifiedCount={diagnosisVerifiedCount} isVerifiedProfessional={isVerifiedProfessional} />
         <MedicationsSection medications={medications} sheetRef={medicationsSheetRef} verifiedCount={medicationVerifiedCount} />
       </AppLayout>
-      <BottomTabBar medicalInformation={medicalInformation} guardedPush={guardedPush} bottomInset={insets.bottom} isVerifiedProfessional={isVerifiedProfessional} />
+      <BottomTabBar medicalInformation={medicalInformation} guardedPush={guardedPush} bottomInset={insets.bottom} />
       <AvatarPreviewSheet ref={avatarSheetRef} name={profile.full_name || 'Unnamed'} />
       <EmergencyContactsBottomSheet ref={emergencyContactsSheetRef} />
       <AllergiesBottomSheet ref={allergiesSheetRef} />

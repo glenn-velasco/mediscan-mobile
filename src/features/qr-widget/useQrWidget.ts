@@ -20,6 +20,7 @@ import {
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
 import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
+import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 
 /* Stable empty references so an unresolved query doesn't churn the effect deps. */
 const EMPTY_CONTACTS: EmergencyContactRow[] = [];
@@ -32,6 +33,7 @@ export function useQrWidget(userId: string | number) {
   const { data: diagnoses } = useDiagnoses();
   const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
+  const { data: professionalEncounters } = useProfessionalEncounters();
   const { data: recentHistory } = useQuery({
     queryKey: ['emergency-field-history', String(userId)],
     queryFn: () => emergencyHistoryRepo.getRecent(5, userId),
@@ -43,7 +45,7 @@ export function useQrWidget(userId: string | number) {
       void queueDynamicEmergencyCardPublication(userId);
     }, 750);
     return () => clearTimeout(timer);
-  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory]);
+  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
 
   useEffect(() => {
     if (!enabled || !medicalInformation) return;
@@ -64,6 +66,7 @@ export function useQrWidget(userId: string | number) {
       disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
       confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
       recentHistory,
+      latestVerifiedEncounter: professionalEncounters?.[0],
     })
       .then((encrypted) => generateQrImage(encrypted))
       .then(async (imagePath) => {
@@ -107,7 +110,7 @@ export function useQrWidget(userId: string | number) {
     return () => {
       cancelled = true;
     };
-  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory]);
+  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
 
   useEffect(() => {
     const hide = () => {

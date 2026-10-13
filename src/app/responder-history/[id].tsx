@@ -5,8 +5,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 
-import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
-import { Card } from '@/components/card';
+import { EmergencyScanContent } from '@/components/emergency-scan-content';
+import { AccessGate } from '@/components/access-gate';
 import { PrimaryButton } from '@/components/primary-button';
 import { ResponderNoteCard } from '@/components/responder-note-card';
 import { ThemedText } from '@/components/themed-text';
@@ -55,11 +55,18 @@ export default function SavedScanScreen() {
     : item.note?.photoUris ?? [];
   const previewIndex = preview.uri ? previewImages.indexOf(preview.uri) : -1;
 
-  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}><ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 18 }}>
-    <Card><ThemedText selectable color="mutedForeground">Saved scan — may not reflect the patient&apos;s current QR.</ThemedText></Card>
-    <ScannedEmergencyCard info={item.info} verification={item.verification} source={item.source} encounterExists={Boolean(item.encounter)} onRecordEncounter={() => router.push({ pathname: '/responder-history/[id]/encounter', params: { id: item.id } })} />
-    <ResponderNoteCard note={item.note} onImagePress={preview.open} />
-    <Pressable accessibilityRole="button" onPress={() => Alert.alert('Delete saved scan?', 'This permanently deletes the snapshot and its local note.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void historyRepo.remove(item.id).then(() => router.back()) }])} style={{ height: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '12', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Ionicons name="trash-outline" size={18} color={theme.destructive} /><ThemedText selectable style={{ color: theme.destructive, fontWeight: '600' }}>Delete saved scan</ThemedText></Pressable>
+  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}><ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="automatic" nestedScrollEnabled showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: 40, gap: 18 }}>
+    <EmergencyScanContent
+      info={item.info}
+      scanId={item.id}
+      verification={item.verification}
+      source={item.source}
+      savedSnapshot
+      onDeleteSavedScan={() => Alert.alert('Delete saved scan?', 'This permanently deletes the snapshot and its local note.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void historyRepo.remove(item.id).then(() => router.back()) }])}
+    />
+    <AccessGate permissions={['verified professional']}>
+      <ResponderNoteCard note={item.note} onImagePress={preview.open} />
+    </AccessGate>
   </ScrollView>
     <Modal visible={Boolean(preview.uri)} transparent animationType="fade" onRequestClose={preview.close}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' }}>

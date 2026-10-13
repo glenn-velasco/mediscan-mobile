@@ -2,12 +2,13 @@ import { z } from 'zod';
 
 import { SUFFIX_OPTIONS } from '@/constants/suffix';
 import { passwordValidation } from '@/lib/validation/password-schema';
+import { optionalPersonName, personName } from '@/lib/validation/person-name-schema';
 
 export const registerSchema = z
   .object({
-    firstName: z.string().trim().min(1, 'First name is required'),
-    middleName: z.string().trim().optional(),
-    lastName: z.string().trim().min(1, 'Last name is required'),
+    firstName: personName('First name'),
+    middleName: optionalPersonName('Middle name').optional(),
+    lastName: personName('Last name'),
     suffix: z.enum(SUFFIX_OPTIONS).optional(),
     email: z.string().trim().min(1, 'Email is required').email('Enter a valid email address'),
     password: passwordValidation,

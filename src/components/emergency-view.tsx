@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 import { Pressable, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { AccessGate } from '@/components/access-gate';
 import { PrimaryButton } from '@/components/primary-button';
 import { SeverityBadge } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
@@ -48,7 +49,7 @@ export function EmergencyView({ info, verification, onAddNote, onRecordEncounter
   const genderLabel = gender ? (GenderLabel[gender as Gender] ?? gender) : 'Not recorded';
   const bloodType = BloodTypeLabel[info.bloodType as BloodType] ?? info.bloodType;
   const missingBloodType = info.withheld?.bloodType ? 'Not shared in this QR' : info.withheld ? 'Not recorded' : 'Not in QR';
-  const streetLine = [info.street, info.unit].filter(Boolean).join(', ');
+  const streetLine = [info.street, info.unit, info.barangay].filter(Boolean).join(', ');
   const localityLine = [info.city, info.province, info.postalCode].filter(Boolean).join(', ');
   const address = [streetLine, localityLine, info.country].filter(Boolean).join('\n');
   const critical = info.allergies.filter((item) => item.severity === 'severe' || item.severity === 'life-threatening');
@@ -68,7 +69,16 @@ export function EmergencyView({ info, verification, onAddNote, onRecordEncounter
       {firstContact ? <View style={{ gap: 4 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><ThemedText selectable style={{ flex: 1 }}>Contact: {firstContact.name}</ThemedText>{callableContact?.phone ? <Pressable accessibilityRole="button" accessibilityLabel={`Call ${callableContact.name}`} onPress={() => void Linking.openURL(`tel:${callableContact.phone!.replace(/[^+\d]/g, '')}`)} style={{ minWidth: 48, minHeight: 48, paddingHorizontal: 12, borderRadius: 999, backgroundColor: theme.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Ionicons name="call" size={20} color={theme.primaryForeground} /><ThemedText selectable style={{ color: theme.primaryForeground, fontWeight: '700' }}>Call</ThemedText></Pressable> : null}</View><ThemedText selectable color="mutedForeground">{callableContact?.phone || 'No callable phone number in this QR'}</ThemedText></View> : <ThemedText selectable>Emergency contact: Not recorded</ThemedText>}
       <ThemedText selectable color="mutedForeground">Patient information updated {formatIsoDateTime(info.lastUpdatedAt || info.generatedAt) || 'at an unknown time'}</ThemedText>
     </View></Section>
-    {onRecordEncounter ? <PrimaryButton label={encounterExists ? 'Edit or share encounter report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /> : null}
+    {onRecordEncounter ? <AccessGate permissions={['verified professional']}><PrimaryButton label={encounterExists ? 'Edit or share encounter report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /></AccessGate> : null}
+
+    {info.latestVerifiedEncounter ? <AccessGate permissions={['verified professional']}><Section title="Latest verified encounter"><View style={{ gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="shield-checkmark" size={20} color={theme.success} /><ThemedText selectable type="bodyBold" style={{ flex: 1 }}>Verified by {info.latestVerifiedEncounter.professionalName}</ThemedText></View>
+      <ThemedText selectable color="mutedForeground">Recorded {formatIsoDateTime(info.latestVerifiedEncounter.recordedAt) || 'at an unknown time'}</ThemedText>
+      {info.latestVerifiedEncounter.updatedAt && info.latestVerifiedEncounter.updatedAt !== info.latestVerifiedEncounter.recordedAt ? <ThemedText selectable color="mutedForeground">Updated {formatIsoDateTime(info.latestVerifiedEncounter.updatedAt)}</ThemedText> : null}
+      {info.latestVerifiedEncounter.observations ? <View><ThemedText selectable type="bodyBold">Observations</ThemedText><ThemedText selectable>{info.latestVerifiedEncounter.observations}</ThemedText></View> : null}
+      {info.latestVerifiedEncounter.actionsTaken ? <View><ThemedText selectable type="bodyBold">Actions taken</ThemedText><ThemedText selectable>{info.latestVerifiedEncounter.actionsTaken}</ThemedText></View> : null}
+      {info.latestVerifiedEncounter.vitals.length ? <View style={{ gap: 6 }}><ThemedText selectable type="bodyBold">Vitals</ThemedText>{info.latestVerifiedEncounter.vitals.map((vital, index) => <View key={`${vital.kind}-${vital.measuredAt}-${index}`}><ThemedText selectable>{vital.kind.replaceAll('_', ' ')}: {vital.value} {vital.unit}</ThemedText><ThemedText selectable color="mutedForeground">Measured {formatIsoDateTime(vital.measuredAt) || 'at an unknown time'}{vital.recordedBy ? ` · ${vital.recordedBy}` : ''}</ThemedText></View>)}</View> : null}
+    </View></Section></AccessGate> : null}
 
     {(critical.length > 0 || info.noBloodTransfusion === 'Yes') ? <Section title="Critical alerts"><View style={{ gap: 12 }}>
       {info.noBloodTransfusion === 'Yes' ? <ThemedText selectable type="heading" style={{ color: theme.destructive }}>⚠ Patient reports no blood transfusion</ThemedText> : null}
@@ -84,7 +94,6 @@ export function EmergencyView({ info, verification, onAddNote, onRecordEncounter
     <Section title="Identity"><View style={{ gap: 4 }}><ThemedText selectable type="heading">{info.name || 'Identity not recorded'}</ThemedText><ThemedText selectable color="mutedForeground">{age !== null ? `Age ${age}` : info.dateOfBirth ? `Born ${formatIsoDate(info.dateOfBirth)}` : 'Age not in QR'}</ThemedText>{info.withheld?.dateOfBirth ? <ThemedText selectable color="mutedForeground">Date of birth not shared in this QR</ThemedText> : info.dateOfBirth && age !== null ? <ThemedText selectable color="mutedForeground">Born {formatIsoDate(info.dateOfBirth)}</ThemedText> : null}<ThemedText selectable color="mutedForeground">Gender: {genderLabel}</ThemedText></View></Section>
     <Section title="Address"><ThemedText selectable color={address ? undefined : 'mutedForeground'}>{address || 'Not recorded'}</ThemedText></Section>
     <Section title="Freshness and provenance"><View style={{ gap: 6 }}><ThemedText selectable>Generated {formatIsoDateTime(info.generatedAt) || 'Unknown'}</ThemedText><ThemedText selectable>Last updated {formatIsoDateTime(info.lastUpdatedAt || info.generatedAt) || 'Unknown'}</ThemedText><ThemedText selectable>Patient-entered emergency information</ThemedText><ThemedText selectable style={{ color: verificationColor }}>{verification.message}</ThemedText><ThemedText selectable color="mutedForeground">Decision support only. Confirm details when possible.</ThemedText></View></Section>
-    {onAddNote ? <PrimaryButton label="Add responder note" variant="primary" onPress={onAddNote} /> : null}
+    {onAddNote ? <AccessGate permissions={['verified professional']}><PrimaryButton label="Add responder note" variant="primary" onPress={onAddNote} /></AccessGate> : null}
   </View>;
 }
-

@@ -7,10 +7,11 @@ import { signEmergencyPayload, verifyEmergencyPayload } from '@/services/emergen
 import type { EmergencyDisclosureSettings, EmergencyQrEnvelopeV2, EmergencyKnowledgeState, QrVerificationResult } from '@/types/emergency';
 import type { ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
+import type { ProfessionalEncounter } from '@/api/types';
 
 export const QR_V2_PREFIX = 'MEDISCAN:v2:';
 
-function parseAddress(value: string | null): { street?: string; unit?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
+function parseAddress(value: string | null): { street?: string; unit?: string; barangay?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
   if (!value) return null;
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -52,13 +53,14 @@ export async function buildEmergencyQrV2(input: {
   disclosure: EmergencyDisclosureSettings;
   confirmedNone?: Partial<Record<'allergies' | 'conditions' | 'diagnoses' | 'medications', boolean>>;
   recentHistory?: EmergencyFieldChange[];
+  latestVerifiedEncounter?: ProfessionalEncounter;
 }): Promise<string> {
   await ready;
   const { patientId, medical, allergies, conditions, diagnoses, medications, contacts, disclosure } = input;
   const generatedAt = new Date();
   const address = parseAddress(medical.address);
   const allRows = [...allergies, ...conditions, ...diagnoses, ...medications, ...contacts];
-  const lastUpdatedAt = latestUpdated(medical, allRows);
+  const lastUpdatedAt = [latestUpdated(medical, allRows), input.latestVerifiedEncounter?.updatedAt].filter((value): value is string => Boolean(value)).sort().at(-1)!;
   const knowledge = {
     allergies: stateFor(allergies, input.confirmedNone?.allergies),
     conditions: stateFor(conditions, input.confirmedNone?.conditions),
@@ -85,6 +87,7 @@ export async function buildEmergencyQrV2(input: {
     phoneCountryCode: disclosure.phone ? medical.phone_country_code || '' : '',
     street: disclosure.address ? address?.street || '' : '',
     unit: disclosure.address ? address?.unit || '' : '',
+    barangay: disclosure.address ? address?.barangay || '' : '',
     city: disclosure.address ? address?.city || '' : '',
     province: disclosure.address ? address?.province || '' : '',
     postalCode: disclosure.address ? address?.postal_code || '' : '',
@@ -100,6 +103,15 @@ export async function buildEmergencyQrV2(input: {
           phone: contact.phone ? formatPhoneWithCountryCode(contact.phone_country_code ?? undefined, contact.phone) : null,
         }))
       : [],
+    latestVerifiedEncounter: input.latestVerifiedEncounter ? {
+      professionalName: input.latestVerifiedEncounter.verifiedBy.name || input.latestVerifiedEncounter.professional_name,
+      professionalId: input.latestVerifiedEncounter.verifiedBy.userId || input.latestVerifiedEncounter.professional_id,
+      recordedAt: input.latestVerifiedEncounter.recordedAt,
+      updatedAt: input.latestVerifiedEncounter.updatedAt,
+      observations: input.latestVerifiedEncounter.observations,
+      actionsTaken: input.latestVerifiedEncounter.actionsTaken,
+      vitals: input.latestVerifiedEncounter.vitals.map((vital) => ({ kind: vital.kind, value: vital.value, unit: vital.unit, measuredAt: vital.measuredAt, recordedBy: vital.verifiedBy?.name || vital.recordedBy })),
+    } : undefined,
     recentHistory: (input.recentHistory ?? []).filter((change) =>
       change.field === 'blood_type' ? disclosure.bloodType
         : change.field === 'date_of_birth' ? disclosure.dateOfBirth

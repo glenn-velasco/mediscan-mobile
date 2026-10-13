@@ -138,11 +138,14 @@ function ActionButtons({
   onStart: () => void;
   onRetry: () => void;
 }) {
-  if (status === 'idle' || status === 'error') {
-    return <PrimaryButton label={status === 'error' ? 'Retry capture' : 'Start selfie capture'} variant="ghost" onPress={onStart} />;
+  if (status === 'idle') {
+    return <PrimaryButton label="Start selfie capture" variant="primary" onPress={onStart} />;
+  }
+  if (status === 'error') {
+    return <PrimaryButton label="Retry capture" variant="outline" onPress={onStart} />;
   }
   if (status === 'done') {
-    return <PrimaryButton label="Retake" variant="ghost" onPress={onRetry} />;
+    return <PrimaryButton label="Retake" variant="outline" onPress={onRetry} />;
   }
   return (
     <PrimaryButton

@@ -36,20 +36,45 @@ export async function invokeFunction<T>(name: string, body?: BodyInit | Record<s
 
   // A foregrounded mobile app can resume with an access token that expired while
   // it was suspended. Refresh and retry once; the user should not have to sign out.
-  const response = 'context' in (result.error ?? {}) ? (result.error as { context?: unknown }).context : null;
-  if (result.error && response instanceof Response && response.status === 401) {
+  const response = functionErrorResponse(result.error);
+  if (result.error && (response?.status === 401 || response?.status === 403)) {
     const refreshed = await supabase.auth.refreshSession();
     if (!refreshed.error && refreshed.data.session) result = await invoke();
   }
 
   if (result.error) {
-    const context = 'context' in result.error ? (result.error as { context?: unknown }).context : null;
-    if (context instanceof Response) {
-      const envelope = await context.clone().json().catch(() => null) as { message?: unknown } | null;
-      const message = typeof envelope?.message === 'string' ? envelope.message : result.error.message;
+    const context = functionErrorResponse(result.error);
+    if (context) {
+      const envelope = await context.clone().json().catch(() => null);
+      const message = readableFunctionError(envelope, result.error.message, context.status);
+      console.warn(`[Supabase function: ${name}] ${message}`);
       throw Object.assign(new Error(message), { status: context.status });
     }
     throwSupabaseError(result.error);
   }
   return result.data as T;
+}
+
+function readableFunctionError(body: unknown, fallback: unknown, status: number): string {
+  const findMessage = (value: unknown, depth = 0): string | null => {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (!value || typeof value !== 'object' || depth > 2) return null;
+    const record = value as Record<string, unknown>;
+    for (const key of ['message', 'error_description', 'error', 'details', 'hint']) {
+      const found = findMessage(record[key], depth + 1);
+      if (found) return found;
+    }
+    return null;
+  };
+  const message = findMessage(body) ?? findMessage(fallback);
+  return message ? `${message} (HTTP ${status})` : `Supabase request failed (HTTP ${status})`;
+}
+
+function functionErrorResponse(error: unknown): { status: number; clone: () => { json: () => Promise<unknown> } } | null {
+  if (!error || typeof error !== 'object' || !('context' in error)) return null;
+  const context = (error as { context?: unknown }).context;
+  if (!context || typeof context !== 'object') return null;
+  const candidate = context as { status?: unknown; clone?: unknown };
+  if (typeof candidate.status !== 'number' || typeof candidate.clone !== 'function') return null;
+  return candidate as { status: number; clone: () => { json: () => Promise<unknown> } };
 }

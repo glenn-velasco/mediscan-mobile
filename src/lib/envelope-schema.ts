@@ -131,7 +131,7 @@ const BLOOD_TYPE_SET = new Set<string>(BLOOD_TYPE_OPTIONS);
 const SUFFIX_SET = new Set<string>(SUFFIX_OPTIONS);
 const RELIGION_SET = new Set<string>(RELIGION_OPTIONS);
 const RELATION_TO_PATIENT_SET = new Set<string>(RELATION_TO_PATIENT_OPTIONS);
-const ADDRESS_KEYS = new Set(['street', 'unit', 'city', 'province', 'postal_code', 'country']);
+const ADDRESS_KEYS = new Set(['street', 'unit', 'barangay', 'city', 'province', 'postal_code', 'country']);
 
 function isAddressOrNull(value: unknown): value is MedicalInformationAddress | null {
   if (value === null) return true;

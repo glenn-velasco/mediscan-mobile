@@ -38,6 +38,7 @@ export type User = {
 export type MedicalInformationAddress = {
   street: string | null;
   unit: string | null;
+  barangay?: string | null;
   city: string | null;
   province: string | null;
   postal_code: string | null;
@@ -123,11 +124,9 @@ export type LoginResponseData = {
 };
 
 /**
- * Registration either materializes an account immediately (the common
- * case), or - when the submitted name+dob matches an existing primary-owned
- * medical record - holds the data server-side pending that record's primary
- * user confirming it's really them. No account/token exists yet in the
- * pending case.
+ * Supabase returns no session when email confirmation is required. The
+ * account and profile exist, but the user must verify their email before
+ * logging in.
  */
 export type RegisterResponseData =
   | { pending: true }
@@ -263,6 +262,20 @@ export type ProfessionalApplication = {
   rejection_reason: string | null;
   role_granted: string | null;
   created_at: string;
+  user_id?: string;
+  applicant_name?: string;
+  applicant_dob?: string | null;
+  screening_status?: 'not_started' | 'processing' | 'passed' | 'failed' | 'unavailable';
+  screening_result?: {
+    full_name?: string | null;
+    registration_number?: string | null;
+    license_number?: string | null;
+    registration_date?: string | null;
+    id_type?: string | null;
+    profession?: string | null;
+    message?: string;
+  };
+  evidence?: { kind: string; url: string }[];
 };
 
 export type ScanSummary = {
@@ -275,6 +288,19 @@ export type ScanSummary = {
   notes: string | null;
   scan_count: number;
   last_scanned_at: string;
+};
+
+export type ProfessionalEncounter = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  professional_name: string;
+  observations: string;
+  actionsTaken: string;
+  vitals: import('@/types/emergency').EncounterVital[];
+  recordedAt: string;
+  updatedAt: string;
+  verifiedBy: { userId: string; name: string };
 };
 
 export type ScanNote = {
@@ -291,5 +317,4 @@ export type ScanActivity = {
   scanner_fullname: string;
   scanned_at: string;
 };
-
 

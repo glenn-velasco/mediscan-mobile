@@ -44,7 +44,7 @@ export function useManageInfo() {
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { mutateAsync: submitEnvelope } = useSubmitEnvelope();
 
-  const [patientId, setPatientId] = useState<number | null>(null);
+  const [patientId, setPatientId] = useState<string | number | null>(null);
   const [info, setInfo] = useState<ScannedEmergencyInfo | null>(null);
   const [parseError, setParseError] = useState(false);
 
@@ -84,7 +84,7 @@ export function useManageInfo() {
     };
   }, []);
 
-  const resetAll = (pid: number, qrData: string) => {
+  const resetAll = (pid: string | number, qrData: string) => {
     setPatientId(pid);
     setInfo(null);
     setParseError(false);
@@ -473,6 +473,7 @@ export function useManageInfo() {
     if (medInfo.address) {
       updated.street = medInfo.address.street ?? '';
       updated.unit = medInfo.address.unit ?? '';
+      updated.barangay = medInfo.address.barangay ?? '';
       updated.city = medInfo.address.city ?? '';
       updated.province = medInfo.address.province ?? '';
       updated.postalCode = medInfo.address.postal_code ?? '';

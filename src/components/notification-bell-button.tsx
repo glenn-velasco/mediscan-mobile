@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useUnreadNotificationCount } from '@/features/notifications/useNotifications';
 import { useTheme } from '@/hooks/use-theme';
 
-/** Bell icon with an unread-count badge, meant to sit beside identity info on the gradient header (mirrors QrIconButton). */
+/** Bell icon with an unread-count badge for themed app surfaces. */
 export function NotificationBellButton({ onPress }: { onPress: () => void }) {
   const theme = useTheme();
   const unreadCount = useUnreadNotificationCount();
@@ -14,11 +14,11 @@ export function NotificationBellButton({ onPress }: { onPress: () => void }) {
     <Pressable
       onPress={onPress}
       className="h-10 w-10 items-center justify-center rounded-full"
-      style={{ backgroundColor: theme.primaryForeground + '20' }}
+      style={{ backgroundColor: theme.muted }}
       hitSlop={12}
       accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
     >
-      <Ionicons name="notifications" size={20} color={theme.primaryForeground} />
+      <Ionicons name="notifications" size={20} color={theme.foreground} />
       {unreadCount > 0 ? (
         <View
           className="absolute -right-1 -top-1 min-w-[18px] items-center justify-center rounded-full px-1"

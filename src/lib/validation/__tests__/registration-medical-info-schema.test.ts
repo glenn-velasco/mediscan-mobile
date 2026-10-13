@@ -108,7 +108,8 @@ describe('registrationAddressSchema', () => {
   const validAddress = {
     street: '123 Main Street',
     city: 'Manila',
-    unit: null,
+    unit: 'Unit 1',
+    barangay: 'Barangay 1',
     province: 'Metro Manila',
     postal_code: '1000',
     country: 'Philippines',
@@ -119,8 +120,8 @@ describe('registrationAddressSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('accepts optional fields omitted or null', () => {
-    const result = registrationAddressSchema.safeParse({ street: '123 Main Street', city: 'Manila' });
+  it('allows barangay to be omitted for a non-Philippine address', () => {
+    const result = registrationAddressSchema.safeParse({ ...validAddress, country: 'United States', barangay: null });
     expect(result.success).toBe(true);
   });
 

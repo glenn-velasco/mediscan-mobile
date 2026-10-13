@@ -170,8 +170,8 @@ function MedicalInfoFormSection({ form }: { form: any }) {
       <Controller control={form.control} name="first_name" render={({ field, fieldState }) => (
         <TextField label="First name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
       )} />
-      <Controller control={form.control} name="middle_name" render={({ field }) => (
-        <TextField label="Middle name" value={field.value} onChangeText={field.onChange} />
+      <Controller control={form.control} name="middle_name" render={({ field, fieldState }) => (
+        <TextField label="Middle name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
       )} />
       <Controller control={form.control} name="last_name" render={({ field, fieldState }) => (
         <TextField label="Last name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -692,13 +692,7 @@ function GeneralNoteSection({
   );
 }
 
-function SyncActionButtons({
-  sendMode,
-  sending,
-  hasChanges,
-  onSendBle,
-  onSendInternet,
-}: {
+function SyncActionButtons({ sendMode, sending, hasChanges, onSendBle, onSendInternet }: {
   sendMode: 'ble' | 'internet' | null;
   sending: boolean;
   hasChanges: boolean;
@@ -707,19 +701,8 @@ function SyncActionButtons({
 }) {
   return (
     <View className="mt-2 gap-3">
-      <PrimaryButton
-        label={sendMode === 'ble' ? 'Syncing via Bluetooth…' : 'Send via Bluetooth'}
-        loading={sendMode === 'ble'}
-        disabled={sending || !hasChanges}
-        onPress={onSendBle}
-      />
-      <PrimaryButton
-        label={sendMode === 'internet' ? 'Sending via internet…' : 'Send via internet (beta)'}
-        variant="ghost"
-        loading={sendMode === 'internet'}
-        disabled={sending || !hasChanges}
-        onPress={onSendInternet}
-      />
+      <PrimaryButton label={sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'} loading={sendMode === 'ble'} disabled={sending || !hasChanges} leftIcon={<Ionicons name="bluetooth" size={18} color="#fff" />} onPress={onSendBle} />
+      <PrimaryButton label={sendMode === 'internet' ? 'Sending via Internet…' : 'Send via Internet (online)'} loading={sendMode === 'internet'} disabled={sending || !hasChanges} leftIcon={<Ionicons name="globe-outline" size={18} color="#fff" />} onPress={onSendInternet} />
     </View>
   );
 }

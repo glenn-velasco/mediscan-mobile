@@ -23,7 +23,7 @@ const info: ScannedEmergencyInfo = {
   name: 'Sample Patient', firstName: '', middleName: '', lastName: '', suffix: '',
   dateOfBirth: '1990-01-01', gender: 'female', bloodType: 'o_positive', religion: '',
   noBloodTransfusion: 'No', phone: '09123456789', phoneCountryCode: '63',
-  street: 'Private Street', unit: '', city: 'Cebu', province: '', postalCode: '', country: '',
+  street: 'Private Street', unit: '', barangay: 'Barangay 1', city: 'Cebu', province: '', postalCode: '', country: '',
   allergies: [{ allergen: 'Peanuts', severity: 'severe', reaction: 'Anaphylaxis' }],
   conditions: [{ description: 'Asthma' }], diagnoses: [],
   medications: [{ name: 'Salbutamol', dosage: '100 mcg', frequency: 'as needed' }],
@@ -47,6 +47,7 @@ describe('hybrid printable emergency QR', () => {
     expect(parsed?.info.phone).toBe('09123456789');
     expect(parsed?.info.phoneCountryCode).toBe('63');
     expect(parsed?.info.street).toBe('Private Street');
+    expect(parsed?.info.barangay).toBe('Barangay 1');
     expect(parsed?.info.city).toBe('Cebu');
   });
 

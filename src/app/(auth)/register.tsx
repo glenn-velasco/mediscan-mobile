@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 
 import { getFieldErrors } from '@/api/errors';
+import { isPhoneNumberAvailable } from '@/api/endpoints/auth';
 import type { MedicalInformationAddress } from '@/api/types';
 import { useApiError } from '@/api/use-api-error';
 import { AddressFields, EMPTY_ADDRESS } from '@/components/form/address-fields';
@@ -25,7 +26,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatAddress } from '@/lib/format-address';
 import { registerSchema } from '@/lib/validation/register-schema';
 import { registrationAddressSchema, registrationMedicalInfoSchema } from '@/lib/validation/registration-medical-info-schema';
-import { getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
+import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
 
 type StepIndicatorProps = {
   step: number;
@@ -156,6 +157,7 @@ type Step1ContentProps = {
   fieldErrors: Record<string, string>;
   setFieldErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   friendlyMessage: string | null;
+  checkingPhone: boolean;
   onNext: () => void;
   onBack: () => void;
 };
@@ -164,7 +166,7 @@ function Step1Content({
   dateOfBirth, setDateOfBirth,
   gender, setGender,
   phoneValue, setPhoneValue,
-  fieldErrors, setFieldErrors, friendlyMessage, onNext, onBack,
+  fieldErrors, setFieldErrors, friendlyMessage, checkingPhone, onNext, onBack,
 }: Step1ContentProps) {
   return (
     <>
@@ -204,7 +206,7 @@ function Step1Content({
       />
 
       <FormError message={friendlyMessage} />
-      <PrimaryButton label="Next" onPress={onNext} />
+      <PrimaryButton label="Next" loading={checkingPhone} onPress={onNext} />
       <PrimaryButton label="Back" onPress={onBack} variant="ghost" />
     </>
   );
@@ -248,12 +250,12 @@ function Step2Content({
         value={medicalAddress}
         onChange={(v) => {
           setMedicalAddress(v);
-          const hasAddressError = fieldErrors.street || fieldErrors.address || fieldErrors.unit || fieldErrors.city || fieldErrors.province || fieldErrors.postal_code || fieldErrors.country;
+          const hasAddressError = fieldErrors.street || fieldErrors.address || fieldErrors.unit || fieldErrors.barangay || fieldErrors.city || fieldErrors.province || fieldErrors.postal_code || fieldErrors.country;
           if (hasAddressError) {
-            setFieldErrors((prev) => ({ ...prev, street: '', address: '', unit: '', city: '', province: '', postal_code: '', country: '' }));
+            setFieldErrors((prev) => ({ ...prev, street: '', address: '', unit: '', barangay: '', city: '', province: '', postal_code: '', country: '' }));
           }
         }}
-        errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
+        errors={{ street: fieldErrors.street || fieldErrors.address, unit: fieldErrors.unit, barangay: fieldErrors.barangay, city: fieldErrors.city, province: fieldErrors.province, postal_code: fieldErrors.postal_code, country: fieldErrors.country }}
         disabled={isPending}
       />
       <SelectField
@@ -346,11 +348,12 @@ export default function RegisterScreen() {
 
   const [bloodType, setBloodType] = useState<BloodType | undefined>(undefined);
   const [religion, setReligion] = useState<Religion | undefined>(undefined);
-  const [medicalAddress, setMedicalAddress] = useState<MedicalInformationAddress>(EMPTY_ADDRESS);
+  const [medicalAddress, setMedicalAddress] = useState<MedicalInformationAddress>({ ...EMPTY_ADDRESS, country: 'Philippines' });
   const [noBloodTransfusion, setNoBloodTransfusion] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [checkingPhone, setCheckingPhone] = useState(false);
 
   const friendlyMessage = message ? 'Something went wrong. Please check your details and try again.' : null;
 
@@ -363,7 +366,7 @@ export default function RegisterScreen() {
     return errors;
   };
 
-  const onNext = () => {
+  const onNext = async () => {
     clearErrors();
     setFieldErrors({});
     if (step === 0) {
@@ -394,6 +397,23 @@ export default function RegisterScreen() {
       if (!result.success) {
         setFieldErrors(parseFieldErrors(result.error.issues));
         return;
+      }
+      const parsedPhone = parsePhoneNumberFromString(phoneValue.phone, phoneValue.countryCode as CountryCode);
+      if (!parsedPhone?.isValid()) {
+        setFieldErrors({ phone: 'Enter a valid phone number' });
+        return;
+      }
+      try {
+        setCheckingPhone(true);
+        if ((await isPhoneNumberAvailable(parsedPhone.number)) === false) {
+          setFieldErrors({ phone: 'This phone number is already registered' });
+          return;
+        }
+      } catch {
+        setFieldErrors({ phone: 'Could not check this phone number. Please try again.' });
+        return;
+      } finally {
+        setCheckingPhone(false);
       }
     }
     setStep((s) => s + 1);
@@ -452,9 +472,7 @@ export default function RegisterScreen() {
     try {
       let phoneNumber = '';
       if (phoneValue.phone && phoneValue.countryCode) {
-        const dialCode = getCountryCallingCode(phoneValue.countryCode as CountryCode);
-        const fullNumber = `+${dialCode}${phoneValue.phone}`;
-        const parsed = parsePhoneNumberFromString(fullNumber);
+        const parsed = parsePhoneNumberFromString(phoneValue.phone, phoneValue.countryCode as CountryCode);
         if (parsed?.isValid()) {
           phoneNumber = parsed.number;
         } else {
@@ -462,6 +480,12 @@ export default function RegisterScreen() {
           setStep(1);
           return;
         }
+      }
+
+      if ((await isPhoneNumberAvailable(phoneNumber)) === false) {
+        setFieldErrors({ phone: 'This phone number is already registered' });
+        setStep(1);
+        return;
       }
 
       const registerPayload = {
@@ -557,6 +581,7 @@ export default function RegisterScreen() {
           fieldErrors={fieldErrors}
           setFieldErrors={setFieldErrors}
           friendlyMessage={friendlyMessage}
+          checkingPhone={checkingPhone}
           onNext={onNext}
           onBack={onBack}
         />
@@ -586,4 +611,3 @@ export default function RegisterScreen() {
     </AuthLayout>
   );
 }
-

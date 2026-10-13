@@ -29,7 +29,7 @@ const medical = {
   phone: '9123456789',
   blood_type: 'o_positive',
   religion: null,
-  address: JSON.stringify({ street: 'Private address', city: 'Cebu' }),
+  address: JSON.stringify({ street: 'Private address', barangay: 'Barangay 1', city: 'Cebu' }),
   no_blood_transfusion: 1,
   sync_status: 'synced',
   updated_at_local: new Date().toISOString(),
@@ -49,6 +49,7 @@ describe('emergency QR v2', () => {
     expect(parsed?.info.allergies[0].allergen).toBe('Peanuts');
     expect(parsed?.info.phone).toBe('9123456789');
     expect(parsed?.info.street).toBe('Private address');
+    expect(parsed?.info.barangay).toBe('Barangay 1');
     expect(parsed?.info.city).toBe('Cebu');
     expect(parsed?.info.religion).toBe('');
     expect(parsed?.info.dateOfBirth).toBe('1990-01-01');

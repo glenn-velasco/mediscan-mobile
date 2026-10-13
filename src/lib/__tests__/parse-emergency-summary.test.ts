@@ -126,6 +126,24 @@ describe('parseEmergencySummary', () => {
     expect(info?.emergencyContacts).toEqual([{ name: 'Maria Velasco', relationship: 'Mother', phone: '+63 9171234567' }]);
   });
 
+  it('round-trips the latest verified encounter with professional and vital timestamps', async () => {
+    const summary = buildEmergencySummary(42, GENERATED_AT, medicalInformation(), [], [], [], [], [], {
+      id: 'encounter-1', patient_id: '42', professional_id: 'professional-1', professional_name: 'Dr. Ana Cruz',
+      observations: 'Patient alert and responsive.', actionsTaken: 'Oxygen administered.',
+      recordedAt: '2026-07-15T09:20:00.000Z', updatedAt: '2026-07-15T09:25:00.000Z',
+      verifiedBy: { userId: 'professional-1', name: 'Dr. Ana Cruz' },
+      vitals: [{ kind: 'oxygen_saturation', value: '96', unit: '%', measuredAt: '2026-07-15T09:21:00.000Z', recordedBy: 'Dr. Ana Cruz', verifiedBy: { userId: 'professional-1', name: 'Dr. Ana Cruz' } }],
+    });
+
+    const info = await parseEmergencySummary(summary);
+
+    expect(info?.latestVerifiedEncounter).toEqual({
+      professionalName: 'Dr. Ana Cruz', professionalId: 'professional-1', recordedAt: '2026-07-15T09:20:00.000Z', updatedAt: '2026-07-15T09:25:00.000Z',
+      observations: 'Patient alert and responsive.', actionsTaken: 'Oxygen administered.',
+      vitals: [{ kind: 'oxygen_saturation', value: '96', unit: '%', measuredAt: '2026-07-15T09:21:00.000Z', recordedBy: 'Dr. Ana Cruz' }],
+    });
+  });
+
   it('parses "Medications: none recorded" into an empty medications array', async () => {
     const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], [], []);
 

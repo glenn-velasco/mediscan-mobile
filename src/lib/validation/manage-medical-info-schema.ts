@@ -5,24 +5,19 @@ import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
 import { SUFFIX_OPTIONS } from '@/constants/suffix';
 import { RELIGION_OPTIONS } from '@/constants/religion';
+import { optionalPersonName } from '@/lib/validation/person-name-schema';
+import { isPastCalendarDate } from '@/lib/validation/calendar-date';
 
 export const manageMedicalInfoSchema = z.object({
-  first_name: z.string().trim().max(255).optional(),
-  middle_name: z.string().trim().max(255).optional(),
-  last_name: z.string().trim().max(255).optional(),
+  first_name: optionalPersonName('First name').optional(),
+  middle_name: optionalPersonName('Middle name').optional(),
+  last_name: optionalPersonName('Last name').optional(),
   suffix: z.enum(SUFFIX_OPTIONS).nullable().optional(),
   date_of_birth: z
     .string()
     .trim()
     .optional()
-    .refine((val) => {
-      if (!val) return true;
-      const [year, month, day] = val.split('-').map(Number);
-      const d = new Date(year, month - 1, day);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      return !isNaN(d.getTime()) && d.getTime() < today.getTime();
-    }, 'Date of birth must be before today'),
+    .refine((val) => !val || isPastCalendarDate(val), 'Enter a valid date of birth before today'),
   gender: z.enum(GENDER_OPTIONS).nullable().optional(),
   phone_country_code: z.string().trim().max(10).optional(),
   phone: z.string().trim().max(30).optional(),
@@ -32,6 +27,7 @@ export const manageMedicalInfoSchema = z.object({
     .object({
       street: z.string().trim().max(255).nullable().optional(),
       unit: z.string().trim().max(255).nullable().optional(),
+      barangay: z.string().trim().max(255).nullable().optional(),
       city: z.string().trim().max(255).nullable().optional(),
       province: z.string().trim().max(255).nullable().optional(),
       postal_code: z.string().trim().max(20).nullable().optional(),

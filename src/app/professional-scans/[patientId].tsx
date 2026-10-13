@@ -7,12 +7,12 @@ import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useScannedPatientDetail } from '@/features/professional-scans/useScannedPatientDetail';
+import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 import { useTheme } from '@/hooks/use-theme';
 import { formatIsoDate } from '@/lib/format-date';
 import { BloodTypeLabel } from '@/constants/blood-type';
 import { GenderLabel } from '@/constants/gender';
 import { ReligionLabel } from '@/constants/religion';
-import type { MedicalInformation } from '@/api/types';
 import { useState } from 'react';
 
 function PatientAvatar({ uri, name }: { uri: string | null; name: string }) {
@@ -78,8 +78,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function ScannedPatientDetailScreen() {
   const { patientId } = useLocalSearchParams<{ patientId: string }>();
-  const id = Number(patientId);
-  const { data: patient, isLoading } = useScannedPatientDetail(id);
+  const { data: patient, isLoading } = useScannedPatientDetail(patientId ?? null);
+  const encounters = useProfessionalEncounters(patientId);
   const theme = useTheme();
 
   if (isLoading) {
@@ -128,6 +128,7 @@ export default function ScannedPatientDetailScreen() {
         {patient.address && (
           <Section title="Address">
             <InfoRow label="Street" value={patient.address.street} />
+            <InfoRow label="Barangay" value={patient.address.barangay} />
             <InfoRow label="City" value={patient.address.city} />
             <InfoRow label="Province" value={patient.address.province} />
             <InfoRow label="Postal Code" value={patient.address.postal_code} />
@@ -201,6 +202,8 @@ export default function ScannedPatientDetailScreen() {
             ))}
           </Section>
         )}
+
+        {encounters.data && encounters.data.length > 0 ? <Section title="My verified encounters">{encounters.data.map((encounter) => <View key={encounter.id} className="gap-2 py-2"><ThemedText>Updated {new Date(encounter.updatedAt).toLocaleString()}</ThemedText>{encounter.vitals.map((vital) => <View key={`${vital.kind}-${vital.measuredAt}`}><ThemedText type="small">{vital.kind.replaceAll('_', ' ')}: {vital.value} {vital.unit}</ThemedText><ThemedText type="small" color="mutedForeground">Recorded {new Date(vital.measuredAt).toLocaleString()} by {vital.verifiedBy?.name || vital.recordedBy || encounter.professional_name}</ThemedText></View>)}</View>)}</Section> : null}
       </ScrollView>
     </AppLayout>
   );

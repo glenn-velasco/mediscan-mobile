@@ -1,10 +1,11 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
   BottomSheetBackdrop,
-  BottomSheetView,
+  BottomSheetFlatList,
+  BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from 'react-native-reanimated';
@@ -50,6 +51,14 @@ export function SelectField<T extends string>({
 }: SelectFieldProps<T>) {
   const theme = useTheme();
   const sheetRef = useRef<BottomSheetModal>(null);
+  const keyboardHideSubscription = useRef<ReturnType<typeof Keyboard.addListener> | null>(null);
+  const [search, setSearch] = useState('');
+  const filteredOptions = useMemo(
+    () => options.length > 15 && search.trim()
+      ? options.filter((option) => getLabel(option).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+      : options,
+    [options, search, getLabel],
+  );
   const floated = value !== undefined;
 
   const progress = useDerivedValue(() => withTiming(floated ? 1 : 0, { duration: 150 }), [floated]);
@@ -61,6 +70,7 @@ export function SelectField<T extends string>({
 
   const labelTextStyle = useAnimatedStyle(() => ({
     fontSize: field.fontSize - progress.value * 4,
+    lineHeight: field.lineHeight - progress.value * 10,
   }));
 
   const valueTextStyle = useAnimatedStyle(() => ({
@@ -68,8 +78,22 @@ export function SelectField<T extends string>({
   }));
 
   const handleOpen = useCallback(() => {
-    Keyboard.dismiss();
+    setSearch('');
+    if (Keyboard.isVisible()) {
+      keyboardHideSubscription.current?.remove();
+      keyboardHideSubscription.current = Keyboard.addListener('keyboardDidHide', () => {
+        keyboardHideSubscription.current?.remove();
+        keyboardHideSubscription.current = null;
+        sheetRef.current?.present();
+      });
+      Keyboard.dismiss();
+      return;
+    }
     sheetRef.current?.present();
+  }, []);
+
+  useEffect(() => () => {
+    keyboardHideSubscription.current?.remove();
   }, []);
 
   const handleSelect = useCallback(
@@ -115,7 +139,11 @@ export function SelectField<T extends string>({
             {placeholder}
           </AnimatedText>
         </Animated.View>
-        <AnimatedText style={[{ fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}>
+        <AnimatedText
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={[{ flex: 1, fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}
+        >
           {value ? getLabel(value) : ''}
         </AnimatedText>
         {value !== undefined ? (
@@ -142,45 +170,63 @@ export function SelectField<T extends string>({
       <BottomSheetModal
         ref={sheetRef}
         stackBehavior="push"
-        enableDynamicSizing
+        snapPoints={options.length > 15 ? ['70%'] : undefined}
+        enableDynamicSizing={options.length <= 15}
+        keyboardBehavior="interactive"
+        android_keyboardInputMode="adjustResize"
         backgroundStyle={{ backgroundColor: theme.background, borderRadius: sheet.radius }}
         handleIndicatorStyle={{ backgroundColor: theme.border, width: sheet.handleWidth }}
         backdropComponent={renderBackdrop}
       >
-        <BottomSheetView style={{ paddingHorizontal: sheet.paddingH, paddingBottom: sheet.paddingB, paddingTop: sheet.paddingT, gap: 4 }}>
-          <View style={[formTokens.sheetHeader, { borderBottomColor: theme.border }]}>
-            <ThemedText type="overline">
-              {placeholder}
-            </ThemedText>
-            <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={8}>
-              <Ionicons name="close" size={20} color={theme.mutedForeground} />
-            </Pressable>
-          </View>
+        <BottomSheetFlatList
+          data={filteredOptions}
+          keyExtractor={(option) => option}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: sheet.paddingH, paddingBottom: sheet.paddingB, paddingTop: sheet.paddingT }}
+          ListHeaderComponent={
+            <View>
+              <View style={[formTokens.sheetHeader, { borderBottomColor: theme.border }]}>
+                <ThemedText type="overline">
+                  {placeholder}
+                </ThemedText>
+                <Pressable onPress={() => sheetRef.current?.dismiss()} hitSlop={8}>
+                  <Ionicons name="close" size={20} color={theme.mutedForeground} />
+                </Pressable>
+              </View>
 
-          {allowClear ? (
-            <Pressable
-              onPress={() => handleSelect(undefined)}
-              style={formTokens.sheetRow}
-            >
-              <ThemedText color="mutedForeground">None</ThemedText>
-              {value === undefined ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
-            </Pressable>
-          ) : null}
+              {options.length > 15 ? (
+                <BottomSheetTextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder={`Search ${placeholder.toLowerCase()}`}
+                  placeholderTextColor={theme.mutedForeground}
+                  style={{ color: theme.foreground, backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginVertical: 8 }}
+                />
+              ) : null}
 
-          {options.map((option) => {
+              {allowClear ? (
+                <Pressable onPress={() => handleSelect(undefined)} style={formTokens.sheetRow}>
+                  <ThemedText color="mutedForeground">None</ThemedText>
+                  {value === undefined ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
+                </Pressable>
+              ) : null}
+            </View>
+          }
+          renderItem={({ item: option }) => {
             const selected = option === value;
             return (
-              <Pressable
-                key={option}
-                onPress={() => handleSelect(option)}
-                style={formTokens.sheetRow}
-              >
+              <Pressable onPress={() => handleSelect(option)} style={formTokens.sheetRow}>
                 <ThemedText style={{ fontWeight: selected ? '600' : '400', color: selected ? theme.primary : theme.foreground }}>{getLabel(option)}</ThemedText>
                 {selected ? <Ionicons name="checkmark" size={18} color={theme.primary} /> : null}
               </Pressable>
             );
-          })}
-        </BottomSheetView>
+          }}
+          ListEmptyComponent={
+            <ThemedText color="mutedForeground" style={{ paddingVertical: 16 }}>
+              No matches found
+            </ThemedText>
+          }
+        />
       </BottomSheetModal>
     </View>
   );

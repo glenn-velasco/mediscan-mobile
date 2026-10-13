@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
+import { getProfessionalEncounters } from '@/api/endpoints/professional-scans';
 import { useAuth } from '@/auth/useAuth';
 import type { Suffix } from '@/constants/suffix';
 import { EmptyState } from '@/components/empty-state';
@@ -12,6 +13,7 @@ import { PrimaryButton } from '@/components/primary-button';
 import { QrCodeView } from '@/components/qr-code-view';
 import { QrScannerView } from '@/components/qr-scanner-view';
 import { ScannedEmergencyCard } from '@/components/scanned-emergency-card';
+import { PatientHandoffShare } from '@/components/patient-handoff-share';
 import { saveScan } from '@/db/repositories/recent-emergency-scans.repo';
 import { ThemedText } from '@/components/themed-text';
 import { buildFullName } from '@/lib/build-full-name';
@@ -21,12 +23,13 @@ import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
 import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useMedications } from '@/features/medications/useMedications';
+import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 import { useTheme } from '@/hooks/use-theme';
 import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { isResponderQr } from '@/lib/emergency-qr-routing';
 import { useLightweightMode } from '@/lib/lightweight-mode-context';
 import { consumeUpdatedScannedInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
-import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
+import { parseEmergencySummary, withLatestVerifiedEncounter, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import { encryptQrPayload } from '@/lib/qr-cipher';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import { useBiometricAuth } from '@/lib/use-biometric-auth';
@@ -34,7 +37,7 @@ import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
 import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
 import { queryClient } from '@/lib/query-client';
 import { professionalScansQueryKey, myScanActivityQueryKey } from '@/lib/query-keys';
-import { submitToPatient, PatientKeyNotFoundError } from '@/services/professional-submission.service';
+import { submitToPatient } from '@/services/professional-submission.service';
 import { scanForPatient, connectAndSubmit, type DiscoveredPeer } from '@/services/ble-central.service';
 import { seal } from '@/services/sealed-box.service';
 import { useDisconnectBondedDevices } from '@/features/ble-sync/useDisconnectBondedDevices';
@@ -101,6 +104,7 @@ export default function QuickScanScreen() {
   const { data: diagnoses = [] } = useDiagnoses();
   const { data: medications = [] } = useMedications();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
+  const { data: professionalEncounters = [] } = useProfessionalEncounters();
 
   useEffect(() => {
     return () => clearQuickScanLockScreenFlags();
@@ -115,7 +119,7 @@ export default function QuickScanScreen() {
   useEffect(() => {
     if (!user || !medicalInformation) return;
     let cancelled = false;
-    encryptQrPayload(buildEmergencySummary(user.id, new Date(), medicalInformation, allergies, emergencyContacts, diagnoses, medications, conditions)).then(
+    encryptQrPayload(buildEmergencySummary(user.id, new Date(), medicalInformation, allergies, emergencyContacts, diagnoses, medications, conditions, professionalEncounters[0])).then(
       (encrypted) => {
         if (!cancelled) setSummary(encrypted);
       },
@@ -123,7 +127,7 @@ export default function QuickScanScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts]);
+  }, [user, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, professionalEncounters]);
 
   const displaySummary = user && medicalInformation ? summary : null;
 
@@ -145,7 +149,9 @@ export default function QuickScanScreen() {
       }
       setScanned(parsed);
       scannedRawRef.current = data;
-      void saveScan(data, parsed, { status: 'legacy', authenticity: 'unverified', message: 'Legacy emergency QR; contents are patient-provided.' }).then((id) => { if (scannedRawRef.current === data) setScanId(id); }).catch(() => {});
+      void saveScan(data, parsed, { status: 'legacy', authenticity: 'unverified', message: 'Legacy emergency QR; contents are patient-provided.' })
+        .then(setScanId)
+        .catch(() => {});
     });
   };
 
@@ -180,6 +186,13 @@ export default function QuickScanScreen() {
           queryClient.invalidateQueries({ queryKey: myScanActivityQueryKey });
           void pullScannedPatients();
           void pullMyScanActivity();
+          void getProfessionalEncounters(String(scanned.patientId)).then((encounters) => {
+            setScanned((current) => current && String(current.patientId) === String(scanned.patientId)
+              ? withLatestVerifiedEncounter(current, encounters[0])
+              : current);
+          }).catch(() => {
+            // The encrypted QR snapshot remains usable when live encounter access is unavailable.
+          });
           if (user && scanned.patientId !== null) {
             sendScanEventEnvelope(scanned.patientId, {
               type: 'scan_event',
@@ -194,7 +207,7 @@ export default function QuickScanScreen() {
     }
   }, [biometric.status, scanned, isLightweight, user]);
 
-  const handleManageInfo = () => {
+  const handleManageInfo = async () => {
     if (!scanned || scanned.patientId === null) return;
     logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId, context: 'professional_submit' })
       .then(() => {
@@ -214,7 +227,16 @@ export default function QuickScanScreen() {
       })
       .catch(() => {});
     setPendingManageInfoQrData(scannedRawRef.current ?? '');
-    router.push({ pathname: '/manage-info', params: { patientId: String(scanned.patientId) } });
+    let currentScanId = scanId;
+    if (!currentScanId && scannedRawRef.current) {
+      currentScanId = await saveScan(
+        scannedRawRef.current,
+        scanned,
+        { status: 'legacy', authenticity: 'unverified', message: 'Legacy emergency QR; contents are patient-provided.' },
+      ).catch(() => null);
+      setScanId(currentScanId);
+    }
+    router.push({ pathname: '/manage-info', params: { patientId: String(scanned.patientId), ...(currentScanId ? { scanId: currentScanId } : {}) } });
   };
 
   const handleClose = () => {
@@ -225,6 +247,15 @@ export default function QuickScanScreen() {
       setPromoting(true);
       promoteToFullApp().then(() => router.replace('/(app)'));
     }
+  };
+
+  const openWalletCard = async () => {
+    clearQuickScanLockScreenFlags();
+    if (isLightweight) {
+      setPromoting(true);
+      await promoteToFullApp();
+    }
+    router.push('/emergency-wallet-card');
   };
 
   const switchMode = async (next: Mode) => {
@@ -298,28 +329,41 @@ export default function QuickScanScreen() {
   return (
     <View className="flex-1" style={{ backgroundColor: theme.background }}>
       <ScrollView
-        className="flex-1 px-6 pt-16"
-        contentContainerStyle={{ paddingBottom: 0 }}
-        contentInset={{ bottom: insets.bottom + 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 24,
+          paddingTop: 64,
+          paddingBottom: mode === 'show' ? insets.bottom + 24 : insets.bottom + 120,
+        }}
+        contentInsetAdjustmentBehavior="automatic"
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
       >
         <View className="mb-4 items-end">{closeButton}</View>
 
         {mode === 'show' ? (
-          <View className="items-center gap-4">
+          <View style={{ flex: 1 }}>
             {displaySummary ? (
               <>
-                <View className="rounded-2xl p-6" style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
-                  <QrCodeView value={displaySummary} size={280} />
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <View className="rounded-2xl p-6" style={{ backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}>
+                    <QrCodeView value={displaySummary} size={280} />
+                  </View>
                 </View>
-                <Pressable
-                  onPress={() => switchMode('scan')}
-                  className="flex-row items-center justify-center gap-2 rounded-xl px-6 py-3"
-                  style={{ backgroundColor: theme.muted }}
-                >
-                  <Ionicons name="camera" size={18} color={theme.foreground} />
-                  <ThemedText type="bodyBold">Scan</ThemedText>
-                </Pressable>
+                <View style={{ gap: 12 }}>
+                  <PrimaryButton
+                    label="Scan QR"
+                    leftIcon={<Ionicons name="camera" size={18} color={theme.primaryForeground} />}
+                    onPress={() => void switchMode('scan')}
+                  />
+                  <PrimaryButton
+                    label="Printable wallet card"
+                    variant="outline"
+                    leftIcon={<Ionicons name="print-outline" size={18} color={theme.primary} />}
+                    onPress={() => void openWalletCard()}
+                  />
+                </View>
               </>
             ) : (
               <EmptyState
@@ -337,7 +381,8 @@ export default function QuickScanScreen() {
           </View>
         ) : biometric.status === 'authenticated' && scanned ? (
           <View className="gap-4">
-            <ScannedEmergencyCard info={scanned} source="qr" onRecordEncounter={() => scanId && router.push({ pathname: '/responder-history/[id]/encounter', params: { id: scanId } })} encounterReady={Boolean(scanId)} showMedicalDetails />
+            <ScannedEmergencyCard info={scanned} source="qr" showMedicalDetails />
+            <PatientHandoffShare info={scanned} scanId={scanId ?? undefined} />
           </View>
         ) : (
           <View className="items-center gap-4 py-8">
@@ -379,9 +424,9 @@ export default function QuickScanScreen() {
               <Ionicons name="medkit" size={18} color={theme.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText type="bodyBold" color="primary">Manage info</ThemedText>
+              <ThemedText type="bodyBold" color="primary">Manage patient information</ThemedText>
               <ThemedText type="small" color="mutedForeground">
-                Verify allergies, witness consent, or leave a note as a professional.
+                Record an encounter, add vitals, verify medical details, or leave a note.
               </ThemedText>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.primary} />

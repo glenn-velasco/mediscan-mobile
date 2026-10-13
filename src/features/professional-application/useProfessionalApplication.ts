@@ -15,11 +15,10 @@ export function useMyProfessionalApplication() {
     queryKey: myProfessionalApplicationQueryKey,
     queryFn: getMyProfessionalApplication,
     staleTime: 0,
-    refetchInterval: 10_000,
   });
 }
 
-export function useProfessionalApplicationBroadcastStatus(applicationId: number | undefined) {
+export function useProfessionalApplicationBroadcastStatus(applicationId: string | number | undefined) {
   return useQuery<ProfessionalApplicationStatus | undefined>({
     queryKey: [...professionalApplicationBroadcastStatusQueryKey, applicationId],
     queryFn: () => undefined,
@@ -28,14 +27,10 @@ export function useProfessionalApplicationBroadcastStatus(applicationId: number 
   });
 }
 
-export function useProfessionalApplication(applicationId: number | undefined) {
+export function useProfessionalApplication(applicationId: string | number | undefined) {
   return useQuery({
     queryKey: [...professionalApplicationQueryKey, applicationId],
     queryFn: () => getProfessionalApplication(applicationId!),
     enabled: !!applicationId,
-    refetchInterval: (query) => {
-      if (query.state.status === 'error') return false;
-      return query.state.data?.status === 'processing' ? 3000 : false;
-    },
   });
 }

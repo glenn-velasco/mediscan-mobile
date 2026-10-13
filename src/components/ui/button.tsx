@@ -60,7 +60,10 @@ const Button = forwardRef<View, ButtonProps>(
           <>
             {leftIcon ? <View>{leftIcon}</View> : null}
             {typeof children === 'string' ? (
-              <Text className={cn(buttonTextVariants({ variant, size }))}>
+              <Text
+                className={cn(buttonTextVariants({ variant, size }))}
+                style={{ color: variant === 'default' ? theme.primaryForeground : variant === 'destructive' ? theme.destructiveForeground : variant === 'secondary' ? theme.secondaryForeground : variant === 'link' ? theme.primary : theme.foreground }}
+              >
                 {children}
               </Text>
             ) : (

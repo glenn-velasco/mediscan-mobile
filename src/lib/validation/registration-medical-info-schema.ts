@@ -4,15 +4,10 @@ import { isValidPhoneNumber, isPossiblePhoneNumber, validatePhoneNumberLength } 
 import { GENDER_OPTIONS } from '@/constants/gender';
 import { BLOOD_TYPE_OPTIONS } from '@/constants/blood-type';
 import { RELIGION_OPTIONS } from '@/constants/religion';
+import { isPastCalendarDate } from '@/lib/validation/calendar-date';
 
 export const registrationMedicalInfoSchema = z.object({
-  date_of_birth: z.string().trim().min(1, 'Date of birth is required').refine((val) => {
-    const [year, month, day] = val.split('-').map(Number);
-    const d = new Date(year, month - 1, day);
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return !isNaN(d.getTime()) && d.getTime() < today.getTime();
-  }, 'Date of birth must be before today'),
+  date_of_birth: z.string().trim().min(1, 'Date of birth is required').refine(isPastCalendarDate, 'Enter a valid date of birth before today'),
   gender: z.enum(GENDER_OPTIONS, { message: 'Gender is required' }),
   phone_country_code: z.string().trim().min(1, 'Country code is required'),
   phone: z.string().trim().min(1, 'Phone number is required'),
@@ -58,10 +53,19 @@ export const registrationMedicalInfoSchema = z.object({
 export const registrationAddressSchema = z.object({
   street: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Street is required')),
   unit: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Unit/Building/House is required')),
+  barangay: z.string().trim().max(255).nullable().optional(),
   city: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'City is required')),
   province: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Province is required')),
   postal_code: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Postal code is required')),
   country: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Country is required')),
+}).superRefine((address, context) => {
+  if (address.country.toLowerCase() === 'philippines' && !address.barangay?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Barangay is required',
+      path: ['barangay'],
+    });
+  }
 });
 
 export type RegistrationMedicalInfoFormValues = z.infer<typeof registrationMedicalInfoSchema>;

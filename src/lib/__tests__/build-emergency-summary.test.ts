@@ -33,6 +33,7 @@ function medicalInformation(overrides: Partial<MedicalInformationRow> = {}): Med
     address: JSON.stringify({
       street: '12 Mabini St',
       unit: null,
+      barangay: 'Barangay 10',
       city: 'Cebu City',
       province: 'Cebu',
       postal_code: '6000',
@@ -321,6 +322,7 @@ describe('buildEmergencySummary', () => {
     expect(parsed?.phone).toBe('9674352324');
     expect(parsed?.phoneCountryCode).toBe('63');
     expect(parsed?.street).toBe('12 Mabini St');
+    expect(parsed?.barangay).toBe('Barangay 10');
     expect(parsed?.city).toBe('Cebu City');
     expect(parsed?.province).toBe('Cebu');
     expect(parsed?.postalCode).toBe('6000');

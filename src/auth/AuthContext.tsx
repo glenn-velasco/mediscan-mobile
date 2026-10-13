@@ -1,7 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { createContext, useCallback, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { login as apiLogin, logout as apiLogout, me as apiMe, register as apiRegister } from '@/api/endpoints/auth';
+import { login as apiLogin, logout as apiLogout, me as apiMe, refreshToken as apiRefreshToken, register as apiRegister } from '@/api/endpoints/auth';
 import { updateMedicalInformation } from '@/api/endpoints/medical-information';
 import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
 import { getDeviceName } from '@/auth/device-name';
@@ -27,12 +27,7 @@ type AuthContextValue = {
    *  screen from flashing the "create profile" empty state when the cached user lacks data. */
   isInitialLoading: boolean;
   login: (payload: Omit<LoginPayload, 'device_name'>) => Promise<void>;
-  /**
-   * Resolves `{ pending: true }` when the submitted name+dob matched an existing record and the
-   * registration is held awaiting that record's primary user's confirmation - no account/session
-   * is created in that case, so `status` stays 'unauthenticated'. Otherwise resolves
-   * `{ pending: false }` after logging the new account in normally.
-   */
+  /** Resolves `{ pending: true }` when Supabase requires email confirmation. */
   register: (
     payload: Omit<RegisterPayload, 'device_name'>,
     medicalInfo?: MedicalInformationPayload,
@@ -141,6 +136,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       // react-doctor-disable-next-line react-hooks-js/todo
       try {
         const ME_TIMEOUT_MS = 10_000;
+        const { token: refreshedToken } = await apiRefreshToken();
+        await setToken(refreshedToken);
         const { user: fetchedUser } = await Promise.race([
           apiMe(),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('apiMe timeout')), ME_TIMEOUT_MS)),
@@ -171,15 +168,20 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
   const login = useCallback(async (payload: Omit<LoginPayload, 'device_name'>) => {
     setStatus('authenticating');
-    const device_name = await getDeviceName();
-    const { token, user: loggedInUser } = await apiLogin({ ...payload, device_name });
-    await setToken(token);
-    setCurrentUserId(loggedInUser.id);
-    setUser(loggedInUser);
-    setStatus('authenticated');
-    setIsInitialLoading(false);
-    void backfillUserId(loggedInUser.id);
-    await saveUser(loggedInUser);
+    try {
+      const device_name = await getDeviceName();
+      const { token, user: loggedInUser } = await apiLogin({ ...payload, device_name });
+      await setToken(token);
+      setCurrentUserId(loggedInUser.id);
+      setUser(loggedInUser);
+      setStatus('authenticated');
+      setIsInitialLoading(false);
+      void backfillUserId(loggedInUser.id);
+      await saveUser(loggedInUser);
+    } catch (error) {
+      setStatus('unauthenticated');
+      throw error;
+    }
   }, []);
 
   const register = useCallback(async (payload: Omit<RegisterPayload, 'device_name'>, medicalInfo?: MedicalInformationPayload) => {
@@ -270,6 +272,8 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   const refreshUser = useCallback(async () => {
     const network = await NetInfo.fetch();
     if (!(network.isInternetReachable ?? network.isConnected ?? false)) return;
+    const { token } = await apiRefreshToken();
+    await setToken(token);
     const { user: fetchedUser } = await apiMe();
     setCurrentUserId(fetchedUser.id);
     setUser((prev) => (prev && JSON.stringify(prev) === JSON.stringify(fetchedUser) ? prev : fetchedUser));

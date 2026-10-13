@@ -12,11 +12,12 @@ import * as medicationsRepo from '@/db/repositories/medications.repo';
 import { buildEmergencyQrV2, parseEmergencyQrV2 } from '@/lib/emergency-qr-v2';
 import { buildHybridEmergencyQr } from '@/lib/emergency-qr-hybrid';
 import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
+import { getProfessionalEncounters } from '@/api/endpoints/professional-scans';
 
 let publishPromise: Promise<boolean> | null = null;
 
 async function buildCurrentSnapshot(userId: string | number): Promise<{ payload: string; generatedAt: string } | null> {
-  const [medical, allergies, conditions, diagnoses, medications, contacts, recentHistory] = await Promise.all([
+  const [medical, allergies, conditions, diagnoses, medications, contacts, recentHistory, encounters] = await Promise.all([
     medicalRepo.getByUserId(userId),
     allergiesRepo.getAll(),
     conditionsRepo.getAll(),
@@ -24,6 +25,7 @@ async function buildCurrentSnapshot(userId: string | number): Promise<{ payload:
     medicationsRepo.getAll(),
     contactsRepo.getAll(),
     emergencyHistoryRepo.getRecent(5, userId),
+    getProfessionalEncounters().catch(() => []),
   ]);
   if (!medical) return null;
   const payload = await buildEmergencyQrV2({
@@ -37,6 +39,7 @@ async function buildCurrentSnapshot(userId: string | number): Promise<{ payload:
     disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
     confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
     recentHistory,
+    latestVerifiedEncounter: encounters[0],
   });
   return { payload, generatedAt: new Date().toISOString() };
 }

@@ -58,6 +58,7 @@ export function TextField({
 
   const textStyle = useAnimatedStyle(() => ({
     fontSize: field.fontSize - progress.value * 4,
+    lineHeight: field.lineHeight - progress.value * 10,
   }));
 
   const labelColor = error ? theme.destructive : focused ? theme.primary : theme.mutedForeground;

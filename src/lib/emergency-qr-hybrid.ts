@@ -24,8 +24,10 @@ type CompactSnapshot = {
   m: [string, string, string | null][];
   e: [string, string | null, string | null][];
   l?: [string, string, string, string, string, string];
+  r?: string;
   x?: [string, string, string, string];
   k?: ScannedEmergencyInfo['knowledge'];
+  q?: ScannedEmergencyInfo['latestVerifiedEncounter'];
 };
 
 type HybridEnvelope = { t: string; p: string; k: string; s: string };
@@ -46,8 +48,10 @@ function toCompact(info: ScannedEmergencyInfo): CompactSnapshot {
     // without a phone number so the responder still sees the person's name/relationship.
     e: info.emergencyContacts.slice(0, 2).map(({ name, relationship, phone }) => [name, relationship, phone]),
     l: [info.street, info.unit, info.city, info.province, info.postalCode, info.country],
+    r: info.barangay || undefined,
     x: [info.dateOfBirth, info.gender, info.phone, info.phoneCountryCode],
     k: info.knowledge,
+    q: info.latestVerifiedEncounter,
   };
 }
 
@@ -62,6 +66,7 @@ function fromCompact(value: CompactSnapshot): ScannedEmergencyInfo {
     bloodType: value.b, religion: '', noBloodTransfusion: value.t,
     phone: value.x?.[2] ?? '', phoneCountryCode: value.x?.[3] ?? '',
     street: value.l?.[0] ?? '', unit: value.l?.[1] ?? '', city: value.l?.[2] ?? '',
+    barangay: value.r ?? '',
     province: value.l?.[3] ?? '', postalCode: value.l?.[4] ?? '', country: value.l?.[5] ?? '',
     allergies: value.a.map(([allergen, severity, reaction]) => ({ allergen, severity, reaction })),
     conditions: value.c.map((description) => ({ description })),
@@ -70,6 +75,7 @@ function fromCompact(value: CompactSnapshot): ScannedEmergencyInfo {
     emergencyContacts: value.e.map(([name, relationship, phone]) => ({ name, relationship, phone })),
     knowledge: value.k,
     withheld: { dateOfBirth: !value.x, bloodType: false, phone: !value.x },
+    latestVerifiedEncounter: value.q,
   };
 }
 

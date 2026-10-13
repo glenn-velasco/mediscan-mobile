@@ -9,8 +9,26 @@ The mobile app no longer calls Laravel. It uses Supabase Auth, Data API/RLS, Rea
 3. Apply the schema: `npx supabase db push`.
 4. Generate a 32-byte random key and configure the Edge Function secret `HISTORY_MASTER_KEY_B64` (base64-encoded). Keep it outside the app and repository. Back it up securely; losing it makes cloud patient records and emergency field history unreadable. Do not rotate it without a re-encryption migration.
 5. Deploy privileged workflows: `npx supabase functions deploy mediscan-privileged`.
-6. In Supabase Auth URL configuration, add `mediscanmobile://auth/callback` as an allowed redirect URL.
-7. Set the app environment values:
+6. Enable the Google Cloud Vision API, create a service account limited to Vision use, and configure its credentials as Edge Function secrets (the app continues with manual admin review while these are absent):
+
+   ```powershell
+   npx supabase secrets set GOOGLE_CLOUD_PROJECT_ID="..."
+   npx supabase secrets set GOOGLE_SERVICE_ACCOUNT_EMAIL="..."
+   npx supabase secrets set GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="..."
+   ```
+
+   Never use an `EXPO_PUBLIC_` variable for these values. The private key may contain literal `\n` sequences; the function normalizes them before signing the Google OAuth assertion.
+7. In Supabase Auth URL configuration, add `mediscanmobile://auth/callback` as an allowed redirect URL.
+8. Bootstrap the first admin from the Supabase SQL editor using that person's existing, confirmed account. Replace the email before running it:
+
+   ```sql
+   update auth.users
+   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
+   where lower(email) = lower('admin@example.com');
+   ```
+
+   The first admin must sign out and back in. Further admins can then be promoted or invited from **Account → Professional verification → Invite admin**.
+9. Set the app environment values:
 
    ```env
    EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
@@ -30,6 +48,8 @@ The service-role key is injected by Supabase into the Edge Function environment.
 - Cloud patient records and emergency history currently use `HISTORY_MASTER_KEY_B64` with separate AES-GCM associated-data domains. That key must be backed up and rotated with a re-encryption procedure before real patient data is used. A missing key makes the cloud ciphertext unreadable.
 - Old development cloud rows encrypted with per-device keys are skipped during pull. They are not automatically migrated; re-enter or re-save fictional data on the updated app. This compatibility behavior is only appropriate while development data is disposable.
 - The patient sync push queue now sends new/pending rows only. Successful updates are marked synced with an edit-timestamp check so a newer local change stays queued instead of being cleared by an older in-flight upload.
+- Migration `0012_unique_profile_phone.sql` rejects new duplicate E.164 profile phone numbers, including concurrent registrations. It leaves pre-existing duplicate numbers untouched; resolve those records separately. The registration screen calls `phone_number_available` before sign-up to show a field-level error. Apply the migration before testing that rule.
+- Philippine province and city choices come from the public PSGC Cloud v2 API, with manual entry when the service is unavailable or a location is missing. This lookup sends no patient data; it fetches only geographic reference lists.
 
 ## Verification
 

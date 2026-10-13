@@ -1,11 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Card } from '@/components/card';
+import { saveProfessionalEncounter } from '@/api/endpoints/professional-scans';
+import { useAuth } from '@/auth/useAuth';
+import { ClinicalObservationInput } from '@/components/clinical-observation-input';
 import { DiagnosisSeverityBadge, DiagnosisSeverityIcon } from '@/components/diagnosis-severity-badge';
 import { AddressFields } from '@/components/form/address-fields';
 import { DateField } from '@/components/form/date-field';
@@ -39,14 +43,179 @@ import { PrimaryButton } from '@/components/primary-button';
 import { SeverityBadge, SeverityIcon } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { useManageInfo } from '@/components/use-manage-info';
+import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 import type { Gender } from '@/constants/gender';
 import { useTheme } from '@/hooks/use-theme';
 import { formatIsoDate } from '@/lib/format-date';
+import { professionalEncountersQueryKey } from '@/lib/query-keys';
+import type { EncounterVital, ResponderNoteBlock } from '@/types/emergency';
+import * as historyRepo from '@/db/repositories/recent-emergency-scans.repo';
 import { consumePendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import type { UseFormReturn } from 'react-hook-form';
 
 type ThemeColors = ReturnType<typeof useTheme>;
+
+type VitalInputs = Record<EncounterVital['kind'], string>;
+const EMPTY_VITALS: VitalInputs = { blood_pressure: '', heart_rate: '', respiratory_rate: '', temperature: '', oxygen_saturation: '' };
+const MANAGE_VITAL_FIELDS: { kind: EncounterVital['kind']; label: string; unit: string }[] = [
+  { kind: 'blood_pressure', label: 'Blood pressure', unit: 'mmHg' },
+  { kind: 'heart_rate', label: 'Heart rate', unit: 'bpm' },
+  { kind: 'respiratory_rate', label: 'Respiratory rate', unit: 'breaths/min' },
+  { kind: 'temperature', label: 'Temperature', unit: '°C' },
+  { kind: 'oxygen_saturation', label: 'Oxygen saturation', unit: '%' },
+];
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 3);
+}
+
+function decimalOnly(value: string): string {
+  const normalized = value.replace(/[^\d.]/g, '');
+  const [whole = '', ...fraction] = normalized.split('.');
+  return `${whole.slice(0, 3)}${fraction.length ? `.${fraction.join('').slice(0, 1)}` : ''}`;
+}
+
+function validVital(kind: EncounterVital['kind'], value: string): boolean {
+  return kind === 'blood_pressure' ? /^\d{2,3}\/\d{2,3}$/.test(value) : /^\d{1,3}(?:\.\d)?$/.test(value);
+}
+
+function ManageEncounterSection({ patientId, scanId, theme, registerSave, onDirtyChange }: { patientId: string; scanId?: string; theme: ThemeColors; registerSave: (save: () => Promise<boolean>) => void; onDirtyChange: (dirty: boolean) => void }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const encounters = useProfessionalEncounters(patientId);
+  const encounter = encounters.data?.find((item) => item.professional_id === String(user?.id));
+  const initializedRef = useRef<string | null>(null);
+  const [observations, setObservations] = useState('');
+  const [actionsTaken, setActionsTaken] = useState('');
+  const [vitals, setVitals] = useState<VitalInputs>(EMPTY_VITALS);
+  const [vitalsDirty, setVitalsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [observationImages, setObservationImages] = useState<Extract<ResponderNoteBlock, { type: 'image' }>[]>([]);
+  const [imageChooserVisible, setImageChooserVisible] = useState(false);
+
+  useEffect(() => {
+    if (!scanId) return;
+    let active = true;
+    void historyRepo.getById(scanId).then((found) => {
+      if (!active || !found) return;
+      const blocks = found.note?.blocks ?? (found.note?.photoUris ?? []).map((uri, index) => ({ id: `${found.id}-image-${index}`, type: 'image' as const, uri, createdAt: found.note!.updatedAt }));
+      setObservationImages(blocks.filter((block): block is Extract<ResponderNoteBlock, { type: 'image' }> => block.type === 'image'));
+    });
+    return () => { active = false; };
+  }, [scanId]);
+
+  useEffect(() => {
+    if (!encounter || initializedRef.current) return;
+    initializedRef.current = encounter.id;
+    setObservations(encounter.observations);
+    setActionsTaken(encounter.actionsTaken);
+    setVitals(encounter.vitals.reduce<VitalInputs>((values, vital) => ({ ...values, [vital.kind]: vital.value }), { ...EMPTY_VITALS }));
+  }, [encounter]);
+
+  useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
+
+  const updateVital = (kind: EncounterVital['kind'], value: string) => {
+    setVitalsDirty(true);
+    setDirty(true);
+    setMessage(null);
+    setVitals((current) => ({ ...current, [kind]: value }));
+  };
+
+  const saveEncounter = async (): Promise<boolean> => {
+    if (!user) return false;
+    const entered = MANAGE_VITAL_FIELDS.filter((field) => vitals[field.kind].trim());
+    const invalid = entered.find((field) => !validVital(field.kind, vitals[field.kind].trim()));
+    if (invalid) {
+      setMessage(`Check the ${invalid.label.toLowerCase()} value.`);
+      return false;
+    }
+    setSaving(true);
+    setMessage(null);
+    try {
+      if (scanId) await historyRepo.setNoteBlocks(scanId, observationImages);
+      const now = new Date().toISOString();
+      const verifiedBy = { userId: String(user.id), name: user.fullname };
+      const newVitals: EncounterVital[] = vitalsDirty
+        ? entered.map((field) => ({ kind: field.kind, value: vitals[field.kind].trim(), unit: field.unit, measuredAt: now, recordedBy: user.fullname, verifiedBy }))
+        : [];
+      await saveProfessionalEncounter({
+        id: encounter?.id,
+        patient_id: patientId,
+        observations: observations.trim(),
+        actions_taken: actionsTaken.trim(),
+        vitals: [...(encounter?.vitals ?? []), ...newVitals],
+        recorded_at: encounter?.recordedAt ?? now,
+      });
+      setVitalsDirty(false);
+      setDirty(false);
+      setMessage('Encounter and vitals saved.');
+      await queryClient.invalidateQueries({ queryKey: professionalEncountersQueryKey });
+      return true;
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Unable to save the encounter.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveRef = useRef(saveEncounter);
+  useEffect(() => { saveRef.current = saveEncounter; });
+  useEffect(() => { registerSave(() => saveRef.current()); }, [registerSave]);
+
+  const [systolic = '', diastolic = ''] = vitals.blood_pressure.split('/', 2);
+  const updateBloodPressure = (nextSystolic: string, nextDiastolic: string) => {
+    updateVital('blood_pressure', nextSystolic || nextDiastolic ? `${nextSystolic}/${nextDiastolic}` : '');
+  };
+
+  return (
+    <View className="mb-6 gap-2">
+      <ThemedText type="overline">Encounter and vitals</ThemedText>
+      <Card className="gap-3">
+        <View className="flex-row items-center gap-3">
+          <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.success + '15' }}>
+            <Ionicons name="shield-checkmark" size={18} color={theme.success} />
+          </View>
+          <View className="flex-1">
+            <ThemedText type="bodyBold">Recorded by {user?.fullname || 'Verified professional'}</ThemedText>
+            <ThemedText type="small" color="mutedForeground">Saved readings remain visible for review.</ThemedText>
+          </View>
+        </View>
+        <ClinicalObservationInput
+          value={observations}
+          onChangeText={(value) => { setObservations(value); setDirty(true); setMessage(null); }}
+          images={observationImages}
+          onChangeImages={(images) => { setObservationImages(images); setDirty(true); setMessage(null); }}
+          chooserVisible={imageChooserVisible}
+          onChangeChooserVisible={setImageChooserVisible}
+        />
+        <TextField label="Actions taken" value={actionsTaken} onChangeText={(value) => { setActionsTaken(value); setDirty(true); setMessage(null); }} multiline maxLength={4000} floatingLabelBackground={theme.card} />
+        <View className="flex-row items-center gap-3">
+          <View className="flex-1"><TextField label="Systolic" value={systolic} onChangeText={(value) => updateBloodPressure(digitsOnly(value), diastolic)} keyboardType="number-pad" maxLength={3} floatingLabelBackground={theme.card} /></View>
+          <ThemedText type="heading">/</ThemedText>
+          <View className="flex-1"><TextField label="Diastolic" value={diastolic} onChangeText={(value) => updateBloodPressure(systolic, digitsOnly(value))} keyboardType="number-pad" maxLength={3} floatingLabelBackground={theme.card} /></View>
+          <ThemedText type="small" color="mutedForeground">mmHg</ThemedText>
+        </View>
+        {MANAGE_VITAL_FIELDS.filter((field) => field.kind !== 'blood_pressure').map((field) => (
+          <TextField
+            key={field.kind}
+            label={`${field.label} (${field.unit})`}
+            value={vitals[field.kind]}
+            onChangeText={(value) => updateVital(field.kind, field.kind === 'temperature' ? decimalOnly(value) : digitsOnly(value))}
+            keyboardType={field.kind === 'temperature' ? 'decimal-pad' : 'number-pad'}
+            maxLength={field.kind === 'temperature' ? 5 : 3}
+            floatingLabelBackground={theme.card}
+          />
+        ))}
+        {message ? <ThemedText type="small" color={message === 'Encounter and vitals saved.' ? 'success' : 'destructive'}>{message}</ThemedText> : null}
+        {saving ? <View className="flex-row items-center gap-2"><ActivityIndicator size="small" color={theme.primary} /><ThemedText type="small" color="mutedForeground">Saving encounter and vitals…</ThemedText></View> : null}
+      </Card>
+    </View>
+  );
+}
 
 function EmergencyContactsSection({
   items,
@@ -160,8 +329,8 @@ function MedicalInfoFormSection({ form }: { form: UseFormReturn<MedInfoFormState
       <Controller control={form.control} name="first_name" render={({ field, fieldState }) => (
         <TextField label="First name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
       )} />
-      <Controller control={form.control} name="middle_name" render={({ field }) => (
-        <TextField label="Middle name" value={field.value} onChangeText={field.onChange} />
+      <Controller control={form.control} name="middle_name" render={({ field, fieldState }) => (
+        <TextField label="Middle name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
       )} />
       <Controller control={form.control} name="last_name" render={({ field, fieldState }) => (
         <TextField label="Last name" value={field.value} onChangeText={field.onChange} error={fieldState.error?.message} />
@@ -608,17 +777,21 @@ function MedicationsSection({
 }
 
 export default function ManageInfoScreen() {
-  const { patientId } = useLocalSearchParams<{ patientId: string }>();
+  const { patientId, scanId } = useLocalSearchParams<{ patientId: string; scanId?: string }>();
   const theme = useTheme();
   const state = useManageInfo();
   const initializedRef = useRef(false);
   const closedRef = useRef(false);
+  const encounterSaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [encounterDirty, setEncounterDirty] = useState(false);
+  const registerEncounterSave = useCallback((save: () => Promise<boolean>) => { encounterSaveRef.current = save; }, []);
+  const handleEncounterDirtyChange = useCallback((dirty: boolean) => { setEncounterDirty(dirty); }, []);
 
   useEffect(() => {
     if (initializedRef.current) return;
     const qrData = consumePendingManageInfoQrData();
-    const pid = patientId ? parseInt(patientId, 10) : NaN;
-    if (qrData && Number.isInteger(pid) && pid > 0) {
+    const pid = patientId?.trim();
+    if (qrData && pid) {
       initializedRef.current = true;
       state.resetAll(pid, qrData);
     }
@@ -637,6 +810,21 @@ export default function ManageInfoScreen() {
   };
 
   const isLoading = !state.info && !state.parseError;
+
+  const sendWithEncounter = async (mode: 'ble' | 'internet') => {
+    const hadEncounterChanges = encounterDirty;
+    if (encounterDirty && encounterSaveRef.current) {
+      const saved = await encounterSaveRef.current();
+      if (!saved) return;
+    }
+    if (hadEncounterChanges && !state.hasFormChanges) {
+      handleClose();
+      return;
+    }
+    const sheetRef = { current: { dismiss: () => {} } } as any;
+    if (mode === 'ble') await state.handleSendBle(sheetRef, handleClose);
+    else await state.handleSendInternet(sheetRef, handleClose);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={['top']}>
@@ -768,23 +956,34 @@ export default function ManageInfoScreen() {
               </View>
 
               <View className="mb-2 gap-2">
-                <ThemedText type="overline">General note</ThemedText>
-                <TextField label="Note (optional)" value={state.generalNote} onChangeText={state.setGeneralNote} multiline />
+                <ThemedText type="overline">Professional notes</ThemedText>
+                <TextField label="Notes (optional)" value={state.generalNote} onChangeText={state.setGeneralNote} multiline />
               </View>
+
+              {state.isVerifiedProfessional && state.patientId !== null ? (
+                <ManageEncounterSection
+                  patientId={String(state.patientId)}
+                  scanId={scanId}
+                  theme={theme}
+                  registerSave={registerEncounterSave}
+                  onDirtyChange={handleEncounterDirtyChange}
+                />
+              ) : null}
 
               <View className="mt-2 gap-3">
                 <PrimaryButton
-                  label={state.sendMode === 'ble' ? 'Syncing via Bluetooth…' : 'Send via Bluetooth'}
+                  label={state.sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'}
                   loading={state.sendMode === 'ble'}
-                  disabled={state.sending || !state.hasFormChanges}
-                  onPress={() => void state.handleSendBle({ current: { dismiss: () => {} } } as any, handleClose)}
+                  disabled={state.sending || (!state.hasFormChanges && !encounterDirty)}
+                  leftIcon={<Ionicons name="bluetooth" size={18} color={theme.primaryForeground} />}
+                  onPress={() => void sendWithEncounter('ble')}
                 />
                 <PrimaryButton
-                  label={state.sendMode === 'internet' ? 'Sending via internet…' : 'Send via internet (beta)'}
-                  variant="ghost"
+                  label={state.sendMode === 'internet' ? 'Sending via Internet…' : 'Send via Internet (online)'}
                   loading={state.sendMode === 'internet'}
-                  disabled={state.sending || !state.hasFormChanges}
-                  onPress={() => void state.handleSendInternet({ current: { dismiss: () => {} } } as any, handleClose)}
+                  disabled={state.sending || (!state.hasFormChanges && !encounterDirty)}
+                  leftIcon={<Ionicons name="globe-outline" size={18} color={theme.primaryForeground} />}
+                  onPress={() => void sendWithEncounter('internet')}
                 />
               </View>
             </>

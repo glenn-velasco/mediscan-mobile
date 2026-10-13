@@ -2,3 +2,5 @@ allowBuilds:
   '@shopify/react-native-skia': true
   react-native-libsodium: true
   unrs-resolver: true
+overrides:
+  lightningcss: 1.30.1

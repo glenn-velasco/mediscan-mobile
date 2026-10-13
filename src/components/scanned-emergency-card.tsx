@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { AccessGate } from '@/components/access-gate';
 import { InfoTile } from '@/components/info-tile';
 import { PrimaryButton } from '@/components/primary-button';
 import { SeverityBadge } from '@/components/severity-badge';
@@ -40,6 +41,15 @@ function calculateAge(dob: string): number | null {
   return age >= 0 ? age : null;
 }
 
+const SCANNED_VITAL_ORDER = ['blood_pressure', 'heart_rate', 'respiratory_rate', 'temperature', 'oxygen_saturation'] as const;
+const SCANNED_VITAL_LABELS: Record<(typeof SCANNED_VITAL_ORDER)[number], string> = {
+  blood_pressure: 'Blood pressure',
+  heart_rate: 'Heart rate',
+  respiratory_rate: 'Respiratory rate',
+  temperature: 'Temperature',
+  oxygen_saturation: 'Oxygen saturation',
+};
+
 export function ScannedEmergencyCard({
   info,
   onRecordEncounter,
@@ -66,12 +76,18 @@ export function ScannedEmergencyCard({
   const missingBloodType = info.withheld?.bloodType ? 'Not shared' : info.withheld ? 'Not recorded' : 'Not in QR';
   const omittedIdentity = [info.withheld?.dateOfBirth && 'date of birth', info.withheld?.phone && 'personal phone'].filter(Boolean).join(' and ');
   const callableContact = info.emergencyContacts.find((contact) => (contact.phone ?? '').replace(/\D/g, '').length >= 3);
+  const verifiedEncounter = info.latestVerifiedEncounter;
+  const latestVitalByKind = new Map((verifiedEncounter?.vitals ?? []).map((vital) => [vital.kind, vital]));
+  const latestVerifiedVitals = SCANNED_VITAL_ORDER.flatMap((kind) => {
+    const vital = latestVitalByKind.get(kind);
+    return vital ? [{ ...vital, kind }] : [];
+  });
 
   return (
     <View className="gap-4">
       <ThemedText type="heading" className="text-center">{info.name || 'Unknown'}</ThemedText>
       {source ? <Card><ThemedText selectable type="bodyBold">Emergency information</ThemedText><ThemedText selectable color="mutedForeground">{source === 'dynamic-card' ? 'Printed card · online published snapshot' : source === 'printable-offline' ? 'Printed card · offline snapshot' : 'On-phone QR · available offline'}</ThemedText><ThemedText selectable color="mutedForeground">Last updated {formatIsoDateTime(info.lastUpdatedAt || info.generatedAt) || 'unknown'}</ThemedText>{verification ? <ThemedText selectable color="mutedForeground">{verification.message}</ThemedText> : null}</Card> : null}
-      {onRecordEncounter ? <PrimaryButton label={encounterExists ? 'Open encounter and report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /> : null}
+      {onRecordEncounter ? <AccessGate permissions={['verified professional']}><PrimaryButton label={encounterExists ? 'Open encounter and report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /></AccessGate> : null}
 
       <View className="gap-2">
         {dateOfBirth ? <InfoTile
@@ -135,6 +151,7 @@ export function ScannedEmergencyCard({
               {formatAddress({
                 street: info.street,
                 unit: info.unit,
+                barangay: info.barangay,
                 city: info.city,
                 province: info.province,
                 postal_code: info.postalCode,
@@ -152,6 +169,32 @@ export function ScannedEmergencyCard({
             value={formatIsoDateTime(info.generatedAt) || '—'}
         />
       </View>
+
+      {showMedicalDetails && verifiedEncounter && latestVerifiedVitals.length > 0 ? (
+        <View className="gap-2">
+          <ThemedText type="overline">Latest verified vitals</ThemedText>
+          <Card className="p-0">
+            <View className="flex-row items-center gap-3 px-4 py-3.5">
+              <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.success + '15' }}>
+                <Ionicons name="shield-checkmark" size={18} color={theme.success} />
+              </View>
+              <View className="flex-1">
+                <ThemedText type="bodyBold">Verified by {verifiedEncounter.professionalName}</ThemedText>
+                <ThemedText type="small" color="mutedForeground">{formatIsoDateTime(verifiedEncounter.updatedAt || verifiedEncounter.recordedAt) || 'Time unavailable'}</ThemedText>
+              </View>
+            </View>
+            {latestVerifiedVitals.map((vital) => (
+              <View key={vital.kind} className="flex-row items-center justify-between gap-3 border-t border-border px-4 py-3.5">
+                <View className="flex-1">
+                  <ThemedText type="small" color="mutedForeground">{SCANNED_VITAL_LABELS[vital.kind]}</ThemedText>
+                  <ThemedText type="detail" color="mutedForeground">{formatIsoDateTime(vital.measuredAt) || 'Time unavailable'} · {vital.recordedBy || verifiedEncounter.professionalName}</ThemedText>
+                </View>
+                <ThemedText type="bodyBold">{vital.value} {vital.unit}</ThemedText>
+              </View>
+            ))}
+          </Card>
+        </View>
+      ) : null}
 
       {showMedicalDetails && (
         <View className="gap-2">

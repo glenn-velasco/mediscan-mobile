@@ -2,9 +2,10 @@ import { z } from 'zod';
 import { isValidPhoneNumber, isPossiblePhoneNumber, validatePhoneNumberLength } from 'libphonenumber-js';
 
 import { RELATION_TO_PATIENT_OPTIONS } from '@/constants/relation-to-patient';
+import { personName } from '@/lib/validation/person-name-schema';
 
 export const emergencyContactSchema = z.object({
-  name: z.string().trim().min(1, 'Name is required').max(255, 'Name must be 255 characters or fewer'),
+  name: personName('Name'),
   relationship: z.enum(RELATION_TO_PATIENT_OPTIONS, { message: 'Relationship is required' }),
   phone_country_code: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Country code is required').max(5, 'Country code must be 5 characters or fewer')),
   phone: z.preprocess((v) => v ?? '', z.string().trim().min(1, 'Phone number is required').max(32, 'Phone number must be 32 characters or fewer')),

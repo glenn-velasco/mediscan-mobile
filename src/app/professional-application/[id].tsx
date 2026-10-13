@@ -87,7 +87,7 @@ function StatusHero({
 export default function ProfessionalApplicationStatusScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const applicationId = Number(id);
+  const applicationId = id;
   const { data: application, isError, error } = useProfessionalApplication(applicationId);
   const { data: myApplication } = useMyProfessionalApplication();
   const { data: broadcastStatus } = useProfessionalApplicationBroadcastStatus(applicationId);
@@ -144,6 +144,9 @@ export default function ProfessionalApplicationStatusScreen() {
   return (
     <AppLayout>
       <StatusHero status={application.status} rejectionReason={application.rejection_reason} />
+      {application.status === 'auto_rejected' || application.status === 'denied' ? (
+        <PrimaryButton label="Submit a new application" onPress={() => router.replace('/professional-application/create')} />
+      ) : null}
     </AppLayout>
   );
 }

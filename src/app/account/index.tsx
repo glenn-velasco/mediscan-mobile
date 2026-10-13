@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
 
@@ -10,6 +10,7 @@ import { AppLayout } from '@/components/layouts/app-layout';
 import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
+import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
 import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
 import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,6 +22,7 @@ export default function AccountScreen() {
   const { data: deviceKey } = useDeviceKey();
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
   const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
+  const { data: professionalApplication, isLoading: applicationLoading } = useMyProfessionalApplication();
 
   const handleQrWidgetToggle = async (next: boolean) => {
     await setQrWidgetEnabled(next);
@@ -74,6 +76,44 @@ export default function AccountScreen() {
         ) : null}
       </View>
 
+      {user?.permissions?.includes('admin') ? (
+        <Card className="mb-4 p-0">
+          <Link href={'/admin-verification' as Href} asChild><Pressable className="flex-row items-center justify-between px-4 py-3.5"><View className="flex-1 pr-3"><ThemedText className="font-semibold">Professional verification</ThemedText><ThemedText type="small" color="mutedForeground">Review PRC applications and manage admin access.</ThemedText></View><Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /></Pressable></Link>
+        </Card>
+      ) : null}
+
+      {!applicationLoading ? (
+        <Card className="mb-4 p-0">
+          <Link
+            href={professionalApplication
+              ? { pathname: '/professional-application/[id]', params: { id: String(professionalApplication.id) } }
+              : '/professional-application/create'}
+            asChild
+          >
+            <Pressable className="flex-row items-center justify-between px-4 py-3.5" accessibilityRole="button">
+              <View className="mr-3 h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: theme.primary + '15' }}>
+                <Ionicons name="shield-checkmark-outline" size={21} color={theme.primary} />
+              </View>
+              <View className="flex-1 pr-3">
+                <ThemedText className="font-semibold">
+                  {professionalApplication ? 'Professional application' : 'Apply as a professional'}
+                </ThemedText>
+                <ThemedText type="small" color="mutedForeground">
+                  {professionalApplication
+                    ? `Status: ${professionalApplication.status.replaceAll('_', ' ')}`
+                    : 'Submit your PRC ID and complete identity verification.'}
+                </ThemedText>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
+            </Pressable>
+          </Link>
+        </Card>
+      ) : null}
+
+      <Card className="mb-4 p-0">
+        <Link href={'/encounters' as Href} asChild><Pressable className="flex-row items-center justify-between px-4 py-3.5"><View className="flex-1 pr-3"><ThemedText className="font-semibold">Encounter reports</ThemedText><ThemedText type="small" color="mutedForeground">View vitals and notes shared by verified professionals.</ThemedText></View><Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} /></Pressable></Link>
+      </Card>
+
       <Card className="mb-4 p-0">
         <Link href="/profile/edit" asChild>
           <Pressable className="flex-row items-center justify-between px-4 py-3.5">
@@ -117,15 +157,6 @@ export default function AccountScreen() {
             </Pressable>
           ) : null}
         </View>
-      </Card>
-
-      <Card className="mb-4 p-0">
-        <Link href="/emergency-wallet-card" asChild>
-          <Pressable className="flex-row items-center justify-between px-4 py-3.5" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-            <View className="flex-1 pr-3"><ThemedText className="font-semibold">Wallet card</ThemedText><ThemedText type="small" color="mutedForeground">Print a card with offline details and online updates.</ThemedText></View>
-            <Ionicons name="chevron-forward" size={18} color={theme.mutedForeground} />
-          </Pressable>
-        </Link>
       </Card>
 
       <Card className="mb-4 gap-1">
