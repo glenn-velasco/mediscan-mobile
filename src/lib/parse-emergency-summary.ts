@@ -117,10 +117,8 @@ const MEDICATION_PATTERN = /^-\s*([^,]+),\s*([^,]+)(?:,\s*(.+))?$/;
 const CONTACT_PATTERN = /^-\s*(.+?)(?:\s*\(([^)]+)\))?(?:\s*—\s*(.+))?$/;
 
 /**
- * Decrypts a scanned QR string (see `src/lib/qr-cipher.ts`) and reverses `buildEmergencySummary()`,
- * parsing the plaintext back into structured fields for display. Returns null if the scanned text
- * isn't a MediScan emergency QR at all (e.g. some other unrelated QR code was scanned) or fails to
- * decrypt.
+ * Decrypts and parses the legacy emergency QR format for backward compatibility. New emergency
+ * codes use the signed V2 envelope. Returns null for unrelated, malformed, or undecryptable input.
  */
 export async function parseEmergencySummary(rawScannedText: string): Promise<ScannedEmergencyInfo | null> {
   const text = await decryptQrPayload(rawScannedText);

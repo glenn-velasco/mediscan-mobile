@@ -8,6 +8,7 @@
       android:name=".EmergencyQrActivity"
       android:exported="false"
       android:excludeFromRecents="true"
+      android:taskAffinity=""
       android:launchMode="singleTop"
       android:showWhenLocked="true"
       android:turnScreenOn="true"

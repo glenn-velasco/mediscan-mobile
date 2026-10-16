@@ -2,11 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useNavigation, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
 import { getProfessionalEncounters } from '@/api/endpoints/professional-scans';
 import { useAuth } from '@/auth/useAuth';
+import type { EmergencyContactRow } from '@/db/schema';
 import type { Suffix } from '@/constants/suffix';
 import { EmptyState } from '@/components/empty-state';
 import { PrimaryButton } from '@/components/primary-button';
@@ -25,14 +27,14 @@ import { useMedicalInformation } from '@/features/medical-information/useMedical
 import { useMedications } from '@/features/medications/useMedications';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 import { useTheme } from '@/hooks/use-theme';
-import { buildEmergencySummary } from '@/lib/build-emergency-summary';
+import { buildEmergencyQrV2 } from '@/lib/emergency-qr-v2';
+import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import { isResponderQr } from '@/lib/emergency-qr-routing';
-import { useLightweightMode } from '@/lib/lightweight-mode-context';
 import { consumeUpdatedScannedInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { parseEmergencySummary, withLatestVerifiedEncounter, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
-import { encryptQrPayload } from '@/lib/qr-cipher';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import { useBiometricAuth } from '@/lib/use-biometric-auth';
+import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
 import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
 import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
 import { queryClient } from '@/lib/query-client';
@@ -43,6 +45,7 @@ import { seal } from '@/services/sealed-box.service';
 import { useDisconnectBondedDevices } from '@/features/ble-sync/useDisconnectBondedDevices';
 
 type Mode = 'show' | 'scan';
+const EMPTY_CONTACTS: EmergencyContactRow[] = [];
 
 async function sendScanEventEnvelope(
   patientId: string | number,
@@ -72,11 +75,8 @@ async function sendScanEventEnvelope(
 }
 
 /**
- * Landing screen for the Android Quick Settings tile (see plugins/withQrScannerTile.js). Reachable
- * over the lock screen without unlocking so scanning/showing can start immediately. Opens on the
- * user's own emergency QR (no auth needed to show your own code — same exposure as the existing
- * home-screen widget); switching to scan mode still holds decoded medical data behind a biometric/
- * passcode challenge before it's shown, per the approved plan.
+ * Shows the user's emergency QR and provides QR scanning. The Android Quick Settings tile opens
+ * the native QR activity directly; this route remains available inside the app.
  */
 export default function QuickScanScreen() {
   const theme = useTheme();
@@ -84,7 +84,6 @@ export default function QuickScanScreen() {
   const insets = useSafeAreaInsets();
   const { status: authStatus, user } = useAuth();
   const biometric = useBiometricAuth();
-  const { isLightweight, promoteToFullApp } = useLightweightMode();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { disconnectIfAndroid } = useDisconnectBondedDevices();
 
@@ -94,7 +93,6 @@ export default function QuickScanScreen() {
   const [scanId, setScanId] = useState<string | null>(null);
   const scannedRawRef = useRef<string | null>(null);
   const [scanError, setScanError] = useState(false);
-  const [promoting, setPromoting] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const loggedRef = useRef(false);
 
@@ -105,6 +103,11 @@ export default function QuickScanScreen() {
   const { data: medications = [] } = useMedications();
   const { data: emergencyContacts = [] } = useEmergencyContacts();
   const { data: professionalEncounters = [] } = useProfessionalEncounters();
+  const { data: recentHistory } = useQuery({
+    queryKey: ['emergency-field-history', String(user?.id ?? '')],
+    queryFn: () => emergencyHistoryRepo.getRecent(5, user?.id ?? 0),
+    enabled: Boolean(user),
+  });
 
   useEffect(() => {
     return () => clearQuickScanLockScreenFlags();
@@ -112,22 +115,36 @@ export default function QuickScanScreen() {
 
   useEffect(() => {
     if (authStatus === 'unauthenticated') {
-      promoteToFullApp().then(() => router.replace('/(auth)'));
+      router.replace('/(auth)');
     }
-  }, [authStatus, promoteToFullApp]);
+  }, [authStatus]);
 
   useEffect(() => {
     if (!user || !medicalInformation) return;
     let cancelled = false;
-    encryptQrPayload(buildEmergencySummary(user.id, new Date(), medicalInformation, allergies, emergencyContacts, diagnoses, medications, conditions, professionalEncounters[0])).then(
-      (encrypted) => {
-        if (!cancelled) setSummary(encrypted);
-      },
-    );
+    buildEmergencyQrV2({
+      patientId: user.id,
+      medical: medicalInformation,
+      allergies,
+      contacts: emergencyContacts ?? EMPTY_CONTACTS,
+      diagnoses,
+      medications,
+      conditions,
+      disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
+      confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
+      recentHistory,
+      latestVerifiedEncounter: professionalEncounters[0],
+    })
+      .then((payload) => {
+        if (!cancelled) setSummary(payload);
+      })
+      .catch((error) => {
+        console.warn('Failed to build emergency QR:', error);
+      });
     return () => {
       cancelled = true;
     };
-  }, [user, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, professionalEncounters]);
+  }, [user, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
 
   const displaySummary = user && medicalInformation ? summary : null;
 
@@ -136,10 +153,7 @@ export default function QuickScanScreen() {
     // Signed on-phone QRs and both printed-card formats are handled by the responder flow.
     // The decoder below only understands the legacy encrypted summary.
     if (isResponderQr(raw)) {
-      void (async () => {
-        if (isLightweight) await promoteToFullApp();
-        router.replace({ pathname: '/responder-scan', params: { raw } });
-      })();
+      router.replace({ pathname: '/responder-scan', params: { raw } });
       return;
     }
     parseEmergencySummary(data).then((parsed) => {
@@ -179,8 +193,7 @@ export default function QuickScanScreen() {
   useEffect(() => {
     if (biometric.status === 'authenticated' && scanned?.patientId !== null && scanned && !loggedRef.current) {
       loggedRef.current = true;
-      const context = isLightweight ? 'quick_scan_tile' : 'viewer';
-      logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId as number, context })
+      logEmergencyQrEvent({ action: 'scanned', patient_id: scanned.patientId as number, context: 'viewer' })
         .then(() => {
           queryClient.invalidateQueries({ queryKey: professionalScansQueryKey });
           queryClient.invalidateQueries({ queryKey: myScanActivityQueryKey });
@@ -205,7 +218,7 @@ export default function QuickScanScreen() {
         })
         .catch(() => {});
     }
-  }, [biometric.status, scanned, isLightweight, user]);
+  }, [biometric.status, scanned, user]);
 
   const handleManageInfo = async () => {
     if (!scanned || scanned.patientId === null) return;
@@ -244,17 +257,12 @@ export default function QuickScanScreen() {
     if (navigation.canGoBack()) {
       router.back();
     } else {
-      setPromoting(true);
-      promoteToFullApp().then(() => router.replace('/(app)'));
+      router.replace('/(app)');
     }
   };
 
-  const openWalletCard = async () => {
+  const openWalletCard = () => {
     clearQuickScanLockScreenFlags();
-    if (isLightweight) {
-      setPromoting(true);
-      await promoteToFullApp();
-    }
     router.push('/emergency-wallet-card');
   };
 
@@ -272,7 +280,7 @@ export default function QuickScanScreen() {
     biometric.reset();
   };
 
-  if (promoting || authStatus === 'idle' || authStatus === 'authenticating' || authStatus === 'unauthenticated') {
+  if (authStatus === 'idle' || authStatus === 'authenticating' || authStatus === 'unauthenticated') {
     return (
       <View className="flex-1 items-center justify-center" style={{ backgroundColor: theme.background }}>
         <ActivityIndicator color={theme.primary} />

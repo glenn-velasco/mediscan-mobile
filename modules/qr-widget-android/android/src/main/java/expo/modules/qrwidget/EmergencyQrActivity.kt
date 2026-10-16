@@ -1,6 +1,7 @@
 package expo.modules.qrwidget
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.drawable.BitmapDrawable
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +9,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
+import android.window.OnBackInvokedCallback
 
 /**
  * Emergency QR shown as a modal *over* the lock screen, so a first responder can scan it without
@@ -25,14 +27,28 @@ class EmergencyQrActivity : Activity() {
   /** Fraction of the screen's shorter edge the code should occupy — big enough to scan, small
    *  enough to still read as a modal. */
   private val qrScreenFraction = 0.55f
+  private var backCallback: OnBackInvokedCallback? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val callback = OnBackInvokedCallback { closeQrView() }
+      backCallback = callback
+      onBackInvokedDispatcher.registerOnBackInvokedCallback(
+        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+        callback,
+      )
+    }
 
     showOverKeyguard()
     keepScreenLitForScanning()
 
     setContentView(R.layout.emergency_qr_modal)
+
+    findViewById<TextView>(R.id.qr_fullscreen_close).setOnClickListener {
+      closeQrView()
+    }
 
     val image = findViewById<ImageView>(R.id.qr_fullscreen_image)
     val empty = findViewById<TextView>(R.id.qr_fullscreen_empty)
@@ -51,6 +67,27 @@ class EmergencyQrActivity : Activity() {
     // smoothing the module boundaries a scanner needs to read.
     val drawable = BitmapDrawable(resources, bitmap).apply { isFilterBitmap = false }
     image.setImageDrawable(drawable)
+  }
+
+  @Suppress("DEPRECATION")
+  override fun onBackPressed() {
+    closeQrView()
+  }
+
+  override fun onDestroy() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      backCallback?.let { onBackInvokedDispatcher.unregisterOnBackInvokedCallback(it) }
+    }
+    super.onDestroy()
+  }
+
+  private fun closeQrView() {
+    startActivity(
+      Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_HOME)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+    finishAndRemoveTask()
   }
 
   /** The fixed dp in the layout would be tiny on a tablet and overflow a small phone, so scale

@@ -6,14 +6,36 @@
   android:orientation="vertical"
   android:padding="20dp">
 
-  <TextView
-    android:layout_width="wrap_content"
+  <LinearLayout
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="14dp"
-    android:text="@string/qr_widget_desc"
-    android:textColor="#1A1D21"
-    android:textSize="16sp"
-    android:textStyle="bold" />
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:text="@string/qr_widget_desc"
+      android:textColor="#1A1D21"
+      android:textSize="16sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/qr_fullscreen_close"
+      android:layout_width="48dp"
+      android:layout_height="48dp"
+      android:background="?android:attr/selectableItemBackgroundBorderless"
+      android:clickable="true"
+      android:contentDescription="@string/qr_close"
+      android:focusable="true"
+      android:gravity="center"
+      android:text="X"
+      android:textColor="#1A1D21"
+      android:textSize="18sp"
+      android:textStyle="bold" />
+  </LinearLayout>
 
   <!-- Sized at runtime relative to the screen so the code stays scannable on any device. -->
   <ImageView

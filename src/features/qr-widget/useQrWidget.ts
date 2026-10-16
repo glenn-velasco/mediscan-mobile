@@ -15,9 +15,7 @@ import { generateQrImage } from '@/features/qr-widget/qr-image-generator';
 import {
   ensureNotificationPermission,
   showQrNotification,
-  hideQrNotification,
 } from '@/features/qr-widget/qr-notification';
-import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
 import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
@@ -26,7 +24,6 @@ import { useProfessionalEncounters } from '@/features/professional-encounters/us
 const EMPTY_CONTACTS: EmergencyContactRow[] = [];
 
 export function useQrWidget(userId: string | number) {
-  const { enabled } = useQrWidgetToggle();
   const { data: medicalInformation } = useMedicalInformation();
   const { data: allergies } = useAllergies();
   const { data: conditions } = useConditions();
@@ -48,7 +45,7 @@ export function useQrWidget(userId: string | number) {
   }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
 
   useEffect(() => {
-    if (!enabled || !medicalInformation) return;
+    if (!medicalInformation) return;
 
     /* Re-runs whenever the profile data changes (React Query hands a new reference
        after any edit is invalidated). `cancelled` guarantees only the latest run
@@ -81,23 +78,33 @@ export function useQrWidget(userId: string | number) {
           } catch { /* widget unavailable */ }
           widget?.updateSnapshot({ imagePath });
 
-          /* The persistent notification requires runtime permission
-             (POST_NOTIFICATIONS on Android 13+); the widget does not. */
-          const notifyGranted = await ensureNotificationPermission();
-
+          let androidWidget: typeof import('../../../modules/qr-widget-android/src/QrWidget').default | null = null;
           if (Platform.OS === 'android') {
             /* On Android the home-screen widget AND the persistent notification
                are both rendered by the native module, which decodes the PNG with
                BitmapFactory. That API needs a filesystem path, not a file:// URI. */
             try {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const m = require('../../../modules/qr-widget-android/src/QrWidget').default;
+              const module: NonNullable<typeof import('../../../modules/qr-widget-android/src/QrWidget').default> =
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                require('../../../modules/qr-widget-android/src/QrWidget').default;
+              androidWidget = module;
               const nativePath = imagePath.replace(/^file:\/\//, '');
-              await m.saveQrImage(nativePath);
-              if (notifyGranted) await m.showQrNotification(nativePath);
-            } catch { /* module unavailable */ }
-          } else if (notifyGranted) {
-            await showQrNotification(imagePath);
+              await module.saveQrImage(nativePath);
+            } catch (e) {
+              console.warn('Failed to update Android QR widget:', e);
+            }
+          }
+
+          /* The home-screen widget does not need notification permission. */
+          const notifyGranted = await ensureNotificationPermission();
+          if (notifyGranted) {
+            const currentAndroidWidget = androidWidget;
+            if (Platform.OS === 'android' && currentAndroidWidget !== null) {
+              const nativePath = imagePath.replace(/^file:\/\//, '');
+              await currentAndroidWidget.showQrNotification(nativePath);
+            } else if (Platform.OS !== 'android') {
+              await showQrNotification(imagePath);
+            }
           }
         } catch (e) {
           console.warn('Failed to sync QR widget:', e);
@@ -110,25 +117,5 @@ export function useQrWidget(userId: string | number) {
     return () => {
       cancelled = true;
     };
-  }, [userId, enabled, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
-
-  useEffect(() => {
-    const hide = () => {
-      if (Platform.OS === 'android') {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const m = require('../../../modules/qr-widget-android/src/QrWidget').default;
-          m.hideQrNotification();
-        } catch { /* module unavailable */ }
-      } else {
-        hideQrNotification();
-      }
-    };
-    if (!enabled) {
-      hide();
-    }
-    return () => {
-      hide();
-    };
-  }, [enabled]);
+  }, [userId, medicalInformation, allergies, conditions, diagnoses, medications, emergencyContacts, recentHistory, professionalEncounters]);
 }

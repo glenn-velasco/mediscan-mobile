@@ -1,7 +1,5 @@
 import { parseEmergencySummary } from '@/lib/parse-emergency-summary';
-import { buildEmergencySummary } from '@/lib/build-emergency-summary';
 import { decryptQrPayload } from '@/lib/qr-cipher';
-import type { AllergyRow, ConditionRow, DiagnosisRow, EmergencyContactRow, MedicalInformationRow, MedicationRow } from '@/db/schema';
 
 // parseEmergencySummary's own logic starts after decryption; stub decryptQrPayload as an identity
 // pass-through so these tests exercise the plaintext parser directly (real encrypt/decrypt needs
@@ -10,91 +8,13 @@ jest.mock('@/lib/qr-cipher', () => ({ decryptQrPayload: jest.fn((text: string) =
 
 const mockDecrypt = decryptQrPayload as jest.Mock;
 
-const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
-
-function medicalInformation(overrides: Partial<MedicalInformationRow> = {}): MedicalInformationRow {
-  return {
-    id: 1,
-    server_id: 10,
-    email: 'glenn@example.com',
-    sync_status: 'synced',
-    updated_at_local: '2026-07-15T09:00:00.000Z',
-    server_updated_at: null,
-    full_name: 'Glenn Gain Velasco',
-    first_name: 'Glenn',
-    middle_name: 'Gain',
-    last_name: 'Velasco',
-    suffix: null,
-    date_of_birth: '1998-04-02',
-    gender: 'male',
-    phone_country_code: '63',
-    phone: '9674352324',
-    blood_type: 'A+',
-    religion: null,
-    address: '12 Mabini St, Cebu',
-    no_blood_transfusion: 0,
-    ...overrides,
-  } as MedicalInformationRow;
-}
-
-function medication(overrides: Partial<MedicationRow> = {}): MedicationRow {
-  return {
-    local_uuid: 'medication-1',
-    user_id: 0,
-    server_id: 1,
-    sync_status: 'synced',
-    deleted_locally: 0,
-    updated_at_local: '2026-07-15T09:00:00.000Z',
-    name: 'Aspirin',
-    dosage: '100mg',
-    frequency: 'Once daily',
-    notes: null,
-    ...overrides,
-  } as MedicationRow;
-}
-
-function diagnosis(overrides: Partial<DiagnosisRow> = {}): DiagnosisRow {
-  return {
-    local_uuid: 'diagnosis-1',
-    user_id: 0,
-    server_id: 1,
-    sync_status: 'synced',
-    deleted_locally: 0,
-    updated_at_local: '2026-07-15T09:00:00.000Z',
-    condition: 'Hypertension',
-    date_of_diagnosis: '2024-03-15',
-    severity: 'ongoing',
-    ...overrides,
-  } as DiagnosisRow;
-}
-
-function condition(overrides: Partial<ConditionRow> = {}): ConditionRow {
-  return {
-    local_uuid: 'condition-1',
-    user_id: 0,
-    server_id: 1,
-    sync_status: 'synced',
-    deleted_locally: 0,
-    updated_at_local: '2026-07-15T09:00:00.000Z',
-    description: 'Occasional migraines',
-    ...overrides,
-  } as ConditionRow;
-}
-
-function contact(overrides: Partial<EmergencyContactRow> = {}): EmergencyContactRow {
-  return {
-    local_uuid: 'contact-1',
-    server_id: 1,
-    sync_status: 'synced',
-    deleted_locally: 0,
-    updated_at_local: '2026-07-15T09:00:00.000Z',
-    name: 'Maria Velasco',
-    relationship: 'Mother',
-    phone_country_code: '63',
-    phone: '9171234567',
-    is_primary: 1,
-    ...overrides,
-  } as EmergencyContactRow;
+function legacyText(...sections: string[]): string {
+  return [
+    'MEDISCAN EMERGENCY INFO',
+    'Patient ID: 42',
+    'Generated: 2026-07-15T09:30:00.000Z',
+    ...sections,
+  ].join('\n');
 }
 
 describe('parseEmergencySummary', () => {
@@ -104,16 +24,18 @@ describe('parseEmergencySummary', () => {
     expect(await parseEmergencySummary('https://example.com')).toBeNull();
   });
 
-  it('round-trips allergies, conditions, diagnoses, medications and contacts through build → parse', async () => {
-    const summary = buildEmergencySummary(
-      42,
-      GENERATED_AT,
-      medicalInformation(),
-      [{ local_uuid: 'a1', server_id: 1, sync_status: 'synced', deleted_locally: 0, updated_at_local: '2026-07-15T09:00:00.000Z', allergen: 'Peanuts', reaction: 'Anaphylaxis', severity: 'severe' } as AllergyRow],
-      [contact()],
-      [diagnosis()],
-      [medication({ name: 'Aspirin', dosage: '100mg', frequency: 'Once daily' })],
-      [condition({ description: 'Occasional migraines' })],
+  it('parses the previously issued emergency summary format', async () => {
+    const summary = legacyText(
+      'Allergies:',
+      '- Peanuts (severe, Anaphylaxis)',
+      'Conditions:',
+      '- Occasional migraines',
+      'Diagnoses:',
+      '- Hypertension, ongoing, 2024-03-15',
+      'Medications:',
+      '- Aspirin, 100mg, Once daily',
+      'Emergency contacts:',
+      '- Maria Velasco (Mother) — +63 9171234567',
     );
 
     const info = await parseEmergencySummary(summary);
@@ -126,14 +48,18 @@ describe('parseEmergencySummary', () => {
     expect(info?.emergencyContacts).toEqual([{ name: 'Maria Velasco', relationship: 'Mother', phone: '+63 9171234567' }]);
   });
 
-  it('round-trips the latest verified encounter with professional and vital timestamps', async () => {
-    const summary = buildEmergencySummary(42, GENERATED_AT, medicalInformation(), [], [], [], [], [], {
-      id: 'encounter-1', patient_id: '42', professional_id: 'professional-1', professional_name: 'Dr. Ana Cruz',
-      observations: 'Patient alert and responsive.', actionsTaken: 'Oxygen administered.',
-      recordedAt: '2026-07-15T09:20:00.000Z', updatedAt: '2026-07-15T09:25:00.000Z',
-      verifiedBy: { userId: 'professional-1', name: 'Dr. Ana Cruz' },
-      vitals: [{ kind: 'oxygen_saturation', value: '96', unit: '%', measuredAt: '2026-07-15T09:21:00.000Z', recordedBy: 'Dr. Ana Cruz', verifiedBy: { userId: 'professional-1', name: 'Dr. Ana Cruz' } }],
-    });
+  it('parses a verified encounter embedded in a previously issued summary', async () => {
+    const summary = legacyText(
+      `Verified encounter: ${JSON.stringify({
+        by: 'Dr. Ana Cruz',
+        byId: 'professional-1',
+        at: '2026-07-15T09:20:00.000Z',
+        updated: '2026-07-15T09:25:00.000Z',
+        observations: 'Patient alert and responsive.',
+        actions: 'Oxygen administered.',
+        vitals: [{ kind: 'oxygen_saturation', value: '96', unit: '%', at: '2026-07-15T09:21:00.000Z', by: 'Dr. Ana Cruz' }],
+      })}`,
+    );
 
     const info = await parseEmergencySummary(summary);
 
@@ -145,7 +71,7 @@ describe('parseEmergencySummary', () => {
   });
 
   it('parses "Medications: none recorded" into an empty medications array', async () => {
-    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], [], []);
+    const summary = legacyText('Medications: none recorded');
 
     const info = await parseEmergencySummary(summary);
 
@@ -153,7 +79,7 @@ describe('parseEmergencySummary', () => {
   });
 
   it('parses "Conditions: none recorded" into an empty conditions array', async () => {
-    const summary = buildEmergencySummary(1, GENERATED_AT, medicalInformation(), [], [], [], [], []);
+    const summary = legacyText('Conditions: none recorded');
 
     const info = await parseEmergencySummary(summary);
 

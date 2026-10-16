@@ -3,7 +3,6 @@ import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
 
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClientProvider } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
@@ -25,7 +24,6 @@ import { useAppUpdates } from '@/hooks/use-app-updates';
 import { useTheme } from '@/hooks/use-theme';
 import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { setAppReady } from '@/lib/app-ready';
-import { LightweightModeContext } from '@/lib/lightweight-mode-context';
 import { addQuickScanRouteListener, getPendingQuickScanRoute } from '@/lib/qr-scanner-tile-native';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { BootProvider } from '@/onboarding/BootProvider';
@@ -34,8 +32,6 @@ import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
 import { usePrimePermissions } from '@/onboarding/usePrimePermissions';
 import { BroadcastProvider } from '@/realtime/BroadcastProvider';
 import { useSyncTriggers } from '@/sync/triggers';
-
-type BootMode = 'pending' | 'lightweight' | 'full';
 
 // Without this, a local notification fired while the app is foregrounded (see
 // showLocalNotification in src/lib/notifications.ts) is silently swallowed on some
@@ -58,7 +54,7 @@ function DeferredWork() {
   return null;
 }
 
-function RootNavigator({ onReady }: { onReady: () => void }) {
+function RootNavigator() {
   const { status } = useAuth();
   const { seen } = useOnboarding();
   const { primed } = usePermissionsPrimer();
@@ -94,13 +90,12 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
       onReadyCalledRef.current = true;
       console.log('[Splash] hiding splash screen');
       void SplashScreen.hideAsync();
-      onReady();
       requestAnimationFrame(() => {
         setShowDeferred(true);
         setAppReady(true);
       });
     }
-  }, [ready, onReady]);
+  }, [ready]);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -118,6 +113,17 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
       if (route === 'quick-scan') router.replace('/quick-scan');
     });
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    void getPendingQuickScanRoute().then((route) => {
+      if (active && route === 'quick-scan') router.replace('/quick-scan');
+    });
+    return () => {
+      active = false;
+    };
+  }, [ready]);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -176,37 +182,8 @@ function RootNavigator({ onReady }: { onReady: () => void }) {
   );
 }
 
-/**
- * Minimal tree for a cold start from the QR quick-scan tile: skips Onboarding/PermissionsPrimer/
- * Broadcast providers, sync triggers, app-update checks, custom font loading, and the persisted
- * (AsyncStorage-hydrated) query cache — none of which quick-scan.tsx needs. Shares the same
- * `queryClient` instance as the full tree so nothing fetched here is wasted if promoted.
- */
-function LightweightQuickScan() {
-  useEffect(() => {
-    void SplashScreen.hideAsync();
-  }, []);
-
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider skipNetworkRefresh>
-          <BottomSheetModalProvider>
-            <SystemBars style="auto" hidden={{ navigationBar: true }} />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="quick-scan" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-            </Stack>
-          </BottomSheetModalProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </GestureHandlerRootView>
-  );
-}
-
 export default function RootLayout() {
   const theme = useTheme();
-  const [mode, setMode] = useState<BootMode>('pending');
-  const promoteResolversRef = useRef<(() => void)[]>([]);
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
@@ -222,52 +199,24 @@ export default function RootLayout() {
     }
   }, []);
 
-  useEffect(() => {
-    getPendingQuickScanRoute().then((route) => {
-      setMode(route === 'quick-scan' ? 'lightweight' : 'full');
-    });
-  }, []);
-
-  const promoteToFullApp = () => {
-    if (mode === 'full') return Promise.resolve();
-    setMode('full');
-    return new Promise<void>((resolve) => {
-      promoteResolversRef.current.push(resolve);
-    });
-  };
-
-  const handleFullTreeReady = () => {
-    const resolvers = promoteResolversRef.current;
-    promoteResolversRef.current = [];
-    resolvers.forEach((resolve) => resolve());
-  };
-
-  if (mode === 'pending') return null;
-
   return (
     <ErrorBoundary>
-    <LightweightModeContext.Provider value={{ isLightweight: mode === 'lightweight', promoteToFullApp }}>
-      {mode === 'lightweight' ? (
-        <LightweightQuickScan />
-      ) : (
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
-          <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
-            <BootProvider>
-              <AuthProvider>
-                <NetworkProvider>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
+        <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: queryPersister }}>
+          <BootProvider>
+            <AuthProvider>
+              <NetworkProvider>
                 <BroadcastProvider>
                   <BottomSheetModalProvider>
                     <SystemBars style="auto" hidden={{ navigationBar: true }} />
-                    <RootNavigator onReady={handleFullTreeReady} />
+                    <RootNavigator />
                   </BottomSheetModalProvider>
                 </BroadcastProvider>
-                </NetworkProvider>
-              </AuthProvider>
-            </BootProvider>
-          </PersistQueryClientProvider>
-        </GestureHandlerRootView>
-      )}
-    </LightweightModeContext.Provider>
+              </NetworkProvider>
+            </AuthProvider>
+          </BootProvider>
+        </PersistQueryClientProvider>
+      </GestureHandlerRootView>
     </ErrorBoundary>
   );
 }

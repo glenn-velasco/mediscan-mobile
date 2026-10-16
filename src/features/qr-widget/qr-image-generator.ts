@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { Skia, ImageFormat } from '@shopify/react-native-skia';
-import { Paths, Directory } from 'expo-file-system';
+import { File, Paths, Directory } from 'expo-file-system';
 import { widgetsDirectory } from 'expo-widgets';
 
 import { buildQrPath, createQrMatrix } from '@/lib/qr-matrix';
@@ -47,18 +47,15 @@ export async function generateQrImage(encryptedText: string): Promise<string | n
 
     const destDir = Platform.OS === 'ios' && widgetsDirectory
       ? widgetsDirectory
-      : Paths.cache.uri;
+      : Paths.document.uri;
 
     const dir = new Directory(destDir);
     if (!dir.exists) {
       dir.create();
     }
 
-    const file = dir.createFile(QR_IMAGE_FILENAME, 'image/png');
-    if (file.exists) {
-      file.delete();
-    }
-    file.create();
+    const file = new File(dir, QR_IMAGE_FILENAME);
+    file.create({ overwrite: true });
     file.write(pngBase64, { encoding: 'base64' });
 
     return file.uri;

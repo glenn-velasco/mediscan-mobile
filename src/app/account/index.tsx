@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Switch, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { Avatar } from '@/components/avatar';
@@ -11,8 +11,6 @@ import { ThemedText } from '@/components/themed-text';
 import type { Suffix } from '@/constants/suffix';
 import { useDeviceKey, useRotateDeviceKey } from '@/features/device-keys/useDeviceKey';
 import { useMyProfessionalApplication } from '@/features/professional-application/useProfessionalApplication';
-import { ensureDndBypass, ensureNotificationPermission } from '@/features/qr-widget/qr-notification';
-import { useQrWidgetToggle } from '@/features/qr-widget/useQrWidgetToggle';
 import { useTheme } from '@/hooks/use-theme';
 import { buildFullName } from '@/lib/build-full-name';
 
@@ -21,17 +19,7 @@ export default function AccountScreen() {
   const theme = useTheme();
   const { data: deviceKey } = useDeviceKey();
   const { mutate: rotateKey, isPending: isRotating } = useRotateDeviceKey();
-  const { enabled: qrWidgetEnabled, loaded: qrWidgetLoaded, setEnabled: setQrWidgetEnabled } = useQrWidgetToggle();
   const { data: professionalApplication, isLoading: applicationLoading } = useMyProfessionalApplication();
-
-  const handleQrWidgetToggle = async (next: boolean) => {
-    await setQrWidgetEnabled(next);
-    if (next) {
-      // Prompt for notification + Do Not Disturb access at the moment of enabling.
-      await ensureNotificationPermission();
-      await ensureDndBypass();
-    }
-  };
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -159,22 +147,6 @@ export default function AccountScreen() {
         </View>
       </Card>
 
-      <Card className="mb-4 gap-1">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 pr-3">
-            <ThemedText className="font-semibold">Emergency QR Widget</ThemedText>
-            <ThemedText type="small" color="mutedForeground">
-              Show your QR code on your lock screen and home screen for quick access in an emergency.
-            </ThemedText>
-          </View>
-          <Switch
-            value={qrWidgetEnabled}
-            onValueChange={(next) => void handleQrWidgetToggle(next)}
-            disabled={!qrWidgetLoaded}
-          />
-        </View>
-      </Card>
-
       <Card className="p-0">
         <Pressable onPress={() => void logout()} className="flex-row items-center justify-between px-4 py-3.5 active:bg-accent">
           <ThemedText color="destructive">Log out</ThemedText>
@@ -184,6 +156,5 @@ export default function AccountScreen() {
     </AppLayout>
   );
 }
-
 
 

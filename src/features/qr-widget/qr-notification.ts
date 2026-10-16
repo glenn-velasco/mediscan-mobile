@@ -1,34 +1,8 @@
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 const CHANNEL_ID = 'emergency-qr';
 const NOTIFICATION_ID = 'emergency-qr-notification';
-
-/**
- * Asks (once, if not already granted) for Do Not Disturb access so the emergency-QR
- * notification's channel can bypass DND and stay visible on the lock screen. Granting
- * happens on a system settings screen, so we explain first and let the user skip.
- * No-op on iOS.
- */
-export async function ensureDndBypass(): Promise<void> {
-  if (Platform.OS !== 'android') return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const m = require('../../../modules/qr-widget-android/src/QrWidget').default;
-    if (await m.hasDndBypassAccess()) return;
-
-    Alert.alert(
-      'Show during Do Not Disturb?',
-      'Allow the Emergency QR to stay visible on your lock screen even when Do Not Disturb is on, so first responders can always scan it.',
-      [
-        { text: 'Not now', style: 'cancel' },
-        { text: 'Open settings', onPress: () => void m.openDndBypassSettings() },
-      ],
-    );
-  } catch {
-    /* native module unavailable */
-  }
-}
 
 /**
  * Ensures POST_NOTIFICATIONS (Android 13+) / user authorization (iOS) is granted.
