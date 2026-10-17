@@ -16,6 +16,7 @@ export function EmergencyScanContent({
   encounterExists,
   encounterReady,
   onRecordEncounter,
+  onManageInfo,
   onDeleteSavedScan,
   savedSnapshot = false,
   scanId,
@@ -26,6 +27,7 @@ export function EmergencyScanContent({
   encounterExists?: boolean;
   encounterReady?: boolean;
   onRecordEncounter?: () => void;
+  onManageInfo?: () => void;
   onDeleteSavedScan?: () => void;
   savedSnapshot?: boolean;
   scanId?: string;
@@ -33,7 +35,16 @@ export function EmergencyScanContent({
   return (
     <View className="gap-4">
       {savedSnapshot ? <Card><ThemedText selectable color="mutedForeground">Saved scan — may not reflect the patient&apos;s current QR.</ThemedText></Card> : null}
-      <ScannedEmergencyCard info={info} verification={verification} source={source} showMedicalDetails encounterExists={encounterExists} encounterReady={encounterReady} onRecordEncounter={onRecordEncounter} />
+      <ScannedEmergencyCard
+        info={info}
+        verification={verification}
+        source={source}
+        showMedicalDetails
+        encounterExists={encounterExists}
+        encounterReady={encounterReady}
+        onRecordEncounter={onRecordEncounter}
+        onManageInfo={onManageInfo}
+      />
       <PatientHandoffShare info={info} scanId={scanId} />
       {onDeleteSavedScan ? (
         <PrimaryButton

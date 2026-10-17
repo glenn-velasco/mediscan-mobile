@@ -1,3 +1,4 @@
+import '@/lib/worklets-guard';
 import '@/global.css';
 import 'react-native-get-random-values';
 import 'react-native-url-polyfill/auto';
@@ -44,6 +45,8 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
+
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /** Mounts after splash hides — runs sync triggers, OTA update check, etc. */
 function DeferredWork() {
@@ -189,14 +192,6 @@ export default function RootLayout() {
     AvoidSoftInput.setEnabled(true);
     void import('@/db/repositories/recent-emergency-scans.repo').then(({ purgeExpired }) => purgeExpired());
     return () => AvoidSoftInput.setEnabled(false);
-  }, []);
-
-  useEffect(() => {
-    try {
-      void SplashScreen.preventAutoHideAsync();
-    } catch {
-      console.warn('Failed to prevent splash auto-hide');
-    }
   }, []);
 
   return (

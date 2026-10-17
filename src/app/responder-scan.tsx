@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import NetInfo from '@react-native-community/netinfo';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/auth/useAuth';
 import { EmergencyScanContent } from '@/components/emergency-scan-content';
 import { logEmergencyQrEvent } from '@/api/endpoints/analytics';
 import { getProfessionalEncounters } from '@/api/endpoints/professional-scans';
@@ -13,19 +14,21 @@ import { QrScannerView } from '@/components/qr-scanner-view';
 import { ThemedText } from '@/components/themed-text';
 import { resolveEmergencyCard } from '@/api/endpoints/emergency-wallet-card';
 import { resolvePatientHandoffReference } from '@/api/endpoints/patient-handoff';
-import { saveScan } from '@/db/repositories/recent-emergency-scans.repo';
+import { saveScan, updateScanInfo } from '@/db/repositories/recent-emergency-scans.repo';
 import { useTheme } from '@/hooks/use-theme';
 import { parseEmergencyCardReference, QR_V3_REFERENCE_PREFIX } from '@/lib/emergency-qr-reference';
 import { parseHybridEmergencyQr, QR_HYBRID_PREFIX } from '@/lib/emergency-qr-hybrid';
 import { parsePatientHandoffFrame, parsePatientHandoffFrames, parsePatientHandoffReference, validatePatientHandoffInfo, type PatientHandoffFrame } from '@/lib/patient-handoff';
 import { parseEmergencyQr, withLatestVerifiedEncounter, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
+import { consumeUpdatedScannedInfo, setPendingManageInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 import type { QrVerificationResult } from '@/types/emergency';
 
 export default function ResponderScanScreen() {
   const theme = useTheme();
+  const { refreshUser } = useAuth();
   const { raw: initialRaw } = useLocalSearchParams<{ raw?: string }>();
   const insets = useSafeAreaInsets();
-  const [result, setResult] = useState<{ info: ScannedEmergencyInfo; verification: QrVerificationResult; source: 'qr' | 'dynamic-card' | 'printable-offline'; scanId?: string } | null>(null);
+  const [result, setResult] = useState<{ info: ScannedEmergencyInfo; verification: QrVerificationResult; source: 'qr' | 'dynamic-card' | 'printable-offline'; scanId?: string; raw?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [torch, setTorch] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -263,11 +266,41 @@ export default function ResponderScanScreen() {
       return;
     }
     if (source === 'dynamic-card') parsed.info.recentHistory = serverHistory ?? [];
-    setResult({ ...parsed, source });
+    setResult({ ...parsed, source, raw: snapshotRaw });
     refreshLatestEncounter(parsed.info, generation);
     setIsProcessing(false);
     void saveScan(raw, parsed.info, parsed.verification, source).then((scanId) => setResult((current) => current ? { ...current, scanId } : current)).catch(() => {
       // Emergency display must never depend on the optional retained-history write.
+    });
+  };
+
+  useEffect(() => {
+    void refreshUser().catch(() => {});
+  }, [refreshUser]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const updated = consumeUpdatedScannedInfo();
+      if (updated) {
+        setResult((current) => (current ? { ...current, info: updated } : current));
+        if (result?.scanId) {
+          void updateScanInfo(result.scanId, updated);
+        }
+      }
+    }, [result?.scanId]),
+  );
+
+  const handleManageInfo = () => {
+    if (!result || result.info.patientId === null) return;
+    const rawData = result.raw ?? (typeof initialRaw === 'string' ? initialRaw : '');
+    setPendingManageInfo({ qrData: rawData, info: result.info });
+    setPendingManageInfoQrData(rawData);
+    router.push({
+      pathname: '/manage-info',
+      params: {
+        patientId: String(result.info.patientId),
+        ...(result.scanId ? { scanId: result.scanId } : {}),
+      },
     });
   };
 
@@ -299,7 +332,17 @@ export default function ResponderScanScreen() {
     headerLeft: () => <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={closeResponderFlow} hitSlop={12} style={{ padding: 6 }}><Ionicons name="arrow-back" size={24} color={theme.foreground} /></Pressable>,
   }} /><ScrollView contentInsetAdjustmentBehavior="automatic" nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={{ flexGrow: 1, padding: 20, paddingBottom: insets.bottom + 40, gap: 16 }}>
     {error ? <View style={{ alignItems: 'center', gap: 16, paddingTop: 80 }}><Ionicons name="warning-outline" size={48} color={theme.destructive} /><ThemedText selectable type="heading" style={{ textAlign: 'center' }}>Unable to show emergency information</ThemedText><ThemedText selectable color="mutedForeground" style={{ textAlign: 'center' }}>{error}</ThemedText><PrimaryButton label="Scan again" onPress={reset} /></View> : null}
-    {result ? <EmergencyScanContent info={result.info} scanId={result.scanId} verification={result.verification} source={result.source} encounterReady={Boolean(result.scanId)} onRecordEncounter={() => result.scanId && router.push({ pathname: '/responder-history/[id]/encounter', params: { id: result.scanId } })} /> : null}
+    {result ? (
+      <EmergencyScanContent
+        info={result.info}
+        scanId={result.scanId}
+        verification={result.verification}
+        source={result.source}
+        encounterReady={Boolean(result.scanId)}
+        onRecordEncounter={() => result.scanId && router.push({ pathname: '/responder-history/[id]/encounter', params: { id: result.scanId } })}
+        onManageInfo={result.info.patientId !== null ? handleManageInfo : undefined}
+      />
+    ) : null}
   </ScrollView></>;
 }
 

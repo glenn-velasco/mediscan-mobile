@@ -5,10 +5,11 @@ import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
+import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
 import { processEnvelope } from '@/services/merge.service';
-import type { PendingSyncEnvelopeRow , AllergyRow, ConditionRow, DiagnosisRow, MedicationRow } from '@/db/schema';
+import type { PendingSyncEnvelopeRow , AllergyRow, ConditionRow, DiagnosisRow, MedicationRow, EmergencyContactRow } from '@/db/schema';
 
 jest.mock('@/db/repositories/pending-sync-envelope.repo');
 jest.mock('@/db/repositories/professional-attestation.repo');
@@ -17,6 +18,7 @@ jest.mock('@/db/repositories/conditions.repo');
 jest.mock('@/db/repositories/diagnoses.repo');
 jest.mock('@/db/repositories/medications.repo');
 jest.mock('@/db/repositories/medical-information.repo');
+jest.mock('@/db/repositories/emergency-contacts.repo');
 // Explicit factories: these modules import react-native-libsodium / api/client (which requires
 // EXPO_PUBLIC_API_URL) at module scope, so a plain jest.mock() automock would still need to load
 // the real module first and blow up in a Node test environment. Stub the shape directly instead.
@@ -26,6 +28,7 @@ jest.mock('@/services/device-key.service', () => ({ getPrivateKeypair: jest.fn()
 // that module pulls in @react-native-async-storage/async-storage at module scope, whose native
 // module isn't available under jest-expo's Node environment. Stub the shape directly instead.
 jest.mock('@/lib/query-client', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
+jest.mock('@/services/patient-sync.service', () => ({ pushPatientChanges: jest.fn() }));
 
 const mockUnseal = unseal as jest.Mock;
 const mockGetPrivateKeypair = getPrivateKeypair as jest.Mock;
@@ -33,6 +36,7 @@ const mockGetAllAllergies = allergiesRepo.getAll as jest.Mock;
 const mockGetAllConditions = conditionsRepo.getAll as jest.Mock;
 const mockGetAllDiagnoses = diagnosesRepo.getAll as jest.Mock;
 const mockGetAllMedications = medicationsRepo.getAll as jest.Mock;
+const mockGetAllEmergencyContacts = emergencyContactsRepo.getAll as jest.Mock;
 const mockInsertAttestation = professionalAttestationRepo.insert as jest.Mock;
 const mockApplyProfessionalUpdate = medicalInformationRepo.applyProfessionalUpdate as jest.Mock;
 
@@ -118,6 +122,23 @@ function makeMedication(overrides: Partial<MedicationRow> = {}): MedicationRow {
   } as MedicationRow;
 }
 
+function makeEmergencyContact(overrides: Partial<EmergencyContactRow> = {}): EmergencyContactRow {
+  return {
+    local_uuid: 'contact-1',
+    user_id: 0,
+    server_id: null,
+    sync_status: 'synced',
+    deleted_locally: 0,
+    updated_at_local: '2026-01-01T00:00:00.000Z',
+    name: 'Jane Doe',
+    relationship: 'spouse',
+    phone_country_code: '+1',
+    phone: '5551234',
+    is_primary: 1,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetPrivateKeypair.mockResolvedValue({ publicKey: new Uint8Array(), privateKey: new Uint8Array() });
@@ -125,6 +146,10 @@ beforeEach(() => {
   mockGetAllConditions.mockResolvedValue([]);
   mockGetAllDiagnoses.mockResolvedValue([]);
   mockGetAllMedications.mockResolvedValue([]);
+  mockGetAllEmergencyContacts.mockResolvedValue([]);
+  (emergencyContactsRepo.createLocal as jest.Mock).mockResolvedValue('contact-new');
+  (emergencyContactsRepo.updateLocal as jest.Mock).mockResolvedValue(undefined);
+  (emergencyContactsRepo.deleteLocal as jest.Mock).mockResolvedValue({ requiresNetworkDelete: false });
 });
 
 describe('processEnvelope', () => {
@@ -314,7 +339,7 @@ describe('processEnvelope', () => {
   });
 
   it('auto-applies a medical_information_update envelope to the patient profile and records an attestation', async () => {
-    const fields = { blood_type: 'O+', no_blood_transfusion: true };
+    const fields = { blood_type: 'o_positive', no_blood_transfusion: true };
     mockUnseal.mockResolvedValue({
       type: 'medical_information_update',
       version: 1,
@@ -392,11 +417,17 @@ describe('processEnvelope', () => {
 
     await processEnvelope(makeEnvelope({ envelope_type: 'diagnosis_verification' }));
 
-    expect(diagnosesRepo.createLocal).toHaveBeenCalledWith({
-      condition: 'Something Unrecorded',
-      date_of_diagnosis: undefined,
-      severity: 'acute',
-    });
+    expect(diagnosesRepo.createLocal).toHaveBeenCalledWith(
+      {
+        condition: 'Something Unrecorded',
+        date_of_diagnosis: undefined,
+        severity: 'acute',
+      },
+      {
+        diagnosed_by_id: 1,
+        diagnosed_by_name: 'Dr. Reyes',
+      },
+    );
     expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedDiagnosisLocalUuid: 'diagnosis-new' }));
   });
 
@@ -491,6 +522,82 @@ describe('processEnvelope', () => {
 
     expect(mockGetAllMedications).not.toHaveBeenCalled();
     expect(mockInsertAttestation).toHaveBeenCalledWith(expect.objectContaining({ matchedMedicationLocalUuid: null }));
+  });
+
+  it('merges and auto-matches an emergency_contact_verification envelope with exactly one case-insensitive name match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'emergency_contact_verification',
+      version: 1,
+      name: 'jane doe',
+      relationship: 'spouse',
+      phone_country_code: '+1',
+      phone: '5559999',
+      is_primary: true,
+      action: 'update',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllEmergencyContacts.mockResolvedValue([makeEmergencyContact({ local_uuid: 'contact-1', name: 'Jane Doe' })]);
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'emergency_contact_verification' }));
+
+    expect(result).toBe('merged');
+    expect(emergencyContactsRepo.updateLocal).toHaveBeenCalledWith('contact-1', {
+      name: 'jane doe',
+      relationship: 'spouse',
+      phone_country_code: '+1',
+      phone: '5559999',
+      is_primary: true,
+    });
+  });
+
+  it('deletes an emergency contact when action is delete', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'emergency_contact_verification',
+      version: 1,
+      name: 'Jane Doe',
+      relationship: 'spouse',
+      phone_country_code: '+1',
+      phone: '5551234',
+      is_primary: true,
+      action: 'delete',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllEmergencyContacts.mockResolvedValue([makeEmergencyContact({ local_uuid: 'contact-1', name: 'Jane Doe' })]);
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'emergency_contact_verification' }));
+
+    expect(result).toBe('merged');
+    expect(emergencyContactsRepo.deleteLocal).toHaveBeenCalledWith('contact-1');
+  });
+
+  it('creates a new emergency contact when there is no name match', async () => {
+    mockUnseal.mockResolvedValue({
+      type: 'emergency_contact_verification',
+      version: 1,
+      name: 'John Smith',
+      relationship: 'parent',
+      phone_country_code: '+1',
+      phone: '5558888',
+      is_primary: false,
+      action: 'create',
+      verified_by: { user_id: 1, name: 'Dr. Reyes' },
+      verified_at: '2026-01-01T00:00:00.000Z',
+    });
+    mockGetAllEmergencyContacts.mockResolvedValue([makeEmergencyContact({ local_uuid: 'contact-1', name: 'Jane Doe' })]);
+    (emergencyContactsRepo.createLocal as jest.Mock).mockResolvedValue('contact-new');
+
+    const result = await processEnvelope(makeEnvelope({ envelope_type: 'emergency_contact_verification' }));
+
+    expect(result).toBe('merged');
+    expect(emergencyContactsRepo.createLocal).toHaveBeenCalledWith({
+      name: 'John Smith',
+      relationship: 'parent',
+      phone_country_code: '+1',
+      phone: '5558888',
+      is_primary: false,
+    });
   });
 
   describe('__unverify__ / __delete__ note conventions', () => {

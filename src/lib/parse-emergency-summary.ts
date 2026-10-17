@@ -373,6 +373,11 @@ export async function parseEmergencyQr(rawScannedText: string): Promise<{
     const { parsePatientHandoff } = await import('@/lib/patient-handoff');
     return parsePatientHandoff(rawScannedText);
   }
+  if (rawScannedText.startsWith('MEDISCAN:v4:')) {
+    const { parseHybridEmergencyQr } = await import('@/lib/emergency-qr-hybrid');
+    const result = await parseHybridEmergencyQr(rawScannedText);
+    return result ? { info: result.info, verification: result.verification } : null;
+  }
   if (rawScannedText.startsWith(QR_V2_PREFIX)) {
     const { parseEmergencyQrV2 } = await import('@/lib/emergency-qr-v2');
     return parseEmergencyQrV2(rawScannedText);

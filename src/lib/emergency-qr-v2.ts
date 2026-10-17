@@ -11,6 +11,12 @@ import type { ProfessionalEncounter } from '@/api/types';
 
 export const QR_V2_PREFIX = 'MEDISCAN:v2:';
 
+function clipText(value: string | null | undefined, maxChars: number): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+  return trimmed.length > maxChars ? trimmed.slice(0, maxChars) : trimmed;
+}
+
 function parseAddress(value: string | null): { street?: string; unit?: string; barangay?: string; city?: string; province?: string; postal_code?: string; country?: string } | null {
   if (!value) return null;
   try {
@@ -67,59 +73,92 @@ export async function buildEmergencyQrV2(input: {
     diagnoses: stateFor(diagnoses, input.confirmedNone?.diagnoses),
     medications: stateFor(medications, input.confirmedNone?.medications),
   };
-  const info: ScannedEmergencyInfo = {
+
+  const initialInfo: ScannedEmergencyInfo = {
     withheld: { dateOfBirth: !disclosure.dateOfBirth, bloodType: !disclosure.bloodType, phone: !disclosure.phone },
     patientId,
     generatedAt: generatedAt.toISOString(),
     lastUpdatedAt,
     age: ageFromDob(medical.date_of_birth),
-    name: disclosure.name ? medical.full_name || 'Unknown' : '',
-    firstName: disclosure.name ? medical.first_name || '' : '',
-    middleName: disclosure.name ? medical.middle_name || '' : '',
-    lastName: disclosure.name ? medical.last_name || '' : '',
-    suffix: disclosure.name ? medical.suffix || '' : '',
-    dateOfBirth: disclosure.dateOfBirth ? medical.date_of_birth || '' : '',
-    gender: disclosure.gender ? medical.gender || '' : '',
-    bloodType: disclosure.bloodType ? medical.blood_type || '' : '',
-    religion: disclosure.religion ? medical.religion || '' : '',
+    name: disclosure.name ? clipText(medical.full_name || 'Unknown', 80) : '',
+    firstName: disclosure.name ? clipText(medical.first_name, 40) : '',
+    middleName: disclosure.name ? clipText(medical.middle_name, 40) : '',
+    lastName: disclosure.name ? clipText(medical.last_name, 40) : '',
+    suffix: disclosure.name ? clipText(medical.suffix, 20) : '',
+    dateOfBirth: disclosure.dateOfBirth ? clipText(medical.date_of_birth, 20) : '',
+    gender: disclosure.gender ? clipText(medical.gender, 20) : '',
+    bloodType: disclosure.bloodType ? clipText(medical.blood_type, 20) : '',
+    religion: disclosure.religion ? clipText(medical.religion, 40) : '',
     noBloodTransfusion: disclosure.transfusionPreference ? (medical.no_blood_transfusion ? 'Yes' : 'No') : '',
-    phone: disclosure.phone ? medical.phone || '' : '',
-    phoneCountryCode: disclosure.phone ? medical.phone_country_code || '' : '',
-    street: disclosure.address ? address?.street || '' : '',
-    unit: disclosure.address ? address?.unit || '' : '',
-    barangay: disclosure.address ? address?.barangay || '' : '',
-    city: disclosure.address ? address?.city || '' : '',
-    province: disclosure.address ? address?.province || '' : '',
-    postalCode: disclosure.address ? address?.postal_code || '' : '',
-    country: disclosure.address ? address?.country || '' : '',
-    allergies: disclosure.allergies ? allergies.map(({ allergen, severity, reaction }) => ({ allergen, severity, reaction })) : [],
-    conditions: disclosure.conditions ? conditions.map(({ description }) => ({ description })) : [],
-    diagnoses: disclosure.diagnoses ? diagnoses.map(({ condition, severity, date_of_diagnosis }) => ({ condition, severity, dateOfDiagnosis: date_of_diagnosis })) : [],
-    medications: disclosure.medications ? medications.map(({ name, dosage, frequency }) => ({ name, dosage, frequency })) : [],
+    phone: disclosure.phone ? clipText(medical.phone, 30) : '',
+    phoneCountryCode: disclosure.phone ? clipText(medical.phone_country_code, 10) : '',
+    street: disclosure.address ? clipText(address?.street, 80) : '',
+    unit: disclosure.address ? clipText(address?.unit, 30) : '',
+    barangay: disclosure.address ? clipText(address?.barangay, 40) : '',
+    city: disclosure.address ? clipText(address?.city, 40) : '',
+    province: disclosure.address ? clipText(address?.province, 40) : '',
+    postalCode: disclosure.address ? clipText(address?.postal_code, 20) : '',
+    country: disclosure.address ? clipText(address?.country, 40) : '',
+    allergies: disclosure.allergies
+      ? allergies.slice(0, 8).map(({ allergen, severity, reaction }) => ({
+          allergen: clipText(allergen, 60),
+          severity: clipText(severity, 30),
+          reaction: reaction ? clipText(reaction, 60) : null,
+        }))
+      : [],
+    conditions: disclosure.conditions
+      ? conditions.slice(0, 8).map(({ description }) => ({
+          description: clipText(description, 80),
+        }))
+      : [],
+    diagnoses: disclosure.diagnoses
+      ? diagnoses.slice(0, 8).map(({ condition, severity, date_of_diagnosis }) => ({
+          condition: clipText(condition, 80),
+          severity: clipText(severity, 30),
+          dateOfDiagnosis: date_of_diagnosis ? clipText(date_of_diagnosis, 20) : null,
+        }))
+      : [],
+    medications: disclosure.medications
+      ? medications.slice(0, 8).map(({ name, dosage, frequency }) => ({
+          name: clipText(name, 60),
+          dosage: clipText(dosage, 30),
+          frequency: frequency ? clipText(frequency, 30) : null,
+        }))
+      : [],
     emergencyContacts: disclosure.emergencyContacts
-      ? contacts.map((contact) => ({
-          name: contact.name,
-          relationship: contact.relationship,
+      ? contacts.slice(0, 2).map((contact) => ({
+          name: clipText(contact.name, 60),
+          relationship: contact.relationship ? clipText(contact.relationship, 30) : null,
           phone: contact.phone ? formatPhoneWithCountryCode(contact.phone_country_code ?? undefined, contact.phone) : null,
         }))
       : [],
     latestVerifiedEncounter: input.latestVerifiedEncounter ? {
-      professionalName: input.latestVerifiedEncounter.verifiedBy.name || input.latestVerifiedEncounter.professional_name,
-      professionalId: input.latestVerifiedEncounter.verifiedBy.userId || input.latestVerifiedEncounter.professional_id,
+      professionalName: clipText(input.latestVerifiedEncounter.verifiedBy.name || input.latestVerifiedEncounter.professional_name, 60),
+      professionalId: clipText(input.latestVerifiedEncounter.verifiedBy.userId || input.latestVerifiedEncounter.professional_id, 40),
       recordedAt: input.latestVerifiedEncounter.recordedAt,
       updatedAt: input.latestVerifiedEncounter.updatedAt,
-      observations: input.latestVerifiedEncounter.observations,
-      actionsTaken: input.latestVerifiedEncounter.actionsTaken,
-      vitals: input.latestVerifiedEncounter.vitals.map((vital) => ({ kind: vital.kind, value: vital.value, unit: vital.unit, measuredAt: vital.measuredAt, recordedBy: vital.verifiedBy?.name || vital.recordedBy })),
+      observations: clipText(input.latestVerifiedEncounter.observations, 160),
+      actionsTaken: clipText(input.latestVerifiedEncounter.actionsTaken, 160),
+      vitals: input.latestVerifiedEncounter.vitals.slice(0, 4).map((vital) => ({
+        kind: clipText(vital.kind, 30),
+        value: clipText(vital.value, 20),
+        unit: clipText(vital.unit, 15),
+        measuredAt: vital.measuredAt,
+        recordedBy: clipText(vital.verifiedBy?.name || vital.recordedBy, 40),
+      })),
     } : undefined,
     recentHistory: (input.recentHistory ?? []).filter((change) =>
       change.field === 'blood_type' ? disclosure.bloodType
         : change.field === 'date_of_birth' ? disclosure.dateOfBirth
           : disclosure.transfusionPreference,
-    ).slice(0, 5),
+    ).slice(0, 3),
     knowledge,
   };
-  const unsigned = {
+
+  const MAX_TARGET_JSON_BYTES = 1800;
+  let info = initialInfo;
+
+  const buildUnsigned = (data: ScannedEmergencyInfo) => ({
     version: 2 as const,
     payloadId: Crypto.randomUUID(),
     generatedAt: generatedAt.toISOString(),
@@ -132,8 +171,61 @@ export async function buildEmergencyQrV2(input: {
       diagnoses: knowledge.diagnoses,
       conditions: knowledge.conditions,
     },
-    data: info,
-  };
+    data,
+  });
+
+  let unsigned = buildUnsigned(info);
+
+  if (JSON.stringify(unsigned).length > MAX_TARGET_JSON_BYTES && info.latestVerifiedEncounter) {
+    info = {
+      ...info,
+      latestVerifiedEncounter: {
+        ...info.latestVerifiedEncounter,
+        observations: clipText(info.latestVerifiedEncounter.observations, 60),
+        actionsTaken: clipText(info.latestVerifiedEncounter.actionsTaken, 60),
+        vitals: info.latestVerifiedEncounter.vitals.slice(0, 2),
+      },
+    };
+    unsigned = buildUnsigned(info);
+  }
+
+  if (JSON.stringify(unsigned).length > MAX_TARGET_JSON_BYTES && info.recentHistory?.length) {
+    info = { ...info, recentHistory: undefined };
+    unsigned = buildUnsigned(info);
+  }
+
+  if (JSON.stringify(unsigned).length > MAX_TARGET_JSON_BYTES && info.latestVerifiedEncounter) {
+    info = { ...info, latestVerifiedEncounter: undefined };
+    unsigned = buildUnsigned(info);
+  }
+
+  for (const maxPerCategory of [3, 2, 1]) {
+    if (JSON.stringify(unsigned).length <= MAX_TARGET_JSON_BYTES) break;
+    info = {
+      ...info,
+      allergies: info.allergies.slice(0, maxPerCategory).map((a) => ({
+        ...a,
+        allergen: clipText(a.allergen, 40),
+        reaction: a.reaction ? clipText(a.reaction, 30) : null,
+      })),
+      conditions: info.conditions.slice(0, maxPerCategory).map((c) => ({
+        description: clipText(c.description, 40),
+      })),
+      diagnoses: info.diagnoses.slice(0, maxPerCategory).map((d) => ({
+        ...d,
+        condition: clipText(d.condition, 40),
+      })),
+      medications: info.medications.slice(0, maxPerCategory).map((m) => ({
+        ...m,
+        name: clipText(m.name, 40),
+        dosage: clipText(m.dosage, 20),
+        frequency: m.frequency ? clipText(m.frequency, 20) : null,
+      })),
+      emergencyContacts: info.emergencyContacts.slice(0, maxPerCategory > 1 ? 2 : 1),
+    };
+    unsigned = buildUnsigned(info);
+  }
+
   const signed = await signEmergencyPayload(patientId, JSON.stringify(unsigned));
   const envelope: EmergencyQrEnvelopeV2 = {
     ...unsigned,

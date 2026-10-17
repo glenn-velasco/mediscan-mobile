@@ -23,6 +23,9 @@ export async function generateQrImage(encryptedText: string): Promise<string | n
 
     const canvas = surface.getCanvas();
     const matrix = createQrMatrix(encryptedText, encryptedText.startsWith(QR_HYBRID_PREFIX) ? 'M' : 'L');
+    if (!matrix) {
+      return null;
+    }
     const padding = (QR_IMAGE_SIZE / matrix.length) * 4;
     const qrArea = QR_IMAGE_SIZE - padding * 2;
 

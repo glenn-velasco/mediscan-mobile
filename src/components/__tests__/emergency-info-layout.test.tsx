@@ -28,7 +28,7 @@ describe('emergency information layout', () => {
     for (const label of ['Date of birth', 'Age', 'Gender', 'Blood type', 'Phone', 'No blood transfusion', 'Generated']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
-    expect(screen.root!.queryAll((node) => typeof node.props.className === 'string' && node.props.className.includes('w-full')).length).toBeGreaterThanOrEqual(7);
+    expect(screen.root!.queryAll((node: any) => typeof node.props.className === 'string' && node.props.className.includes('w-full')).length).toBeGreaterThanOrEqual(7);
     expect(screen.getByText('July 25, 2000')).toBeTruthy();
   });
 

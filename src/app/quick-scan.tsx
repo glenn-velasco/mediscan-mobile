@@ -27,14 +27,14 @@ import { useMedicalInformation } from '@/features/medical-information/useMedical
 import { useMedications } from '@/features/medications/useMedications';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
 import { useTheme } from '@/hooks/use-theme';
-import { buildEmergencyQrV2 } from '@/lib/emergency-qr-v2';
+import { buildEmergencyQrPayload } from '@/services/dynamic-emergency-card.service';
 import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
+import { updateScanInfo } from '@/db/repositories/recent-emergency-scans.repo';
 import { isResponderQr } from '@/lib/emergency-qr-routing';
-import { consumeUpdatedScannedInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
+import { consumeUpdatedScannedInfo, setPendingManageInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { parseEmergencySummary, withLatestVerifiedEncounter, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import { useBiometricAuth } from '@/lib/use-biometric-auth';
-import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
 import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
 import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
 import { queryClient } from '@/lib/query-client';
@@ -122,21 +122,9 @@ export default function QuickScanScreen() {
   useEffect(() => {
     if (!user || !medicalInformation) return;
     let cancelled = false;
-    buildEmergencyQrV2({
-      patientId: user.id,
-      medical: medicalInformation,
-      allergies,
-      contacts: emergencyContacts ?? EMPTY_CONTACTS,
-      diagnoses,
-      medications,
-      conditions,
-      disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
-      confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
-      recentHistory,
-      latestVerifiedEncounter: professionalEncounters[0],
-    })
-      .then((payload) => {
-        if (!cancelled) setSummary(payload);
+    buildEmergencyQrPayload(user.id)
+      .then((res) => {
+        if (!cancelled && res) setSummary(res.payload);
       })
       .catch((error) => {
         console.warn('Failed to build emergency QR:', error);
@@ -180,14 +168,11 @@ export default function QuickScanScreen() {
       const updated = consumeUpdatedScannedInfo();
       if (updated) {
         setScanned(updated);
-        return;
+        if (scanId) {
+          void updateScanInfo(scanId, updated);
+        }
       }
-      if (scannedRawRef.current && scanned) {
-        parseEmergencySummary(scannedRawRef.current).then((parsed) => {
-          if (parsed) setScanned(parsed);
-        });
-      }
-    }, [scanned]),
+    }, [scanId]),
   );
 
   useEffect(() => {
@@ -239,6 +224,7 @@ export default function QuickScanScreen() {
         }
       })
       .catch(() => {});
+    setPendingManageInfo({ qrData: scannedRawRef.current ?? '', info: scanned });
     setPendingManageInfoQrData(scannedRawRef.current ?? '');
     let currentScanId = scanId;
     if (!currentScanId && scannedRawRef.current) {

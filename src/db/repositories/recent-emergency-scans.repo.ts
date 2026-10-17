@@ -136,6 +136,16 @@ export async function setEncounter(id: string, encounter: ResponderEncounter): P
   await db.runAsync('UPDATE recent_emergency_scans SET encrypted_snapshot = ? WHERE id = ?', await encryptRecentScan(snapshot), id);
 }
 
+export async function updateScanInfo(id: string, info: ScannedEmergencyInfo): Promise<void> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<ScanRow>('SELECT * FROM recent_emergency_scans WHERE id = ?', id);
+  if (!row) return;
+  const snapshot = await decryptRecentScan<StoredSnapshot>(row.encrypted_snapshot);
+  if (!snapshot) return;
+  snapshot.info = info;
+  await db.runAsync('UPDATE recent_emergency_scans SET encrypted_snapshot = ? WHERE id = ?', await encryptRecentScan(snapshot), id);
+}
+
 export async function remove(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM recent_emergency_scans WHERE id = ?', id);

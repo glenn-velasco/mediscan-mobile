@@ -5,6 +5,7 @@ import * as professionalAttestationRepo from '@/db/repositories/professional-att
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import * as conditionsRepo from '@/db/repositories/conditions.repo';
 import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
+import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import * as scannedPatientsRepo from '@/db/repositories/scanned-patients.repo';
@@ -12,10 +13,11 @@ import * as myScanActivityRepo from '@/db/repositories/my-scan-activity.repo';
 import { getCurrentUserId } from '@/db/context';
 import { unseal } from '@/services/sealed-box.service';
 import { getPrivateKeypair } from '@/services/device-key.service';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 import { parseEnvelopePlaintext } from '@/lib/envelope-schema';
 import { queryClient } from '@/lib/query-client';
-import { allergiesQueryKey, conditionsQueryKey, diagnosesQueryKey, medicationsQueryKey, medicalInformationQueryKey, attestationsQueryKey, professionalScansQueryKey, myScanActivityQueryKey } from '@/lib/query-keys';
-import type { AllergyVerificationEnvelope, ConditionVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, ScanEventEnvelope } from '@/lib/envelope-schema';
+import { allergiesQueryKey, conditionsQueryKey, diagnosesQueryKey, medicationsQueryKey, emergencyContactsQueryKey, medicalInformationQueryKey, attestationsQueryKey, professionalScansQueryKey, myScanActivityQueryKey } from '@/lib/query-keys';
+import type { AllergyVerificationEnvelope, ConditionVerificationEnvelope, DiagnosisVerificationEnvelope, MedicationVerificationEnvelope, EmergencyContactVerificationEnvelope, ScanEventEnvelope } from '@/lib/envelope-schema';
 import type { PendingSyncEnvelopeRow, VerifiedByEntry } from '@/db/schema';
 import type { EnvelopeType } from '@/api/types';
 
@@ -41,6 +43,7 @@ async function createOrUpdateOrDeleteAllergy(allergy: AllergyVerificationEnvelop
     if (match) {
       console.debug(TAG, 'Deleting allergy', { localUuid: match.local_uuid });
       await allergiesRepo.deleteLocal(match.local_uuid);
+
       return match.local_uuid;
     }
     return null;
@@ -106,6 +109,7 @@ async function createOrUpdateOrDeleteCondition(condition: ConditionVerificationE
     if (match) {
       console.debug(TAG, 'Deleting condition', { localUuid: match.local_uuid });
       await conditionsRepo.deleteLocal(match.local_uuid);
+
       return match.local_uuid;
     }
     return null;
@@ -162,6 +166,7 @@ async function createOrUpdateOrDeleteDiagnosis(diagnosis: DiagnosisVerificationE
     if (match) {
       console.debug(TAG, 'Deleting diagnosis', { localUuid: match.local_uuid });
       await diagnosesRepo.deleteLocal(match.local_uuid);
+
       return match.local_uuid;
     }
     return null;
@@ -227,6 +232,7 @@ async function createOrUpdateOrDeleteMedication(medication: MedicationVerificati
     if (match) {
       console.debug(TAG, 'Deleting medication', { localUuid: match.local_uuid });
       await medicationsRepo.deleteLocal(match.local_uuid);
+
       return match.local_uuid;
     }
     return null;
@@ -272,6 +278,50 @@ async function createOrUpdateOrDeleteMedication(medication: MedicationVerificati
     verified_at: medication.verified_at,
   };
   await medicationsRepo.updateVerifiedBy(newUuid, verifiedEntry);
+  return newUuid;
+}
+
+async function createOrUpdateOrDeleteEmergencyContact(contact: EmergencyContactVerificationEnvelope): Promise<string | null> {
+  console.debug(TAG, 'Processing emergency contact verification', { name: contact.name, action: contact.action });
+  const existingContacts = await emergencyContactsRepo.getAll();
+  const matches = existingContacts.filter(
+    (c) => c.name.trim().toLowerCase() === contact.name.trim().toLowerCase(),
+  );
+  if (matches.length > 1) {
+    console.debug(TAG, 'Ambiguous emergency contact match, skipping', { name: contact.name, matchCount: matches.length });
+    return null;
+  }
+  const match = matches[0];
+
+  if (contact.action === 'delete' || (contact as unknown as { note?: string }).note === '__delete__') {
+    if (match) {
+      console.debug(TAG, 'Deleting emergency contact', { localUuid: match.local_uuid });
+      await emergencyContactsRepo.deleteLocal(match.local_uuid);
+      return match.local_uuid;
+    }
+    return null;
+  }
+
+  if (match) {
+    console.debug(TAG, 'Updating existing emergency contact', { localUuid: match.local_uuid });
+    await emergencyContactsRepo.updateLocal(match.local_uuid, {
+      name: contact.name,
+      relationship: contact.relationship ?? undefined,
+      phone_country_code: contact.phone_country_code ?? undefined,
+      phone: contact.phone ?? undefined,
+      is_primary: contact.is_primary,
+    });
+    return match.local_uuid;
+  }
+
+  console.debug(TAG, 'Creating new emergency contact', { name: contact.name });
+  const newUuid = await emergencyContactsRepo.createLocal({
+    name: contact.name,
+    relationship: contact.relationship ?? undefined,
+    phone_country_code: contact.phone_country_code ?? undefined,
+    phone: contact.phone ?? undefined,
+    is_primary: contact.is_primary,
+  });
   return newUuid;
 }
 
@@ -349,13 +399,19 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
   const matchedMedicationLocalUuid = parsed.type === 'medication_verification'
     ? await createOrUpdateOrDeleteMedication(parsed)
     : null;
+  const matchedEmergencyContactLocalUuid = parsed.type === 'emergency_contact_verification'
+    ? await createOrUpdateOrDeleteEmergencyContact(parsed)
+    : null;
 
   console.debug(TAG, 'Record matching results', {
     allergy: matchedAllergyLocalUuid,
     condition: matchedConditionLocalUuid,
     diagnosis: matchedDiagnosisLocalUuid,
     medication: matchedMedicationLocalUuid,
+    emergencyContact: matchedEmergencyContactLocalUuid,
   });
+
+
 
   await professionalAttestationRepo.insert({
     localId: Crypto.randomUUID(),
@@ -384,8 +440,10 @@ export async function processEnvelope(envelope: PendingSyncEnvelopeRow): Promise
     queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
     queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
     queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
+    queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });
     queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
     queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
+    void pushPatientChanges();
   });
 
   return 'merged';

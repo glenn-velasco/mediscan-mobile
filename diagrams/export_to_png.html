@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediScan - Diagram Image Exporter (SVG & PNG)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f4f5f7;
+      color: #111827;
+      padding: 40px 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1050px;
+      margin: 0 auto;
+    }
+    header {
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      padding: 30px;
+      border-radius: 6px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #4b5563;
+      font-size: 14px;
+    }
+    .top-actions {
+      margin-top: 15px;
+    }
+    .btn {
+      background: #111827;
+      color: #ffffff;
+      border: 1px solid #111827;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      margin: 4px;
+      transition: background 0.15s;
+    }
+    .btn:hover {
+      background: #374151;
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: #111827;
+      border: 1px solid #9ca3af;
+    }
+    .btn-secondary:hover {
+      background: #f3f4f6;
+    }
+    .diagram-card {
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+    .diagram-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .diagram-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+    }
+    .svg-wrapper {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      padding: 15px;
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .svg-wrapper img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>MediScan Mobile - Diagram Images</h1>
+      <p>Plain academic diagrams with formal UML 2.5 elements. Validated 100% compliant XML/SVG format.</p>
+      <div class="top-actions">
+        <button class="btn" onclick="downloadAllPngs()">Download All 5 PNGs (High-Res 2X)</button>
+      </div>
+    </header>
+
+    <!-- DIAGRAM 1 -->
+    <div class="diagram-card" id="card-1">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 1: System High-Level Architecture (HLD)</div>
+        <div>
+          <a class="btn btn-secondary" href="figure1_high_level_architecture.svg" download="figure1_high_level_architecture.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure1_high_level_architecture.svg', 'figure1_high_level_architecture.png', 950, 540)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-1" src="figure1_high_level_architecture.svg" width="950" height="540" alt="Figure 1: High Level Architecture">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 2 -->
+    <div class="diagram-card" id="card-2">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 2: UML 2.5 Component Diagram</div>
+        <div>
+          <a class="btn btn-secondary" href="figure2_component_diagram.svg" download="figure2_component_diagram.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure2_component_diagram.svg', 'figure2_component_diagram.png', 950, 560)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-2" src="figure2_component_diagram.svg" width="950" height="560" alt="Figure 2: Component Diagram">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 3 -->
+    <div class="diagram-card" id="card-3">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 3: UML 2.5 Deployment Diagram</div>
+        <div>
+          <a class="btn btn-secondary" href="figure3_deployment_diagram.svg" download="figure3_deployment_diagram.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure3_deployment_diagram.svg', 'figure3_deployment_diagram.png', 950, 560)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-3" src="figure3_deployment_diagram.svg" width="950" height="560" alt="Figure 3: Deployment Diagram">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 4 -->
+    <div class="diagram-card" id="card-4">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 4: UML 2.5 Use Case Diagram</div>
+        <div>
+          <a class="btn btn-secondary" href="figure4_use_case_diagram.svg" download="figure4_use_case_diagram.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure4_use_case_diagram.svg', 'figure4_use_case_diagram.png', 950, 560)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-4" src="figure4_use_case_diagram.svg" width="950" height="560" alt="Figure 4: Use Case Diagram">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 5 -->
+    <div class="diagram-card" id="card-5">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 5: UML 2.5 Sequence Diagram (Offline Triage)</div>
+        <div>
+          <a class="btn btn-secondary" href="figure5_sequence_diagram.svg" download="figure5_sequence_diagram.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure5_sequence_diagram.svg', 'figure5_sequence_diagram.png', 950, 540)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-5" src="figure5_sequence_diagram.svg" width="950" height="540" alt="Figure 5: Sequence Diagram">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 6: DFD LEVEL 0 -->
+    <div class="diagram-card" id="card-6">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 6: Data Flow Diagram (DFD) Level 0: Context Diagram</div>
+        <div>
+          <a class="btn btn-secondary" href="figure6_dfd_level0_context.svg" download="figure6_dfd_level0_context.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure6_dfd_level0_context.svg', 'figure6_dfd_level0_context.png', 950, 560)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-6" src="figure6_dfd_level0_context.svg" width="950" height="560" alt="Figure 6: DFD Level 0 Context Diagram">
+      </div>
+    </div>
+
+    <!-- DIAGRAM 7: DFD LEVEL 1 -->
+    <div class="diagram-card" id="card-7">
+      <div class="diagram-header">
+        <div class="diagram-title">Figure 7: Data Flow Diagram (DFD) Level 1: Sub-Processes &amp; Data Stores</div>
+        <div>
+          <a class="btn btn-secondary" href="figure7_dfd_level1.svg" download="figure7_dfd_level1.svg">Download .SVG</a>
+          <button class="btn" onclick="exportToPng('figure7_dfd_level1.svg', 'figure7_dfd_level1.png', 1000, 700)">Download .PNG</button>
+        </div>
+      </div>
+      <div class="svg-wrapper">
+        <img id="img-7" src="figure7_dfd_level1.svg" width="1000" height="700" alt="Figure 7: DFD Level 1 Detailed Diagram">
+      </div>
+    </div>
+  </div>
+
+  <canvas id="export-canvas"></canvas>
+
+  <script>
+    async function exportToPng(svgPath, filename, width, height) {
+      try {
+        const response = await fetch(svgPath);
+        const svgText = await response.text();
+
+        const canvas = document.getElementById('export-canvas');
+        const scale = 2; // High-Resolution 2X
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const img = new Image();
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = function() {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(url);
+          const a = document.createElement('a');
+          a.download = filename;
+          a.href = canvas.toDataURL('image/png');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+        img.src = url;
+      } catch (err) {
+        console.error('Export failed', err);
+      }
+    }
+
+    async function downloadAllPngs() {
+      const diagrams = [
+        { path: 'figure1_high_level_architecture.svg', name: 'figure1_high_level_architecture.png', w: 950, h: 540 },
+        { path: 'figure2_component_diagram.svg', name: 'figure2_component_diagram.png', w: 950, h: 560 },
+        { path: 'figure3_deployment_diagram.svg', name: 'figure3_deployment_diagram.png', w: 950, h: 560 },
+        { path: 'figure4_use_case_diagram.svg', name: 'figure4_use_case_diagram.png', w: 950, h: 560 },
+        { path: 'figure5_sequence_diagram.svg', name: 'figure5_sequence_diagram.png', w: 950, h: 540 },
+        { path: 'figure6_dfd_level0_context.svg', name: 'figure6_dfd_level0_context.png', w: 950, h: 560 },
+        { path: 'figure7_dfd_level1.svg', name: 'figure7_dfd_level1.png', w: 1000, h: 700 }
+      ];
+      for (const d of diagrams) {
+        await exportToPng(d.path, d.name, d.w, d.h);
+        await new Promise(r => setTimeout(r, 600));
+      }
+    }
+  </script>
+</body>
+</html>

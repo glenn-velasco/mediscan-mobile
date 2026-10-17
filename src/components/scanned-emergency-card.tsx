@@ -11,6 +11,7 @@ import { SeverityBadge } from '@/components/severity-badge';
 import { ThemedText } from '@/components/themed-text';
 import { GENDER_OPTIONS, GenderLabel, type Gender } from '@/constants/gender';
 import { BloodTypeLabel, type BloodType } from '@/constants/blood-type';
+import { RELIGION_OPTIONS, ReligionLabel, type Religion } from '@/constants/religion';
 import { RELATION_TO_PATIENT_OPTIONS, RelationToPatientLabel, type RelationToPatient } from '@/constants/relation-to-patient';
 import type { AllergyRow } from '@/db/schema';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,6 +22,8 @@ import { formatPhoneWithCountryCode } from '@/lib/format-phone';
 import type { ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import type { QrVerificationResult } from '@/types/emergency';
 import type { EmergencyFieldChange } from '@/db/repositories/emergency-field-history.repo';
+
+const VALID_SEVERITIES = new Set(['mild', 'moderate', 'severe', 'life-threatening']);
 
 function formatHistoryValue(change: EmergencyFieldChange): string {
   if (change.value === null) return 'Not recorded';
@@ -53,6 +56,7 @@ const SCANNED_VITAL_LABELS: Record<(typeof SCANNED_VITAL_ORDER)[number], string>
 export function ScannedEmergencyCard({
   info,
   onRecordEncounter,
+  onManageInfo,
   encounterReady = true,
   encounterExists = false,
   source,
@@ -61,6 +65,7 @@ export function ScannedEmergencyCard({
 }: {
   info: ScannedEmergencyInfo;
   onRecordEncounter?: () => void;
+  onManageInfo?: () => void;
   encounterReady?: boolean;
   encounterExists?: boolean;
   source?: 'qr' | 'dynamic-card' | 'printable-offline';
@@ -87,7 +92,27 @@ export function ScannedEmergencyCard({
     <View className="gap-4">
       <ThemedText type="heading" className="text-center">{info.name || 'Unknown'}</ThemedText>
       {source ? <Card><ThemedText selectable type="bodyBold">Emergency information</ThemedText><ThemedText selectable color="mutedForeground">{source === 'dynamic-card' ? 'Printed card · online published snapshot' : source === 'printable-offline' ? 'Printed card · offline snapshot' : 'On-phone QR · available offline'}</ThemedText><ThemedText selectable color="mutedForeground">Last updated {formatIsoDateTime(info.lastUpdatedAt || info.generatedAt) || 'unknown'}</ThemedText>{verification ? <ThemedText selectable color="mutedForeground">{verification.message}</ThemedText> : null}</Card> : null}
-      {onRecordEncounter ? <AccessGate permissions={['verified professional']}><PrimaryButton label={encounterExists ? 'Open encounter and report' : 'Record encounter and vitals'} disabled={!encounterReady} onPress={onRecordEncounter} /></AccessGate> : null}
+      {onRecordEncounter || onManageInfo ? (
+        <AccessGate permissions={['verified professional']}>
+          <View className="gap-2.5">
+            {onRecordEncounter ? (
+              <PrimaryButton
+                label={encounterExists ? 'Open encounter and report' : 'Record encounter and vitals'}
+                disabled={!encounterReady}
+                onPress={onRecordEncounter}
+              />
+            ) : null}
+            {onManageInfo ? (
+              <PrimaryButton
+                label="Manage patient information"
+                variant="outline"
+                leftIcon={<Ionicons name="medkit-outline" size={18} color={theme.primary} />}
+                onPress={onManageInfo}
+              />
+            ) : null}
+          </View>
+        </AccessGate>
+      ) : null}
 
       <View className="gap-2">
         {dateOfBirth ? <InfoTile
@@ -129,6 +154,14 @@ export function ScannedEmergencyCard({
             iconBgKey="primary"
             label="Phone"
             value={personalPhone}
+          /> : null}
+        {info.religion ? <InfoTile
+            fullWidth
+            icon="heart"
+            iconColor={theme.primary}
+            iconBgKey="primary"
+            label="Religion"
+            value={RELIGION_OPTIONS.includes(info.religion as Religion) ? ReligionLabel[info.religion as Religion] : info.religion}
           /> : null}
         <InfoTile
             fullWidth
@@ -328,6 +361,55 @@ export function ScannedEmergencyCard({
                     <Ionicons name="fitness" size={18} color={theme.primary} />
                   </View>
                   <ThemedText className="flex-1 shrink font-semibold">{condition.description}</ThemedText>
+                </View>
+              ))}
+            </Card>
+          )}
+        </View>
+      )}
+
+      {showMedicalDetails && (
+        <View className="gap-2">
+          <ThemedText type="overline">Diagnoses</ThemedText>
+          {!info.diagnoses || info.diagnoses.length === 0 ? (
+            <Card>
+              <View className="flex-row items-center gap-3">
+                <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.muted }}>
+                  <Ionicons name="medkit" size={18} color={theme.mutedForeground} />
+                </View>
+                <ThemedText type="label" color="mutedForeground" className="flex-1 shrink">{info.knowledge?.diagnoses === 'confirmed_none' ? 'None reported by patient.' : 'Not recorded.'}</ThemedText>
+              </View>
+            </Card>
+          ) : (
+            <Card className="p-0">
+              {info.diagnoses.filter(Boolean).map((diagnosis, i, arr) => (
+                <View
+                  key={`diagnosis-${diagnosis.condition}-${diagnosis.severity || ''}-${diagnosis.dateOfDiagnosis || ''}-${i}`}
+                  className={cn(
+                    'flex-row items-center gap-3 px-4 py-3.5',
+                    i < arr.length - 1 && 'border-b border-border',
+                  )}
+                >
+                  <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: theme.primary + '15' }}>
+                    <Ionicons name="medkit" size={18} color={theme.primary} />
+                  </View>
+                  <View className="flex-1 shrink">
+                    <ThemedText className="font-semibold">{diagnosis.condition}</ThemedText>
+                    {diagnosis.dateOfDiagnosis ? (
+                      <ThemedText type="small" color="mutedForeground">
+                        Diagnosed {formatIsoDate(diagnosis.dateOfDiagnosis)}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  {diagnosis.severity && VALID_SEVERITIES.has(diagnosis.severity) ? (
+                    <SeverityBadge severity={diagnosis.severity as AllergyRow['severity']} />
+                  ) : diagnosis.severity ? (
+                    <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: theme.muted }}>
+                      <ThemedText type="detail" color="mutedForeground">
+                        {diagnosis.severity}
+                      </ThemedText>
+                    </View>
+                  ) : null}
                 </View>
               ))}
             </Card>

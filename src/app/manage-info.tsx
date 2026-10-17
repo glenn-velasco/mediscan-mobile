@@ -50,7 +50,7 @@ import { formatIsoDate } from '@/lib/format-date';
 import { professionalEncountersQueryKey } from '@/lib/query-keys';
 import type { EncounterVital, ResponderNoteBlock } from '@/types/emergency';
 import * as historyRepo from '@/db/repositories/recent-emergency-scans.repo';
-import { consumePendingManageInfoQrData } from '@/lib/manage-info-pending';
+import { consumePendingManageInfo, consumePendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
 import type { UseFormReturn } from 'react-hook-form';
 
@@ -779,7 +779,7 @@ function MedicationsSection({
 export default function ManageInfoScreen() {
   const { patientId, scanId } = useLocalSearchParams<{ patientId: string; scanId?: string }>();
   const theme = useTheme();
-  const state = useManageInfo();
+  const state = useManageInfo({ scanId });
   const initializedRef = useRef(false);
   const closedRef = useRef(false);
   const encounterSaveRef = useRef<(() => Promise<boolean>) | null>(null);
@@ -789,11 +789,12 @@ export default function ManageInfoScreen() {
 
   useEffect(() => {
     if (initializedRef.current) return;
-    const qrData = consumePendingManageInfoQrData();
+    const pendingData = consumePendingManageInfo();
     const pid = patientId?.trim();
-    if (qrData && pid) {
+    const sourceData = pendingData.info ?? pendingData.qrData ?? consumePendingManageInfoQrData();
+    if (sourceData && pid) {
       initializedRef.current = true;
-      state.resetAll(pid, qrData);
+      state.resetAll(pid, sourceData);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);

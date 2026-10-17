@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Suspense, lazy, useRef, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { AppLayout } from '@/components/layouts/app-layout';
@@ -8,10 +8,14 @@ import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { DateField } from '@/components/form/date-field';
 import { IdPhotoCaptureView, type CapturedPhoto } from '@/components/id-photo-capture-view';
-import { LivenessCaptureView, type LivenessCaptureResult } from '@/components/liveness-capture-view';
+import type { LivenessCaptureResult } from '@/components/liveness-capture-view';
 import { useApiError } from '@/api/use-api-error';
 import { submitProfessionalApplication } from '@/services/professional-application.service';
 import { dateOfBirthSchema } from '@/lib/validation/date-of-birth-schema';
+
+const LivenessCaptureView = lazy(() =>
+  import('@/components/liveness-capture-view').then((m) => ({ default: m.LivenessCaptureView })),
+);
 
 type Step = 'id-photo' | 'liveness' | 'date-of-birth' | 'submitting';
 
@@ -82,7 +86,11 @@ export default function CreateProfessionalApplicationScreen() {
       <FormError message={message} />
 
       {step === 'id-photo' && <IdPhotoCaptureView onCaptured={handleIdPhoto} />}
-      {step === 'liveness' && <LivenessCaptureView onCaptured={handleLiveness} onReset={() => (livenessRef.current = null)} />}
+      {step === 'liveness' && (
+        <Suspense fallback={<View className="flex-1 items-center justify-center py-12"><ActivityIndicator size="large" /></View>}>
+          <LivenessCaptureView onCaptured={handleLiveness} onReset={() => (livenessRef.current = null)} />
+        </Suspense>
+      )}
       {(step === 'date-of-birth' || step === 'submitting') && (
         <View className="gap-4">
           <DateField

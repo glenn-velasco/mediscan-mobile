@@ -1,0 +1,105 @@
+<svg viewBox="0 0 950 540" width="950" height="540" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#111827"/>
+    </marker>
+  </defs>
+
+  <!-- TITLE -->
+  <text x="475" y="24" font-size="14" font-weight="bold" text-anchor="middle" fill="#111827">FIGURE 1: SYSTEM HIGH-LEVEL ARCHITECTURE (HLD)</text>
+
+  <!-- USERS BLOCK -->
+  <rect x="30" y="40" width="200" height="460" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="130" y="65" font-size="13" font-weight="bold" text-anchor="middle" fill="#111827">System Actors</text>
+  <line x1="30" y1="75" x2="230" y2="75" stroke="#111827" stroke-width="1"/>
+
+  <rect x="45" y="90" width="170" height="80" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="55" y="110" font-size="12" font-weight="bold" fill="#111827">Patient / Civilian</text>
+  <text x="55" y="128" font-size="11" fill="#4b5563">• Manages medical data</text>
+  <text x="55" y="144" font-size="11" fill="#4b5563">• Issues emergency QR</text>
+  <text x="55" y="160" font-size="11" fill="#4b5563">• Views "Who Scanned Me"</text>
+
+  <rect x="45" y="190" width="170" height="80" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="55" y="210" font-size="12" font-weight="bold" fill="#111827">First Responder</text>
+  <text x="55" y="228" font-size="11" fill="#4b5563">• Offline QR camera scan</text>
+  <text x="55" y="244" font-size="11" fill="#4b5563">• Records vitals &amp; notes</text>
+  <text x="55" y="260" font-size="11" fill="#4b5563">• Initiates handoffs</text>
+
+  <rect x="45" y="290" width="170" height="80" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="55" y="310" font-size="12" font-weight="bold" fill="#111827">Healthcare Professional</text>
+  <text x="55" y="328" font-size="11" fill="#4b5563">• Submits PRC license</text>
+  <text x="55" y="344" font-size="11" fill="#4b5563">• Attests medical records</text>
+  <text x="55" y="360" font-size="11" fill="#4b5563">• Clinical encounters</text>
+
+  <rect x="45" y="390" width="170" height="80" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="55" y="410" font-size="12" font-weight="bold" fill="#111827">System Administrator</text>
+  <text x="55" y="428" font-size="11" fill="#4b5563">• Reviews application queue</text>
+  <text x="55" y="444" font-size="11" fill="#4b5563">• Approves / denies licenses</text>
+  <text x="55" y="460" font-size="11" fill="#4b5563">• Audits screening checks</text>
+
+  <!-- MOBILE CLIENT BLOCK -->
+  <rect x="290" y="40" width="280" height="460" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="430" y="65" font-size="13" font-weight="bold" text-anchor="middle" fill="#111827">MediScan Mobile Client</text>
+  <line x1="290" y1="75" x2="570" y2="75" stroke="#111827" stroke-width="1"/>
+
+  <rect x="305" y="90" width="250" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="315" y="112" font-size="12" font-weight="bold" fill="#111827">Presentation &amp; UI Layer</text>
+  <text x="315" y="130" font-size="11" fill="#4b5563">React Native / Expo Router (TypeScript)</text>
+  <text x="315" y="145" font-size="11" fill="#4b5563">Triage Scanner, Records, Wallet Cards</text>
+
+  <rect x="305" y="170" width="250" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="315" y="192" font-size="12" font-weight="bold" fill="#111827">Cryptographic Engine</text>
+  <text x="315" y="210" font-size="11" fill="#4b5563">AES-GCM 256-bit Client-Side Sealing</text>
+  <text x="315" y="225" font-size="11" fill="#4b5563">Ed25519 Device Digital Signatures</text>
+
+  <rect x="305" y="250" width="250" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="315" y="272" font-size="12" font-weight="bold" fill="#111827">Local Storage &amp; Sync Engine</text>
+  <text x="315" y="290" font-size="11" fill="#4b5563">Embedded SQLite 3 (24 Migrations)</text>
+  <text x="315" y="305" font-size="11" fill="#4b5563">Last-Write-Wins Delta Sync Worker</text>
+
+  <rect x="305" y="330" width="250" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="315" y="352" font-size="12" font-weight="bold" fill="#111827">Hardware Subsystems</text>
+  <text x="315" y="370" font-size="11" fill="#4b5563">Camera QR Scanner (expo-camera)</text>
+  <text x="315" y="385" font-size="11" fill="#4b5563">BLE Controller (react-native-ble-plx)</text>
+
+  <rect x="305" y="410" width="250" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="315" y="432" font-size="12" font-weight="bold" fill="#111827">Secure Hardware Keystore</text>
+  <text x="315" y="450" font-size="11" fill="#4b5563">TEE / Android KeyStore / iOS Keychain</text>
+  <text x="315" y="465" font-size="11" fill="#4b5563">Private Key Protection &amp; Biometrics</text>
+
+  <!-- BACKEND CLOUD BLOCK -->
+  <rect x="630" y="40" width="290" height="340" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="775" y="65" font-size="13" font-weight="bold" text-anchor="middle" fill="#111827">Supabase Cloud Platform</text>
+  <line x1="630" y1="75" x2="920" y2="75" stroke="#111827" stroke-width="1"/>
+
+  <rect x="645" y="90" width="260" height="55" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="655" y="112" font-size="12" font-weight="bold" fill="#111827">PostgREST API Gateway &amp; Auth</text>
+  <text x="655" y="130" font-size="11" fill="#4b5563">Row Level Security (RLS) &amp; JWT</text>
+
+  <rect x="645" y="155" width="260" height="65" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="655" y="177" font-size="12" font-weight="bold" fill="#111827">Privileged Edge Functions</text>
+  <text x="655" y="195" font-size="11" fill="#4b5563">mediscan-privileged (Deno Runtime)</text>
+  <text x="655" y="210" font-size="11" fill="#4b5563">Card Resolver, Licensure, Handoffs</text>
+
+  <rect x="645" y="230" width="260" height="70" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="655" y="252" font-size="12" font-weight="bold" fill="#111827">PostgreSQL 17.6 Relational DB</text>
+  <text x="655" y="270" font-size="11" fill="#4b5563">24 Relational Tables (Encrypted Payloads)</text>
+  <text x="655" y="285" font-size="11" fill="#4b5563">RPC: sync_patient_data()</text>
+
+  <rect x="645" y="310" width="260" height="55" fill="#f9fafb" stroke="#4b5563" stroke-width="1"/>
+  <text x="655" y="332" font-size="12" font-weight="bold" fill="#111827">Storage &amp; Realtime Pub/Sub</text>
+  <text x="655" y="350" font-size="11" fill="#4b5563">Buckets: /avatars &amp; /applications</text>
+
+  <!-- EXTERNAL GCP OCR -->
+  <rect x="630" y="410" width="290" height="90" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="775" y="435" font-size="13" font-weight="bold" text-anchor="middle" fill="#111827">Google Cloud Platform</text>
+  <line x1="630" y1="445" x2="920" y2="445" stroke="#111827" stroke-width="1"/>
+  <text x="645" y="468" font-size="12" font-weight="bold" fill="#111827">Cloud Vision OCR API</text>
+  <text x="645" y="488" font-size="11" fill="#4b5563">Automated Philippine PRC Licensure Document OCR</text>
+
+  <!-- CONNECTIONS -->
+  <line x1="230" y1="270" x2="290" y2="270" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="570" y1="200" x2="630" y2="200" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="775" y1="380" x2="775" y2="410" stroke="#111827" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+  <text x="780" y="400" font-size="10" fill="#4b5563">OAuth2</text>
+</svg>

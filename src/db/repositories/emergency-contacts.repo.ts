@@ -177,7 +177,8 @@ export async function upsertFromServer(record: {
        is_primary = excluded.is_primary,
        sync_status = 'synced',
        deleted_locally = 0,
-       updated_at_local = excluded.updated_at_local`,
+       updated_at_local = excluded.updated_at_local
+     WHERE sync_status != 'pending' AND deleted_locally = 0`,
     record.id,
     userId,
     await encryptField(record.name),

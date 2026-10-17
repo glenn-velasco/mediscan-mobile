@@ -1,0 +1,188 @@
+<svg viewBox="0 0 1000 700" width="1000" height="700" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#111827"/>
+    </marker>
+  </defs>
+
+  <!-- TITLE -->
+  <text x="500" y="24" font-size="14" font-weight="bold" text-anchor="middle" fill="#111827">DATA FLOW DIAGRAM (DFD) LEVEL 1: DETAILED SUB-PROCESSES &amp; DATA STORES</text>
+
+  <!-- EXTERNAL ENTITIES -->
+  <rect x="30" y="50" width="140" height="45" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="100" y="77" font-size="11" font-weight="bold" text-anchor="middle">Patient / Civilian</text>
+
+  <rect x="30" y="370" width="140" height="45" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="100" y="397" font-size="11" font-weight="bold" text-anchor="middle">First Responder</text>
+
+  <rect x="830" y="50" width="140" height="45" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="900" y="77" font-size="11" font-weight="bold" text-anchor="middle">Healthcare Professional</text>
+
+  <rect x="830" y="370" width="140" height="45" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="900" y="397" font-size="11" font-weight="bold" text-anchor="middle">System Administrator</text>
+
+  <rect x="830" y="530" width="140" height="45" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="900" y="557" font-size="11" font-weight="bold" text-anchor="middle">Google Vision OCR</text>
+
+
+  <!-- PROCESSES (CIRCULAR / ROUNDED RECTANGLES) -->
+  <!-- Process 1.0 -->
+  <rect x="230" y="50" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="230" y1="70" x2="400" y2="70" stroke="#111827" stroke-width="1"/>
+  <text x="315" y="65" font-size="10" font-weight="bold" text-anchor="middle">1.0</text>
+  <text x="315" y="88" font-size="11" font-weight="bold" text-anchor="middle">Authentication &amp; Profile</text>
+  <text x="315" y="102" font-size="9" fill="#4b5563" text-anchor="middle">User credentials &amp; tokens</text>
+
+  <!-- Process 2.0 -->
+  <rect x="230" y="180" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="230" y1="200" x2="400" y2="200" stroke="#111827" stroke-width="1"/>
+  <text x="315" y="195" font-size="10" font-weight="bold" text-anchor="middle">2.0</text>
+  <text x="315" y="218" font-size="11" font-weight="bold" text-anchor="middle">Record Sealing &amp; QR</text>
+  <text x="315" y="232" font-size="9" fill="#4b5563" text-anchor="middle">AES-GCM &amp; Ed25519 card</text>
+
+  <!-- Process 3.0 -->
+  <rect x="230" y="360" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="230" y1="380" x2="400" y2="380" stroke="#111827" stroke-width="1"/>
+  <text x="315" y="375" font-size="10" font-weight="bold" text-anchor="middle">3.0</text>
+  <text x="315" y="398" font-size="11" font-weight="bold" text-anchor="middle">Emergency QR Triage</text>
+  <text x="315" y="412" font-size="9" fill="#4b5563" text-anchor="middle">Offline signature check</text>
+
+  <!-- Process 4.0 -->
+  <rect x="230" y="500" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="230" y1="520" x2="400" y2="520" stroke="#111827" stroke-width="1"/>
+  <text x="315" y="515" font-size="10" font-weight="bold" text-anchor="middle">4.0</text>
+  <text x="315" y="538" font-size="11" font-weight="bold" text-anchor="middle">Encounters &amp; Handoff</text>
+  <text x="315" y="552" font-size="9" fill="#4b5563" text-anchor="middle">Vitals &amp; ephemeral token</text>
+
+  <!-- Process 5.0 -->
+  <rect x="600" y="360" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="600" y1="380" x2="770" y2="380" stroke="#111827" stroke-width="1"/>
+  <text x="685" y="375" font-size="10" font-weight="bold" text-anchor="middle">5.0</text>
+  <text x="685" y="398" font-size="11" font-weight="bold" text-anchor="middle">Licensure Vetting &amp; OCR</text>
+  <text x="685" y="412" font-size="9" fill="#4b5563" text-anchor="middle">PRC automated screening</text>
+
+  <!-- Process 6.0 -->
+  <rect x="420" y="620" width="170" height="60" rx="15" fill="#f9fafb" stroke="#111827" stroke-width="1.5"/>
+  <line x1="420" y1="640" x2="590" y2="640" stroke="#111827" stroke-width="1"/>
+  <text x="505" y="635" font-size="10" font-weight="bold" text-anchor="middle">6.0</text>
+  <text x="505" y="658" font-size="11" font-weight="bold" text-anchor="middle">Delta Sync Worker</text>
+  <text x="505" y="672" font-size="9" fill="#4b5563" text-anchor="middle">sync_patient_data() RPC</text>
+
+
+  <!-- DATA STORES (OPEN-ENDED RECTANGLES / GANE & SARSON NOTATION) -->
+  <!-- D1: Local SQLite -->
+  <g transform="translate(470, 180)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="45" x2="160" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="35" y1="0" x2="35" y2="45" stroke="#111827" stroke-width="1"/>
+    <text x="18" y="27" font-size="10" font-weight="bold" text-anchor="middle">D1</text>
+    <text x="45" y="20" font-size="10" font-weight="bold">Local SQLite Cache</text>
+    <text x="45" y="35" font-size="9" fill="#4b5563">mediscan.db (24 tables)</text>
+  </g>
+
+  <!-- D2: Keystore -->
+  <g transform="translate(470, 80)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="45" x2="160" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="35" y1="0" x2="35" y2="45" stroke="#111827" stroke-width="1"/>
+    <text x="18" y="27" font-size="10" font-weight="bold" text-anchor="middle">D2</text>
+    <text x="45" y="20" font-size="10" font-weight="bold">Device Secure Keystore</text>
+    <text x="45" y="35" font-size="9" fill="#4b5563">TEE / Secure Enclave</text>
+  </g>
+
+  <!-- D3: PostgreSQL -->
+  <g transform="translate(670, 180)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="45" x2="160" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="35" y1="0" x2="35" y2="45" stroke="#111827" stroke-width="1"/>
+    <text x="18" y="27" font-size="10" font-weight="bold" text-anchor="middle">D3</text>
+    <text x="45" y="20" font-size="10" font-weight="bold">PostgreSQL Database</text>
+    <text x="45" y="35" font-size="9" fill="#4b5563">Supabase Cloud RLS</text>
+  </g>
+
+  <!-- D4: S3 Storage -->
+  <g transform="translate(470, 480)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="45" x2="160" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="35" y1="0" x2="35" y2="45" stroke="#111827" stroke-width="1"/>
+    <text x="18" y="27" font-size="10" font-weight="bold" text-anchor="middle">D4</text>
+    <text x="45" y="20" font-size="10" font-weight="bold">S3 Object Storage</text>
+    <text x="45" y="35" font-size="9" fill="#4b5563">Avatars &amp; PRC Files</text>
+  </g>
+
+  <!-- D5: Audit Trail -->
+  <g transform="translate(470, 360)">
+    <line x1="0" y1="0" x2="160" y2="0" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="45" x2="160" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="0" y1="0" x2="0" y2="45" stroke="#111827" stroke-width="1.5"/>
+    <line x1="35" y1="0" x2="35" y2="45" stroke="#111827" stroke-width="1"/>
+    <text x="18" y="27" font-size="10" font-weight="bold" text-anchor="middle">D5</text>
+    <text x="45" y="20" font-size="10" font-weight="bold">Audit &amp; Field History</text>
+    <text x="45" y="35" font-size="9" fill="#4b5563">scan_events, history</text>
+  </g>
+
+
+  <!-- DATA FLOW CONNECTORS -->
+  <!-- Patient -> 1.0 -->
+  <line x1="170" y1="72" x2="230" y2="72" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="200" y="67" font-size="9" text-anchor="middle">Signup/Login</text>
+
+  <!-- Patient -> 2.0 -->
+  <line x1="100" y1="95" x2="230" y2="195" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="150" y="150" font-size="9">Enter Allergies/Meds</text>
+
+  <!-- 2.0 -> D2 (Signing Key) -->
+  <line x1="350" y1="180" x2="470" y2="115" stroke="#111827" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+  <text x="400" y="140" font-size="8">Sign Key</text>
+
+  <!-- 2.0 -> D1 (Write Local) -->
+  <line x1="400" y1="205" x2="470" y2="205" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="435" y="198" font-size="8" text-anchor="middle">Write Sealed</text>
+
+  <!-- Responder -> 3.0 -->
+  <line x1="170" y1="390" x2="230" y2="390" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="200" y="384" font-size="9" text-anchor="middle">QR Scan</text>
+
+  <!-- 3.0 -> 4.0 -->
+  <line x1="315" y1="420" x2="315" y2="500" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="320" y="460" font-size="9">Verified Info</text>
+
+  <!-- 3.0 -> D5 (Audit Log) -->
+  <line x1="400" y1="385" x2="470" y2="385" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="435" y="378" font-size="8" text-anchor="middle">Log Scan</text>
+
+  <!-- 4.0 -> D1 -->
+  <line x1="350" y1="500" x2="480" y2="225" stroke="#111827" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+  <text x="440" y="330" font-size="8">Save Encounter</text>
+
+  <!-- Professional -> 5.0 -->
+  <line x1="850" y1="95" x2="720" y2="360" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="800" y="240" font-size="9">Upload License</text>
+
+  <!-- 5.0 -> D4 (Save Images) -->
+  <line x1="650" y1="420" x2="570" y2="480" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="625" y="460" font-size="8">Store PRC Photo</text>
+
+  <!-- 5.0 -> Google Vision -->
+  <line x1="770" y1="400" x2="850" y2="530" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="825" y="470" font-size="9">OCR Request</text>
+
+  <!-- Admin -> 5.0 -->
+  <line x1="830" y1="390" x2="770" y2="390" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="800" y="384" font-size="9" text-anchor="middle">Decision</text>
+
+  <!-- 5.0 -> D3 (Update is_professional) -->
+  <line x1="685" y1="360" x2="710" y2="225" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="715" y="300" font-size="8">Grant Role</text>
+
+  <!-- 6.0 Delta Sync -> D1 & D3 -->
+  <line x1="470" y1="620" x2="520" y2="225" stroke="#111827" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+  <text x="480" y="580" font-size="8">Read/Write Local</text>
+
+  <line x1="550" y1="620" x2="720" y2="225" stroke="#111827" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <text x="660" y="580" font-size="8">Pull/Push Cloud</text>
+</svg>

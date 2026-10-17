@@ -1,0 +1,122 @@
+<svg viewBox="0 0 950 560" width="950" height="560" xmlns="http://www.w3.org/2000/svg" style="background:#ffffff; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <defs>
+    <g id="actor-stick">
+      <circle cx="15" cy="12" r="9" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+      <line x1="15" y1="21" x2="15" y2="45" stroke="#111827" stroke-width="1.5"/>
+      <line x1="0" y1="30" x2="30" y2="30" stroke="#111827" stroke-width="1.5"/>
+      <line x1="15" y1="45" x2="3" y2="68" stroke="#111827" stroke-width="1.5"/>
+      <line x1="15" y1="45" x2="27" y2="68" stroke="#111827" stroke-width="1.5"/>
+    </g>
+  </defs>
+
+  <!-- TITLE -->
+  <text x="475" y="22" font-size="14" font-weight="bold" text-anchor="middle" fill="#111827">FIGURE 4: UML 2.5 USE CASE DIAGRAM</text>
+
+  <!-- ACTOR: PATIENT -->
+  <g transform="translate(40, 100)">
+    <use href="#actor-stick" x="0" y="0"/>
+    <text x="15" y="85" font-size="11" font-weight="bold" text-anchor="middle">Patient / Civilian</text>
+  </g>
+
+  <!-- ACTOR: RESPONDER -->
+  <g transform="translate(40, 340)">
+    <use href="#actor-stick" x="0" y="0"/>
+    <text x="15" y="85" font-size="11" font-weight="bold" text-anchor="middle">First Responder</text>
+  </g>
+
+  <!-- ACTOR: DOCTOR -->
+  <g transform="translate(860, 140)">
+    <use href="#actor-stick" x="0" y="0"/>
+    <text x="15" y="85" font-size="11" font-weight="bold" text-anchor="middle">Healthcare Professional</text>
+  </g>
+
+  <!-- ACTOR: ADMIN -->
+  <g transform="translate(860, 360)">
+    <use href="#actor-stick" x="0" y="0"/>
+    <text x="15" y="85" font-size="11" font-weight="bold" text-anchor="middle">System Administrator</text>
+  </g>
+
+  <!-- BOUNDARY -->
+  <rect x="180" y="30" width="590" height="500" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+  <text x="195" y="55" font-size="12" font-weight="bold">System Boundary: MediScan Mobile</text>
+
+  <!-- OVALS -->
+  <g transform="translate(210, 70)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Register &amp; Authenticate</text>
+  </g>
+
+  <g transform="translate(210, 130)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Manage Encrypted Records</text>
+  </g>
+
+  <g transform="translate(210, 190)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Generate Emergency Card</text>
+  </g>
+
+  <g transform="translate(210, 250)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Review "Who Scanned Me"</text>
+  </g>
+
+  <g transform="translate(210, 320)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Scan Emergency QR (Offline)</text>
+  </g>
+
+  <g transform="translate(210, 380)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Transfer Records via BLE</text>
+  </g>
+
+  <g transform="translate(210, 440)">
+    <ellipse cx="110" cy="22" rx="100" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="110" y="26" font-size="11" text-anchor="middle">Record Triage Vitals &amp; Notes</text>
+  </g>
+
+  <!-- RIGHT OVALS -->
+  <g transform="translate(480, 100)">
+    <ellipse cx="120" cy="22" rx="110" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="120" y="26" font-size="11" text-anchor="middle">Submit PRC License Credentials</text>
+  </g>
+
+  <g transform="translate(480, 170)">
+    <ellipse cx="120" cy="22" rx="110" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="120" y="26" font-size="11" text-anchor="middle">Attest Patient Diagnoses</text>
+  </g>
+
+  <g transform="translate(380, 260)">
+    <ellipse cx="120" cy="22" rx="110" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="120" y="26" font-size="11" text-anchor="middle">Execute Patient Handoff</text>
+  </g>
+
+  <g transform="translate(480, 360)">
+    <ellipse cx="120" cy="22" rx="110" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="120" y="26" font-size="11" text-anchor="middle">Review Application Queue</text>
+  </g>
+
+  <g transform="translate(480, 430)">
+    <ellipse cx="120" cy="22" rx="110" ry="20" fill="#ffffff" stroke="#111827" stroke-width="1.2"/>
+    <text x="120" y="26" font-size="11" text-anchor="middle">Approve / Deny License Status</text>
+  </g>
+
+  <!-- LINES -->
+  <line x1="80" y1="135" x2="210" y2="92" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="135" x2="210" y2="152" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="135" x2="210" y2="212" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="135" x2="210" y2="272" stroke="#111827" stroke-width="1"/>
+
+  <line x1="80" y1="375" x2="210" y2="342" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="375" x2="210" y2="402" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="375" x2="210" y2="462" stroke="#111827" stroke-width="1"/>
+  <line x1="80" y1="375" x2="380" y2="282" stroke="#111827" stroke-width="1"/>
+
+  <line x1="860" y1="175" x2="720" y2="122" stroke="#111827" stroke-width="1"/>
+  <line x1="860" y1="175" x2="720" y2="192" stroke="#111827" stroke-width="1"/>
+  <line x1="860" y1="175" x2="620" y2="282" stroke="#111827" stroke-width="1"/>
+
+  <line x1="860" y1="395" x2="720" y2="382" stroke="#111827" stroke-width="1"/>
+  <line x1="860" y1="395" x2="720" y2="452" stroke="#111827" stroke-width="1"/>
+</svg>

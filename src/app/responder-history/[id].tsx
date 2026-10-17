@@ -15,6 +15,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useImagePreview } from '@/hooks/use-image-preview';
 import type { RecentEmergencyScan } from '@/types/emergency';
 import { grantRecentScanAccess, hasRecentScanAccess } from '@/services/recent-scan-access';
+import { setPendingManageInfo, setPendingManageInfoQrData } from '@/lib/manage-info-pending';
 
 export default function SavedScanScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -62,6 +63,17 @@ export default function SavedScanScreen() {
       verification={item.verification}
       source={item.source}
       savedSnapshot
+      onRecordEncounter={() => router.push({ pathname: '/responder-history/[id]/encounter', params: { id: item.id } })}
+      onManageInfo={item.info.patientId !== null ? () => {
+        setPendingManageInfo({ info: item.info });
+        router.push({
+          pathname: '/manage-info',
+          params: {
+            patientId: String(item.info.patientId),
+            scanId: item.id,
+          },
+        });
+      } : undefined}
       onDeleteSavedScan={() => Alert.alert('Delete saved scan?', 'This permanently deletes the snapshot and its local note.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => void historyRepo.remove(item.id).then(() => router.back()) }])}
     />
     <AccessGate permissions={['verified professional']}>

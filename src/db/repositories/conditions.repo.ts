@@ -222,7 +222,8 @@ export async function upsertFromServer(record: {
        verified_by = excluded.verified_by,
        sync_status = 'synced',
        deleted_locally = 0,
-       updated_at_local = excluded.updated_at_local`,
+       updated_at_local = excluded.updated_at_local
+     WHERE sync_status != 'pending' AND deleted_locally = 0`,
     record.id,
     userId,
     await encryptField(record.description),

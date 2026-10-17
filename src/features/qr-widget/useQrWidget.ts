@@ -2,9 +2,7 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 
-import type { EmergencyContactRow } from '@/db/schema';
-import { buildEmergencyQrV2 } from '@/lib/emergency-qr-v2';
-import { DEFAULT_EMERGENCY_DISCLOSURE } from '@/types/emergency';
+import { buildEmergencyQrPayload, queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
 import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
@@ -16,12 +14,8 @@ import {
   ensureNotificationPermission,
   showQrNotification,
 } from '@/features/qr-widget/qr-notification';
-import { queueDynamicEmergencyCardPublication } from '@/services/dynamic-emergency-card.service';
 import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
-
-/* Stable empty references so an unresolved query doesn't churn the effect deps. */
-const EMPTY_CONTACTS: EmergencyContactRow[] = [];
 
 export function useQrWidget(userId: string | number) {
   const { data: medicalInformation } = useMedicalInformation();
@@ -52,20 +46,8 @@ export function useQrWidget(userId: string | number) {
        writes the QR, so a mid-flight edit is never dropped. */
     let cancelled = false;
 
-    buildEmergencyQrV2({
-      patientId: userId,
-      medical: medicalInformation,
-      allergies: allergies ?? [],
-      contacts: emergencyContacts ?? EMPTY_CONTACTS,
-      diagnoses: diagnoses ?? [],
-      medications: medications ?? [],
-      conditions: conditions ?? [],
-      disclosure: DEFAULT_EMERGENCY_DISCLOSURE,
-      confirmedNone: DEFAULT_EMERGENCY_DISCLOSURE.confirmedNone,
-      recentHistory,
-      latestVerifiedEncounter: professionalEncounters?.[0],
-    })
-      .then((encrypted) => generateQrImage(encrypted))
+    buildEmergencyQrPayload(userId)
+      .then((res) => (res ? generateQrImage(res.payload) : null))
       .then(async (imagePath) => {
         if (cancelled || !imagePath) return;
 

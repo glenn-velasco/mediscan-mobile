@@ -5,6 +5,7 @@ import { useForm, useFormState } from 'react-hook-form';
 import { useAuth } from '@/auth/useAuth';
 import { useSubmitEnvelope } from '@/features/professional-sync/useSubmitEnvelope';
 import { setUpdatedScannedInfo } from '@/lib/manage-info-pending';
+import * as recentEmergencyScansRepo from '@/db/repositories/recent-emergency-scans.repo';
 import { parseEmergencySummary, type ScannedEmergencyInfo } from '@/lib/parse-emergency-summary';
 import { scanForPatient, connectAndSubmit } from '@/services/ble-central.service';
 import { seal } from '@/services/sealed-box.service';
@@ -39,7 +40,7 @@ import {
   buildMedInfoPatch,
 } from '@/components/manage-info-helpers';
 
-export function useManageInfo() {
+export function useManageInfo(options?: { scanId?: string }) {
   const { user } = useAuth();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
   const { mutateAsync: submitEnvelope } = useSubmitEnvelope();
@@ -84,7 +85,7 @@ export function useManageInfo() {
     };
   }, []);
 
-  const resetAll = (pid: string | number, qrData: string) => {
+  const resetAll = (pid: string | number, qrDataOrInfo: string | ScannedEmergencyInfo) => {
     setPatientId(pid);
     setInfo(null);
     setParseError(false);
@@ -110,11 +111,8 @@ export function useManageInfo() {
     setSendMode(null);
     setItemErrors({});
     medInfoForm.clearErrors();
-    parseEmergencySummary(qrData).then((parsed) => {
-      if (!parsed) {
-        setParseError(true);
-        return;
-      }
+
+    const applyParsed = (parsed: ScannedEmergencyInfo) => {
       setInfo(parsed);
       setOriginalAllergies(parsed.allergies);
       setOriginalConditions(parsed.conditions);
@@ -140,7 +138,19 @@ export function useManageInfo() {
           setMedications(initMedications(parsed));
           setContacts(initEmergencyContacts(parsed));
         });
-    });
+    };
+
+    if (typeof qrDataOrInfo === 'object' && qrDataOrInfo !== null) {
+      applyParsed(qrDataOrInfo);
+    } else {
+      parseEmergencySummary(qrDataOrInfo).then((parsed) => {
+        if (!parsed) {
+          setParseError(true);
+          return;
+        }
+        applyParsed(parsed);
+      });
+    }
   };
 
   const setAllergy = (key: string, patch: Partial<ManageAllergy>) => {
@@ -188,15 +198,18 @@ export function useManageInfo() {
     if (!user) return { changes: [], validationFailed: false };
     const changes: Change[] = [];
 
-    const allergyMap = new Map(originalAllergies.map((a) => [a.allergen, a]));
-    const conditionMap = new Map(originalConditions.map((c) => [c.description, c]));
-    const diagnosisMap = new Map(originalDiagnoses.map((d) => [d.condition, d]));
-    const medicationMap = new Map(originalMedications.map((m) => [m.name, m]));
+    const normalize = (str: string) => str.trim().toLowerCase();
+
+    const allergyMap = new Map(originalAllergies.map((a) => [normalize(a.allergen), a]));
+    const conditionMap = new Map(originalConditions.map((c) => [normalize(c.description), c]));
+    const diagnosisMap = new Map(originalDiagnoses.map((d) => [normalize(d.condition), d]));
+    const medicationMap = new Map(originalMedications.map((m) => [normalize(m.name), m]));
+    const contactMap = new Map(originalContacts.map((c) => [normalize(c.name), c]));
 
     for (const item of allergies) {
-      const orig = allergyMap.get(item.allergen);
+      const orig = allergyMap.get(normalize(item.allergen));
       if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildAllergyEnvelope(item, 'delete', user), envelopeType: 'allergy_verification', label: item.allergen });
+        if (!item.isNew) changes.push({ type: 'delete', envelope: buildAllergyEnvelope(item, 'delete', user), envelopeType: 'allergy_verification', label: item.allergen });
       } else if (item.isNew) {
         changes.push({ type: 'create', envelope: buildAllergyEnvelope(item, 'create', user), envelopeType: 'allergy_verification', label: item.allergen });
       } else if (orig && (orig.severity !== item.severity || (orig.reaction ?? '') !== item.reaction)) {
@@ -212,9 +225,8 @@ export function useManageInfo() {
     }
 
     for (const item of conditions) {
-      const orig = conditionMap.get(item.description);
       if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildConditionEnvelope(item, 'delete', user), envelopeType: 'condition_verification', label: item.description });
+        if (!item.isNew) changes.push({ type: 'delete', envelope: buildConditionEnvelope(item, 'delete', user), envelopeType: 'condition_verification', label: item.description });
       } else if (item.isNew) {
         changes.push({ type: 'create', envelope: buildConditionEnvelope(item, 'create', user), envelopeType: 'condition_verification', label: item.description });
       } else if (item.verifyTouched) {
@@ -228,9 +240,9 @@ export function useManageInfo() {
     }
 
     for (const item of diagnoses) {
-      const orig = diagnosisMap.get(item.condition);
+      const orig = diagnosisMap.get(normalize(item.condition));
       if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildDiagnosisEnvelope(item, 'delete', user), envelopeType: 'diagnosis_verification', label: item.condition });
+        if (!item.isNew) changes.push({ type: 'delete', envelope: buildDiagnosisEnvelope(item, 'delete', user), envelopeType: 'diagnosis_verification', label: item.condition });
       } else if (item.isNew) {
         changes.push({ type: 'create', envelope: buildDiagnosisEnvelope(item, 'create', user), envelopeType: 'diagnosis_verification', label: item.condition });
       } else if (orig && (orig.severity !== item.severity || (orig.dateOfDiagnosis ?? '') !== item.dateOfDiagnosis)) {
@@ -246,9 +258,9 @@ export function useManageInfo() {
     }
 
     for (const item of medications) {
-      const orig = medicationMap.get(item.name);
+      const orig = medicationMap.get(normalize(item.name));
       if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildMedicationEnvelope(item, 'delete', user), envelopeType: 'medication_verification', label: item.name });
+        if (!item.isNew) changes.push({ type: 'delete', envelope: buildMedicationEnvelope(item, 'delete', user), envelopeType: 'medication_verification', label: item.name });
       } else if (item.isNew) {
         changes.push({ type: 'create', envelope: buildMedicationEnvelope(item, 'create', user), envelopeType: 'medication_verification', label: item.name });
       } else if (orig && (orig.dosage !== item.dosage || (orig.frequency ?? '') !== item.frequency)) {
@@ -263,11 +275,10 @@ export function useManageInfo() {
       }
     }
 
-    const contactMap = new Map(originalContacts.map((c) => [c.name, c]));
     for (const item of contacts) {
-      const orig = contactMap.get(item.name);
+      const orig = contactMap.get(normalize(item.name));
       if (item.deleted) {
-        if (orig) changes.push({ type: 'delete', envelope: buildContactEnvelope(item, 'delete', user), envelopeType: 'emergency_contact_verification', label: item.name });
+        if (!item.isNew) changes.push({ type: 'delete', envelope: buildContactEnvelope(item, 'delete', user), envelopeType: 'emergency_contact_verification', label: item.name });
       } else if (item.isNew) {
         changes.push({ type: 'create', envelope: buildContactEnvelope(item, 'create', user), envelopeType: 'emergency_contact_verification', label: item.name });
       } else if (orig && ((orig.relationship ?? '') !== (item.relationship ?? '') || (orig.phone ?? '') !== (item.phone ?? ''))) {
@@ -373,11 +384,18 @@ export function useManageInfo() {
   };
 
   const handleCancelEdit = (type: 'allergy' | 'condition' | 'diagnosis' | 'medication' | 'contact', key: string) => {
-    if (type === 'allergy') setAllergy(key, { editing: false });
-    else if (type === 'condition') setCondition(key, { editing: false });
-    else if (type === 'diagnosis') setDiagnosis(key, { editing: false });
-    else if (type === 'medication') setMedication(key, { editing: false });
-    else setContact(key, { editing: false });
+    if (type === 'allergy') {
+      setAllergies((prev) => prev.filter((a) => a.key !== key || !a.isNew).map((a) => (a.key === key ? { ...a, editing: false } : a)));
+    } else if (type === 'condition') {
+      setConditions((prev) => prev.filter((c) => c.key !== key || !c.isNew).map((c) => (c.key === key ? { ...c, editing: false } : c)));
+    } else if (type === 'diagnosis') {
+      setDiagnoses((prev) => prev.filter((d) => d.key !== key || !d.isNew).map((d) => (d.key === key ? { ...d, editing: false } : d)));
+    } else if (type === 'medication') {
+      setMedications((prev) => prev.filter((m) => m.key !== key || !m.isNew).map((m) => (m.key === key ? { ...m, editing: false } : m)));
+    } else {
+      setContacts((prev) => prev.filter((c) => c.key !== key || !c.isNew).map((c) => (c.key === key ? { ...c, editing: false } : c)));
+    }
+    clearItemError(key);
   };
 
   const handleSaveEdit = (type: 'allergy' | 'condition' | 'diagnosis' | 'medication' | 'contact', key: string) => {
@@ -423,9 +441,26 @@ export function useManageInfo() {
   };
 
   const handleDelete = (type: 'allergy' | 'condition' | 'diagnosis' | 'medication' | 'contact', key: string, label: string) => {
+    const isNewItem =
+      (type === 'allergy' && allergies.find((a) => a.key === key)?.isNew) ||
+      (type === 'condition' && conditions.find((c) => c.key === key)?.isNew) ||
+      (type === 'diagnosis' && diagnoses.find((d) => d.key === key)?.isNew) ||
+      (type === 'medication' && medications.find((m) => m.key === key)?.isNew) ||
+      (type === 'contact' && contacts.find((c) => c.key === key)?.isNew);
+
+    if (isNewItem) {
+      if (type === 'allergy') setAllergies((prev) => prev.filter((a) => a.key !== key));
+      else if (type === 'condition') setConditions((prev) => prev.filter((c) => c.key !== key));
+      else if (type === 'diagnosis') setDiagnoses((prev) => prev.filter((d) => d.key !== key));
+      else if (type === 'medication') setMedications((prev) => prev.filter((m) => m.key !== key));
+      else setContacts((prev) => prev.filter((c) => c.key !== key));
+      clearItemError(key);
+      return;
+    }
+
     Alert.alert(
-      `Remove ${label}?`,
-      `This will mark "${label}" for removal from the patient's record when you sync.`,
+      `Remove ${label || 'item'}?`,
+      `This will mark "${label || 'this item'}" for removal from the patient's record when you sync.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -437,6 +472,7 @@ export function useManageInfo() {
             else if (type === 'diagnosis') setDiagnosis(key, { deleted: true, editing: false });
             else if (type === 'medication') setMedication(key, { deleted: true, editing: false });
             else setContact(key, { deleted: true, editing: false });
+            clearItemError(key);
           },
         },
       ],
@@ -480,11 +516,33 @@ export function useManageInfo() {
       updated.country = medInfo.address.country ?? '';
     }
     setUpdatedScannedInfo(updated);
+    if (options?.scanId) {
+      void recentEmergencyScansRepo.updateScanInfo(options.scanId, updated);
+    }
   };
 
   const { isDirty: medInfoDirty } = useFormState({ control: medInfoForm.control });
 
-  const hasFormChanges = medInfoDirty || allergies.some((a) => a.isNew || a.deleted || a.verifyTouched) || conditions.some((c) => c.isNew || c.deleted || c.verifyTouched) || diagnoses.some((d) => d.isNew || d.deleted || d.verifyTouched) || medications.some((m) => m.isNew || m.deleted || m.verifyTouched) || contacts.some((c) => c.isNew || c.deleted || c.editing) || transfusionTouched || !!generalNote.trim();
+  const hasFormChanges = medInfoDirty ||
+    allergies.some((a) => (a.isNew && !a.deleted) || (!a.isNew && a.deleted) || a.verifyTouched || (!a.isNew && !a.deleted && (() => {
+      const orig = originalAllergies.find((o) => o.allergen.trim().toLowerCase() === a.allergen.trim().toLowerCase());
+      return Boolean(orig && (orig.severity !== a.severity || (orig.reaction ?? '') !== a.reaction));
+    })())) ||
+    conditions.some((c) => (c.isNew && !c.deleted) || (!c.isNew && c.deleted) || c.verifyTouched) ||
+    diagnoses.some((d) => (d.isNew && !d.deleted) || (!d.isNew && d.deleted) || d.verifyTouched || (!d.isNew && !d.deleted && (() => {
+      const orig = originalDiagnoses.find((o) => o.condition.trim().toLowerCase() === d.condition.trim().toLowerCase());
+      return Boolean(orig && (orig.severity !== d.severity || (orig.dateOfDiagnosis ?? '') !== d.dateOfDiagnosis));
+    })())) ||
+    medications.some((m) => (m.isNew && !m.deleted) || (!m.isNew && m.deleted) || m.verifyTouched || (!m.isNew && !m.deleted && (() => {
+      const orig = originalMedications.find((o) => o.name.trim().toLowerCase() === m.name.trim().toLowerCase());
+      return Boolean(orig && (orig.dosage !== m.dosage || (orig.frequency ?? '') !== m.frequency));
+    })())) ||
+    contacts.some((c) => (c.isNew && !c.deleted) || (!c.isNew && c.deleted) || c.editing || (!c.isNew && !c.deleted && (() => {
+      const orig = originalContacts.find((o) => o.name.trim().toLowerCase() === c.name.trim().toLowerCase());
+      return Boolean(orig && ((orig.relationship ?? '') !== (c.relationship ?? '') || (orig.phone ?? '') !== (c.phone ?? '')));
+    })())) ||
+    transfusionTouched ||
+    !!generalNote.trim();
 
   const finishSending = () => {
     setSending(false);
@@ -515,8 +573,10 @@ export function useManageInfo() {
       return;
     }
     if (pending.length === 0) {
+      publishUpdatedInfo();
       finishSending();
       sheetRef.current?.dismiss();
+      onSuccess?.();
       return;
     }
 
@@ -555,8 +615,10 @@ export function useManageInfo() {
       return;
     }
     if (pending.length === 0) {
+      publishUpdatedInfo();
       finishSending();
       sheetRef.current?.dismiss();
+      onSuccess?.();
       return;
     }
 

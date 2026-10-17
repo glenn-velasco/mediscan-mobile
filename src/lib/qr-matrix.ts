@@ -1,19 +1,23 @@
 import QRCode from 'qrcode';
 
-/** Generates the boolean module matrix for a QR code — pure JS, no native rendering dependency. */
-export function createQrMatrix(text: string, errorCorrectionLevel: 'L' | 'M' = 'L'): boolean[][] {
-  const qr = QRCode.create(text, { errorCorrectionLevel });
-  const { size, data } = qr.modules;
+/** Generates the boolean module matrix for a QR code — pure JS, no native rendering dependency. Returns null if payload exceeds QR capacity. */
+export function createQrMatrix(text: string, errorCorrectionLevel: 'L' | 'M' = 'L'): boolean[][] | null {
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel });
+    const { size, data } = qr.modules;
 
-  const matrix: boolean[][] = [];
-  for (let row = 0; row < size; row++) {
-    const rowValues: boolean[] = [];
-    for (let col = 0; col < size; col++) {
-      rowValues.push(data[row * size + col] === 1);
+    const matrix: boolean[][] = [];
+    for (let row = 0; row < size; row++) {
+      const rowValues: boolean[] = [];
+      for (let col = 0; col < size; col++) {
+        rowValues.push(data[row * size + col] === 1);
+      }
+      matrix.push(rowValues);
     }
-    matrix.push(rowValues);
+    return matrix;
+  } catch {
+    return null;
   }
-  return matrix;
 }
 
 /**

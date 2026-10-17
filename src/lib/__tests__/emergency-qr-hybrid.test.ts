@@ -72,4 +72,38 @@ describe('hybrid printable emergency QR', () => {
     const raw = await buildHybridEmergencyQr(old.patientId!, token, old);
     expect((await parseHybridEmergencyQr(raw))?.verification.status).toBe('stale');
   });
+
+  it('round-trips religion, diagnoses, and multiple contacts', async () => {
+    const detailedInfo: ScannedEmergencyInfo = {
+      ...info,
+      religion: 'catholic',
+      diagnoses: [{ condition: 'Hypertension', severity: 'moderate', dateOfDiagnosis: '2023-05-10' }],
+      emergencyContacts: [
+        { name: 'First', relationship: 'Parent', phone: '+639111111111' },
+        { name: 'Second', relationship: 'Sibling', phone: '+639222222222' },
+        { name: 'Third', relationship: 'Doctor', phone: '+639333333333' },
+      ],
+    };
+    const raw = await buildHybridEmergencyQr(detailedInfo.patientId!, token, detailedInfo, { maxModules: 177 });
+    const parsed = await parseHybridEmergencyQr(raw);
+    expect(parsed?.info.religion).toBe('catholic');
+    expect(parsed?.info.diagnoses).toEqual(detailedInfo.diagnoses);
+    expect(parsed?.info.emergencyContacts).toHaveLength(3);
+  });
+
+  it('slices contacts to maxContacts when specified', async () => {
+    const multiContactInfo: ScannedEmergencyInfo = {
+      ...info,
+      emergencyContacts: [
+        { name: 'First', relationship: 'Parent', phone: '+639111111111' },
+        { name: 'Second', relationship: 'Sibling', phone: '+639222222222' },
+        { name: 'Third', relationship: 'Doctor', phone: '+639333333333' },
+      ],
+    };
+    const raw = await buildHybridEmergencyQr(multiContactInfo.patientId!, token, multiContactInfo, { maxContacts: 2 });
+    const parsed = await parseHybridEmergencyQr(raw);
+    expect(parsed?.info.emergencyContacts).toHaveLength(2);
+    expect(parsed?.info.emergencyContacts[0].name).toBe('First');
+    expect(parsed?.info.emergencyContacts[1].name).toBe('Second');
+  });
 });
