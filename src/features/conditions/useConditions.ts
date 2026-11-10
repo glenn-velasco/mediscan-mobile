@@ -12,6 +12,5 @@ export function useConditions() {
     queryKey: [...conditionsQueryKey, user?.id],
     queryFn: () => conditionsRepo.getAll(),
     enabled: !!user,
-    placeholderData: (previousData) => previousData,
   });
 }

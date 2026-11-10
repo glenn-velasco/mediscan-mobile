@@ -17,6 +17,8 @@ function toServerPayload(payload: MedicalInformationPayload) {
     suffix: payload.suffix ?? null,
     dob: payload.date_of_birth,
     gender: payload.gender,
+    phone_country_code: payload.phone_country_code ?? null,
+    phone: payload.phone ?? null,
     blood_type: payload.blood_type ?? null,
     religion: payload.religion ?? null,
     address: payload.address ?? null,

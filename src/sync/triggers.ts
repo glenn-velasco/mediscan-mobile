@@ -1,16 +1,22 @@
-import NetInfo from '@react-native-community/netinfo';
-import { useEffect, useRef } from 'react';
-import { AppState } from 'react-native';
+import NetInfo from "@react-native-community/netinfo";
+import { useEffect, useRef } from "react";
+import { AppState } from "react-native";
 
-import { getIsOffline } from '@/lib/network-state';
-import { useAuth } from '@/auth/useAuth';
-import { queryClient } from '@/lib/query-client';
-import { ensureDeviceKeyServerRegistered, retryPendingRevoke } from '@/services/device-key.service';
-import { pullPatientChanges, pushPatientChanges } from '@/services/patient-sync.service';
-import { pullScannedPatients } from '@/services/scanned-patients-sync.service';
-import { pullMyScanActivity } from '@/services/my-scan-activity-sync.service';
-import { queueDynamicEmergencyCardPublication, retryPendingDynamicEmergencyCard } from '@/services/dynamic-emergency-card.service';
-import { getCurrentUserId, hasCurrentUser } from '@/db/context';
+import { getIsOffline } from "@/lib/network-state";
+import { useAuth } from "@/auth/useAuth";
+import { queryClient } from "@/lib/query-client";
+import {
+  ensureDeviceKeyServerRegistered,
+  retryPendingRevoke,
+} from "@/services/device-key.service";
+import { syncPatientChanges } from "@/services/patient-sync.service";
+import { pullScannedPatients } from "@/services/scanned-patients-sync.service";
+import { pullMyScanActivity } from "@/services/my-scan-activity-sync.service";
+import {
+  queueDynamicEmergencyCardPublication,
+  retryPendingDynamicEmergencyCard,
+} from "@/services/dynamic-emergency-card.service";
+import { getCurrentUserId, hasCurrentUser } from "@/db/context";
 
 /**
  * Foreground and NetInfo reconnect can fire in quick succession
@@ -28,9 +34,9 @@ const MIN_TRIGGER_INTERVAL_MS = 10_000;
  * best chance of reflecting this device's own latest state, not a hard ordering guarantee.
  */
 async function syncPatientData(): Promise<void> {
-  await pushPatientChanges();
-  await pullPatientChanges();
-  if (hasCurrentUser()) await queueDynamicEmergencyCardPublication(getCurrentUserId());
+  await syncPatientChanges();
+  if (hasCurrentUser())
+    await queueDynamicEmergencyCardPublication(getCurrentUserId());
   await pullScannedPatients();
   await pullMyScanActivity();
 }
@@ -63,14 +69,18 @@ export function useSyncTriggers(): void {
     };
 
     const safeRefreshUser = () => {
-      if (status !== 'authenticated' || !mountedRef.current) return;
+      if (status !== "authenticated" || !mountedRef.current) return;
       refreshUser().catch(() => {
         // Best-effort: likely offline or the token just expired; next trigger will retry.
       });
     };
 
     /** Shared cooldown across all trigger sources — see MIN_TRIGGER_INTERVAL_MS above. */
-    const runTriggeredSync = (extras?: { retryRevoke?: boolean; invalidateQueries?: boolean; registerDeviceKey?: boolean }) => {
+    const runTriggeredSync = (extras?: {
+      retryRevoke?: boolean;
+      invalidateQueries?: boolean;
+      registerDeviceKey?: boolean;
+    }) => {
       if (!mountedRef.current) return;
       if (getIsOffline()) return;
       const now = Date.now();
@@ -98,11 +108,18 @@ export function useSyncTriggers(): void {
       if (reachable && mountedRef.current) runTriggeredSync();
     });
 
-    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active' && mountedRef.current) {
-        runTriggeredSync({ retryRevoke: true, invalidateQueries: true, registerDeviceKey: true });
-      }
-    });
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (nextState) => {
+        if (nextState === "active" && mountedRef.current) {
+          runTriggeredSync({
+            retryRevoke: true,
+            invalidateQueries: true,
+            registerDeviceKey: true,
+          });
+        }
+      },
+    );
 
     return () => {
       mountedRef.current = false;

@@ -12,6 +12,5 @@ export function useDiagnoses() {
     queryKey: [...diagnosesQueryKey, user?.id],
     queryFn: () => diagnosesRepo.getAll(),
     enabled: !!user,
-    placeholderData: (previousData) => previousData,
   });
 }

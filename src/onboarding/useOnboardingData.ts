@@ -1,7 +1,9 @@
 import { useAuth } from '@/auth/useAuth';
 import { useAllergies } from '@/features/allergies/useAllergies';
 import { useConditions } from '@/features/conditions/useConditions';
+import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
 import { useEmergencyContacts } from '@/features/emergency-contacts';
+import { useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { useMedications } from '@/features/medications/useMedications';
 import { useOnboardingChecklist } from '@/onboarding/useOnboardingChecklist';
 
@@ -13,12 +15,16 @@ export function useOnboardingData() {
   const { user } = useAuth();
   const { data: allergies } = useAllergies();
   const { data: conditions } = useConditions();
+  const { data: diagnoses } = useDiagnoses();
   const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
+  const { data: medicalInformation, isLoading: isMedicalInformationLoading } = useMedicalInformation();
 
   const isDataReady =
+    medicalInformation !== undefined &&
     allergies !== undefined &&
     conditions !== undefined &&
+    diagnoses !== undefined &&
     medications !== undefined &&
     emergencyContacts !== undefined;
 
@@ -34,8 +40,11 @@ export function useOnboardingData() {
   return {
     allergies: allergies ?? [],
     conditions: conditions ?? [],
+    diagnoses: diagnoses ?? [],
     medications: medications ?? [],
     emergencyContacts: emergencyContacts ?? [],
+    medicalInformation,
+    isMedicalInformationLoading,
     isDataReady,
     checklist,
   };

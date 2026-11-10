@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 
-import { useAuth } from '@/auth/useAuth';
-import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
+import { useAuth } from "@/auth/useAuth";
+import * as emergencyContactsRepo from "@/db/repositories/emergency-contacts.repo";
+import { emergencyContactsQueryKey } from "@/lib/query-keys";
 
-export const emergencyContactsQueryKey = ['emergencyContacts'] as const;
+export { emergencyContactsQueryKey };
 
 export function useEmergencyContacts() {
   const { user } = useAuth();
@@ -11,6 +12,5 @@ export function useEmergencyContacts() {
     queryKey: [...emergencyContactsQueryKey, user?.id],
     queryFn: () => emergencyContactsRepo.getAll(),
     enabled: !!user,
-    placeholderData: (previousData) => previousData,
   });
 }

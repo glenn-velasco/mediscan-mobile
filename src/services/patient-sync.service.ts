@@ -1,11 +1,16 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { NetworkError, UnauthenticatedError, ValidationError, getErrorStatus } from '@/api/errors';
-import { getCachedToken } from '@/auth/token-storage';
-import { getIsOffline } from '@/lib/network-state';
-import { getCurrentUserId, hasCurrentUser } from '@/db/context';
-import { backoffDelayMs } from '@/lib/backoff';
-import { queryClient } from '@/lib/query-client';
+import {
+  NetworkError,
+  UnauthenticatedError,
+  ValidationError,
+  getErrorStatus,
+} from "@/api/errors";
+import { getCachedToken } from "@/auth/token-storage";
+import { getIsOffline } from "@/lib/network-state";
+import { getCurrentUserId, hasCurrentUser } from "@/db/context";
+import { backoffDelayMs } from "@/lib/backoff";
+import { queryClient } from "@/lib/query-client";
 import {
   allergiesQueryKey,
   conditionsQueryKey,
@@ -13,30 +18,52 @@ import {
   emergencyContactsQueryKey,
   medicalInformationQueryKey,
   medicationsQueryKey,
-} from '@/lib/query-keys';
+} from "@/lib/query-keys";
 
-import * as allergiesRepo from '@/db/repositories/allergies.repo';
-import * as conditionsRepo from '@/db/repositories/conditions.repo';
-import * as diagnosesRepo from '@/db/repositories/diagnoses.repo';
-import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
-import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
-import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
-import * as medicationsRepo from '@/db/repositories/medications.repo';
+import * as allergiesRepo from "@/db/repositories/allergies.repo";
+import * as conditionsRepo from "@/db/repositories/conditions.repo";
+import * as diagnosesRepo from "@/db/repositories/diagnoses.repo";
+import * as emergencyContactsRepo from "@/db/repositories/emergency-contacts.repo";
+import * as medicalInformationRepo from "@/db/repositories/medical-information.repo";
+import * as emergencyHistoryRepo from "@/db/repositories/emergency-field-history.repo";
+import * as medicationsRepo from "@/db/repositories/medications.repo";
 
-import { createAllergy, deleteAllergy, updateAllergy } from '@/api/endpoints/allergies';
-import { createCondition, deleteCondition, updateCondition } from '@/api/endpoints/conditions';
-import { createDiagnosis, deleteDiagnosis, updateDiagnosis } from '@/api/endpoints/diagnoses';
+import {
+  createAllergy,
+  deleteAllergy,
+  updateAllergy,
+} from "@/api/endpoints/allergies";
+import {
+  createCondition,
+  deleteCondition,
+  updateCondition,
+} from "@/api/endpoints/conditions";
+import {
+  createDiagnosis,
+  deleteDiagnosis,
+  updateDiagnosis,
+} from "@/api/endpoints/diagnoses";
 import {
   createEmergencyContact,
   deleteEmergencyContact,
   updateEmergencyContact,
-} from '@/api/endpoints/emergency-contacts';
-import { createMedicalInformation, updateMedicalInformation } from '@/api/endpoints/medical-information';
-import { createMedication, deleteMedication, updateMedication } from '@/api/endpoints/medications';
-import { pullSync } from '@/api/endpoints/sync';
-import { pullEmergencyFieldHistory, pushEmergencyFieldHistory } from '@/api/endpoints/emergency-field-history';
+} from "@/api/endpoints/emergency-contacts";
+import {
+  createMedicalInformation,
+  updateMedicalInformation,
+} from "@/api/endpoints/medical-information";
+import {
+  createMedication,
+  deleteMedication,
+  updateMedication,
+} from "@/api/endpoints/medications";
+import { pullSync } from "@/api/endpoints/sync";
+import {
+  pullEmergencyFieldHistory,
+  pushEmergencyFieldHistory,
+} from "@/api/endpoints/emergency-field-history";
 
-const TAG = '[PatientSyncService]';
+const TAG = "[PatientSyncService]";
 
 /**
  * Patient-authored CRUD sync — a second, independent sync system from the BLE/envelope/
@@ -54,14 +81,18 @@ const HISTORY_PULL_INTERVAL_MS = 5 * 60 * 1000;
 
 async function pushEmergencyHistory(): Promise<void> {
   // Do not publish a change log ahead of the current patient record it describes.
-  if ((await medicalInformationRepo.getLocal())?.sync_status === 'pending') return;
+  if ((await medicalInformationRepo.getLocal())?.sync_status === "pending")
+    return;
   while (true) {
     const pending = await emergencyHistoryRepo.getPending();
     if (!pending.length) return;
     const result = await pushEmergencyFieldHistory(pending);
-    if (result.recorded.length !== pending.length) throw new Error('Some emergency history events were not accepted');
+    if (result.recorded.length !== pending.length)
+      throw new Error("Some emergency history events were not accepted");
     await emergencyHistoryRepo.markSynced(result.recorded);
-    void queryClient.invalidateQueries({ queryKey: ['emergency-field-history', String(getCurrentUserId())] });
+    void queryClient.invalidateQueries({
+      queryKey: ["emergency-field-history", String(getCurrentUserId())],
+    });
     if (pending.length < 50) return;
   }
 }
@@ -69,11 +100,15 @@ async function pushEmergencyHistory(): Promise<void> {
 async function pullEmergencyHistoryIfDue(): Promise<void> {
   const userId = String(getCurrentUserId());
   const now = Date.now();
-  if (now - (lastHistoryPullByUser.get(userId) ?? 0) < HISTORY_PULL_INTERVAL_MS) return;
+  if (now - (lastHistoryPullByUser.get(userId) ?? 0) < HISTORY_PULL_INTERVAL_MS)
+    return;
   const events = await pullEmergencyFieldHistory();
   const inserted = await emergencyHistoryRepo.cacheServerChanges(events);
   lastHistoryPullByUser.set(userId, now);
-  if (inserted) void queryClient.invalidateQueries({ queryKey: ['emergency-field-history', userId] });
+  if (inserted)
+    void queryClient.invalidateQueries({
+      queryKey: ["emergency-field-history", userId],
+    });
 }
 
 function withinBackoffWindow(): boolean {
@@ -82,7 +117,7 @@ function withinBackoffWindow(): boolean {
 }
 
 /** Clears the retry backoff so a fresh login doesn't inherit a stale delay from before the user logged out. */
-function resetPatientSyncBackoff(): void {
+export function resetPatientSyncBackoff(): void {
   consecutiveFailures = 0;
   lastFailureAt = 0;
 }
@@ -117,7 +152,12 @@ async function setLastSyncedAt(value: string): Promise<void> {
  * store there. See the `allergies` migration's comment for the id design.
  */
 async function pushRecord<TPayload>(
-  row: { local_uuid: string; server_id: number | null; deleted_locally: 0 | 1; updated_at_local: string },
+  row: {
+    local_uuid: string;
+    server_id: number | null;
+    deleted_locally: 0 | 1;
+    updated_at_local: string;
+  },
   payload: TPayload,
   api: {
     create: (id: string, payload: TPayload) => Promise<unknown>;
@@ -126,7 +166,11 @@ async function pushRecord<TPayload>(
   },
   repo: {
     hardDelete: (id: string) => Promise<void>;
-    markSyncedCreate: (id: string, serverId: number, expectedUpdatedAt?: string) => Promise<void>;
+    markSyncedCreate: (
+      id: string,
+      serverId: number,
+      expectedUpdatedAt?: string,
+    ) => Promise<void>;
     markSynced: (id: string, expectedUpdatedAt?: string) => Promise<void>;
   },
 ): Promise<void> {
@@ -145,11 +189,16 @@ async function pushRecord<TPayload>(
       // instead of leaving the row stuck unsynced forever.
       if (err instanceof ValidationError) {
         await api.update(row.local_uuid, payload);
-      } else if (typeof getErrorStatus === 'function' && getErrorStatus(err) === 404) {
+      } else if (
+        typeof getErrorStatus === "function" &&
+        getErrorStatus(err) === 404
+      ) {
         // 404 on CREATE means the endpoint/parent record doesn't exist yet — NOT that this record
         // was deleted. Skip for now and retry next cycle instead of hard-deleting (which would
         // destroy data that never existed server-side).
-        console.warn(TAG, `create returned 404, will retry next cycle`, { localUuid: row.local_uuid });
+        console.warn(TAG, `create returned 404, will retry next cycle`, {
+          localUuid: row.local_uuid,
+        });
         return;
       } else {
         throw err;
@@ -171,17 +220,25 @@ async function pushOne(
   try {
     await action();
   } catch (err) {
-    if (err instanceof NetworkError || err instanceof UnauthenticatedError) throw err;
+    if (err instanceof NetworkError || err instanceof UnauthenticatedError)
+      throw err;
     // The server no longer has this record - most likely its parent medical_information record
     // was merged/deleted server-side (e.g. a registration-match accept moved it elsewhere, or an
     // admin deleted it). Retrying forever would just log the same 404 every cycle; drop the local
     // row instead since there's nothing left to reconcile it against.
-    if (typeof getErrorStatus === 'function' && getErrorStatus(err) === 404) {
-      console.warn(TAG, `${tag} no longer exists server-side, dropping local copy`, { localUuid });
+    if (typeof getErrorStatus === "function" && getErrorStatus(err) === 404) {
+      console.warn(
+        TAG,
+        `${tag} no longer exists server-side, dropping local copy`,
+        { localUuid },
+      );
       await onNotFound(localUuid);
       return;
     }
-    console.warn(TAG, `failed to push ${tag}, will retry next cycle`, { localUuid, error: String(err) });
+    console.warn(TAG, `failed to push ${tag}, will retry next cycle`, {
+      localUuid,
+      error: String(err),
+    });
   }
 }
 
@@ -189,13 +246,22 @@ async function pushAllergies(): Promise<void> {
   for (const row of await allergiesRepo.getAllForPush()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
-      'allergy',
+      "allergy",
       () =>
-        pushRecord(row, allergiesRepo.toPayload(row), { create: createAllergy, update: updateAllergy, remove: deleteAllergy }, {
-          hardDelete: allergiesRepo.hardDelete,
-          markSyncedCreate: allergiesRepo.markSyncedCreate,
-          markSynced: allergiesRepo.markSynced,
-        }),
+        pushRecord(
+          row,
+          allergiesRepo.toPayload(row),
+          {
+            create: createAllergy,
+            update: updateAllergy,
+            remove: deleteAllergy,
+          },
+          {
+            hardDelete: allergiesRepo.hardDelete,
+            markSyncedCreate: allergiesRepo.markSyncedCreate,
+            markSynced: allergiesRepo.markSynced,
+          },
+        ),
       row.local_uuid,
       allergiesRepo.hardDelete,
     );
@@ -206,13 +272,22 @@ async function pushConditions(): Promise<void> {
   for (const row of await conditionsRepo.getAllForPush()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
-      'condition',
+      "condition",
       () =>
-        pushRecord(row, conditionsRepo.toPayload(row), { create: createCondition, update: updateCondition, remove: deleteCondition }, {
-          hardDelete: conditionsRepo.hardDelete,
-          markSyncedCreate: conditionsRepo.markSyncedCreate,
-          markSynced: conditionsRepo.markSynced,
-        }),
+        pushRecord(
+          row,
+          conditionsRepo.toPayload(row),
+          {
+            create: createCondition,
+            update: updateCondition,
+            remove: deleteCondition,
+          },
+          {
+            hardDelete: conditionsRepo.hardDelete,
+            markSyncedCreate: conditionsRepo.markSyncedCreate,
+            markSynced: conditionsRepo.markSynced,
+          },
+        ),
       row.local_uuid,
       conditionsRepo.hardDelete,
     );
@@ -227,13 +302,14 @@ async function pushDiagnoses(): Promise<void> {
   for (const row of await diagnosesRepo.getAllForPush()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
-      'diagnosis',
+      "diagnosis",
       () =>
         pushRecord(
           row,
           diagnosesRepo.toPayload(row),
           {
-            create: (id, payload) => createDiagnosis(medicalInformationId, id, payload),
+            create: (id, payload) =>
+              createDiagnosis(medicalInformationId, id, payload),
             update: updateDiagnosis,
             remove: deleteDiagnosis,
           },
@@ -253,13 +329,22 @@ async function pushMedications(): Promise<void> {
   for (const row of await medicationsRepo.getAllForPush()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
-      'medication',
+      "medication",
       () =>
-        pushRecord(row, medicationsRepo.toPayload(row), { create: createMedication, update: updateMedication, remove: deleteMedication }, {
-          hardDelete: medicationsRepo.hardDelete,
-          markSyncedCreate: medicationsRepo.markSyncedCreate,
-          markSynced: medicationsRepo.markSynced,
-        }),
+        pushRecord(
+          row,
+          medicationsRepo.toPayload(row),
+          {
+            create: createMedication,
+            update: updateMedication,
+            remove: deleteMedication,
+          },
+          {
+            hardDelete: medicationsRepo.hardDelete,
+            markSyncedCreate: medicationsRepo.markSyncedCreate,
+            markSynced: medicationsRepo.markSynced,
+          },
+        ),
       row.local_uuid,
       medicationsRepo.hardDelete,
     );
@@ -270,13 +355,21 @@ async function pushEmergencyContacts(): Promise<void> {
   for (const row of await emergencyContactsRepo.getAllForPush()) {
     // react-doctor-disable-next-line react-doctor/async-await-in-loop
     await pushOne(
-      'emergency contact',
+      "emergency contact",
       () =>
         pushRecord(
           row,
           emergencyContactsRepo.toPayload(row),
-          { create: createEmergencyContact, update: updateEmergencyContact, remove: deleteEmergencyContact },
-          { hardDelete: emergencyContactsRepo.hardDelete, markSyncedCreate: emergencyContactsRepo.markSyncedCreate, markSynced: emergencyContactsRepo.markSynced },
+          {
+            create: createEmergencyContact,
+            update: updateEmergencyContact,
+            remove: deleteEmergencyContact,
+          },
+          {
+            hardDelete: emergencyContactsRepo.hardDelete,
+            markSyncedCreate: emergencyContactsRepo.markSyncedCreate,
+            markSynced: emergencyContactsRepo.markSynced,
+          },
         ),
       row.local_uuid,
       emergencyContactsRepo.hardDelete,
@@ -286,7 +379,7 @@ async function pushEmergencyContacts(): Promise<void> {
 
 async function pushMedicalInformation(): Promise<void> {
   const row = await medicalInformationRepo.getLocal();
-  if (!row || row.sync_status !== 'pending') return;
+  if (!row || row.sync_status !== "pending") return;
 
   try {
     const payload = medicalInformationRepo.toPayload(row);
@@ -297,8 +390,13 @@ async function pushMedicalInformation(): Promise<void> {
     }
     await medicalInformationRepo.markSynced();
   } catch (err) {
-    if (err instanceof NetworkError || err instanceof UnauthenticatedError) throw err;
-    console.warn(TAG, 'failed to push medical information, will retry next cycle', { error: String(err) });
+    if (err instanceof NetworkError || err instanceof UnauthenticatedError)
+      throw err;
+    console.warn(
+      TAG,
+      "failed to push medical information, will retry next cycle",
+      { error: String(err) },
+    );
   }
 }
 
@@ -318,16 +416,26 @@ export async function pushPatientChanges(): Promise<void> {
     await pushDiagnoses();
     await pushMedications();
     await pushEmergencyContacts();
-    try { await pushEmergencyHistory(); }
-    catch (error) { console.warn(TAG, 'emergency history remains pending', { error: String(error) }); }
+    try {
+      await pushEmergencyHistory();
+    } catch (error) {
+      console.warn(TAG, "emergency history remains pending", {
+        error: String(error),
+      });
+    }
     consecutiveFailures = 0;
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError) {
       consecutiveFailures += 1;
       lastFailureAt = Date.now();
-      console.warn(TAG, 'push failed, will retry on next trigger', { error: String(err), consecutiveFailures });
+      console.warn(TAG, "push failed, will retry on next trigger", {
+        error: String(err),
+        consecutiveFailures,
+      });
     } else {
-      console.error(TAG, 'unexpected error during push', { error: String(err) });
+      console.error(TAG, "unexpected error during push", {
+        error: String(err),
+      });
     }
   } finally {
     isPushing = false;
@@ -346,7 +454,7 @@ export async function forcePushBeforeLogout(): Promise<void> {
   if (!getCachedToken()) return;
   if (!hasCurrentUser()) return;
 
-  console.log(TAG, 'forcePushBeforeLogout: flushing all pending changes');
+  console.log(TAG, "forcePushBeforeLogout: flushing all pending changes");
   try {
     await pushMedicalInformation();
     await pushAllergies();
@@ -354,12 +462,19 @@ export async function forcePushBeforeLogout(): Promise<void> {
     await pushDiagnoses();
     await pushMedications();
     await pushEmergencyContacts();
-    try { await pushEmergencyHistory(); }
-    catch (error) { console.warn(TAG, 'emergency history remains pending on logout', { error: String(error) }); }
+    try {
+      await pushEmergencyHistory();
+    } catch (error) {
+      console.warn(TAG, "emergency history remains pending on logout", {
+        error: String(error),
+      });
+    }
     consecutiveFailures = 0;
-    console.log(TAG, 'forcePushBeforeLogout: done');
+    console.log(TAG, "forcePushBeforeLogout: done");
   } catch (err) {
-    console.warn(TAG, 'forcePushBeforeLogout: some data may not have synced', { error: String(err) });
+    console.warn(TAG, "forcePushBeforeLogout: some data may not have synced", {
+      error: String(err),
+    });
   }
 }
 
@@ -379,7 +494,7 @@ export async function pullPatientChanges(): Promise<void> {
   isPulling = true;
   try {
     const since = await getLastSyncedAt();
-    console.debug(TAG, `pull: fetching changes since ${since ?? '(ever)'}`);
+    console.debug(TAG, `pull: fetching changes since ${since ?? "(ever)"}`);
     const response = await pullSync(since);
     console.debug(TAG, `pull: received`, {
       allergies: response.allergies.length,
@@ -387,70 +502,102 @@ export async function pullPatientChanges(): Promise<void> {
       diagnoses: response.diagnoses.length,
       medications: response.medications.length,
       emergency_contacts: response.emergency_contacts.length,
-      medical_information: response.medical_information ? 'present' : 'null',
+      medical_information: response.medical_information ? "present" : "null",
     });
 
     if (response.medical_information) {
       const localMedical = await medicalInformationRepo.getLocal();
       // A cloud snapshot must not erase an edit that has not reached the server yet.
-      if (localMedical?.sync_status !== 'pending') {
-        await medicalInformationRepo.saveFromServer(response.medical_information);
+      if (localMedical?.sync_status !== "pending") {
+        await medicalInformationRepo.saveFromServer(
+          response.medical_information,
+        );
       }
     }
 
-    await Promise.all(response.allergies.map((record) =>
-      record.deleted_at
-        ? allergiesRepo.hardDelete(record.id)
-        : allergiesRepo.upsertFromServer(record),
-    ));
+    await Promise.all(
+      response.allergies.map((record) =>
+        record.deleted_at
+          ? allergiesRepo.hardDelete(record.id)
+          : allergiesRepo.upsertFromServer(record),
+      ),
+    );
 
-    await Promise.all(response.conditions.map((record) =>
-      record.deleted_at
-        ? conditionsRepo.hardDelete(record.id)
-        : conditionsRepo.upsertFromServer(record),
-    ));
+    await Promise.all(
+      response.conditions.map((record) =>
+        record.deleted_at
+          ? conditionsRepo.hardDelete(record.id)
+          : conditionsRepo.upsertFromServer(record),
+      ),
+    );
 
-    await Promise.all(response.diagnoses.map((record) =>
-      record.deleted_at
-        ? (console.debug(TAG, `pull: deleting diagnosis ${record.id}`), diagnosesRepo.hardDelete(record.id))
-        : (console.debug(TAG, `pull: upserting diagnosis ${record.id}`, { condition: record.condition }), diagnosesRepo.upsertFromServer(record)),
-    ));
+    await Promise.all(
+      response.diagnoses.map((record) =>
+        record.deleted_at
+          ? (console.debug(TAG, `pull: deleting diagnosis ${record.id}`),
+            diagnosesRepo.hardDelete(record.id))
+          : (console.debug(TAG, `pull: upserting diagnosis ${record.id}`, {
+              condition: record.condition,
+            }),
+            diagnosesRepo.upsertFromServer(record)),
+      ),
+    );
 
-    await Promise.all(response.medications.map((record) =>
-      record.deleted_at
-        ? medicationsRepo.hardDelete(record.id)
-        : medicationsRepo.upsertFromServer(record),
-    ));
+    await Promise.all(
+      response.medications.map((record) =>
+        record.deleted_at
+          ? medicationsRepo.hardDelete(record.id)
+          : medicationsRepo.upsertFromServer(record),
+      ),
+    );
 
-    await Promise.all(response.emergency_contacts.map((record) =>
-      record.deleted_at
-        ? emergencyContactsRepo.hardDelete(record.id)
-        : emergencyContactsRepo.upsertFromServer(record),
-    ));
+    await Promise.all(
+      response.emergency_contacts.map((record) =>
+        record.deleted_at
+          ? emergencyContactsRepo.hardDelete(record.id)
+          : emergencyContactsRepo.upsertFromServer(record),
+      ),
+    );
 
-    try { await pullEmergencyHistoryIfDue(); }
-    catch (error) { console.warn(TAG, 'emergency history refresh deferred', { error: String(error) }); }
+    try {
+      await pullEmergencyHistoryIfDue();
+    } catch (error) {
+      console.warn(TAG, "emergency history refresh deferred", {
+        error: String(error),
+      });
+    }
 
     await setLastSyncedAt(response.server_time);
     consecutiveFailures = 0;
 
-    void Promise.resolve().then(() => {
-      queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-      queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
-      queryClient.invalidateQueries({ queryKey: conditionsQueryKey });
-      queryClient.invalidateQueries({ queryKey: diagnosesQueryKey });
-      queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
-      queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey }),
+      queryClient.invalidateQueries({ queryKey: allergiesQueryKey }),
+      queryClient.invalidateQueries({ queryKey: conditionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: diagnosesQueryKey }),
+      queryClient.invalidateQueries({ queryKey: medicationsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey }),
+    ]);
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError) {
       consecutiveFailures += 1;
       lastFailureAt = Date.now();
-      console.warn(TAG, 'pull failed, will retry on next trigger', { error: String(err), consecutiveFailures });
+      console.warn(TAG, "pull failed, will retry on next trigger", {
+        error: String(err),
+        consecutiveFailures,
+      });
     } else {
-      console.error(TAG, 'unexpected error during pull', { error: String(err) });
+      console.error(TAG, "unexpected error during pull", {
+        error: String(err),
+      });
     }
   } finally {
     isPulling = false;
   }
+}
+
+/** Pushes local edits first, then hydrates every patient-authored collection from the cloud. */
+export async function syncPatientChanges(): Promise<void> {
+  await pushPatientChanges();
+  await pullPatientChanges();
 }

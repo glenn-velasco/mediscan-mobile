@@ -5,6 +5,11 @@ import { login as apiLogin, logout as apiLogout, me as apiMe, refreshToken as ap
 import { updateMedicalInformation } from '@/api/endpoints/medical-information';
 import type { LoginPayload, MedicalInformationPayload, RegisterPayload, User } from '@/api/types';
 import { getDeviceName } from '@/auth/device-name';
+import {
+  clearPendingRegistration,
+  loadPendingRegistration,
+  savePendingRegistration,
+} from '@/auth/pending-registration-storage';
 import { clearToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
 import { setCurrentUserId } from '@/db/context';
@@ -12,7 +17,12 @@ import * as medicalInformationRepo from '@/db/repositories/medical-information.r
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
 import { clearPrivateKey } from '@/services/device-key-storage';
-import { clearLastSyncedAt, forcePushBeforeLogout } from '@/services/patient-sync.service';
+import {
+  clearLastSyncedAt,
+  forcePushBeforeLogout,
+  resetPatientSyncBackoff,
+  syncPatientChanges,
+} from '@/services/patient-sync.service';
 import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import { forceSyncBeforeLogout } from '@/services/verification-sync.service';
 import { useAvatarStore } from '@/stores/avatar-store';
@@ -51,6 +61,40 @@ async function backfillUserId(userId: string | number): Promise<void> {
   await db.runAsync('UPDATE professional_attestations SET user_id = ? WHERE user_id = 0', userId);
 }
 
+const PATIENT_HYDRATION_TIMEOUT_MS = 15_000;
+
+async function hydratePatientData(user: User): Promise<void> {
+  setCurrentUserId(user.id);
+  await backfillUserId(user.id);
+
+  // Authentication is the recovery boundary for the offline cache. Push pending local edits first,
+  // then request a complete cloud snapshot so every patient collection can self-heal even when an
+  // older app version left SQLite partially populated while retaining a newer delta cursor.
+  await clearLastSyncedAt();
+
+  const pendingRegistration = await loadPendingRegistration(user.email);
+  if (pendingRegistration) {
+    await medicalInformationRepo.saveLocalEdit(pendingRegistration, 'pending', user.id);
+    await clearPendingRegistration();
+  }
+
+  resetPatientSyncBackoff();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      syncPatientChanges(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('patient hydration timeout')),
+          PATIENT_HYDRATION_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 type AuthProviderProps = PropsWithChildren<{
   /**
    * Skips the apiMe() network call and db backfill on init, using only the cached token/user from
@@ -67,9 +111,11 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
   const handleUnauthenticated = useCallback(async () => {
     queryClient.clear();
+    await queryPersister.removeClient();
     await clearPrivateKey();
     setCurrentUserId(null);
     await clearToken();
+    await clearUser();
     resetPendingSyncBackoff();
     useAvatarStore.getState().clear();
     setUser(null);
@@ -115,22 +161,18 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         return;
       }
 
-      if (cached) {
-        setCurrentUserId(cached.id);
-        setUser(cached);
-        setStatus('authenticated');
-        setIsInitialLoading(false);
-        void backfillUserId(cached.id);
-      }
-
       const network = await NetInfo.fetch();
       const isOnline = network.isInternetReachable ?? network.isConnected ?? false;
       // react-doctor-disable-next-line react-hooks-js/todo
       if (!isOnline) {
-        if (!cached) {
+        if (cached) {
+          setCurrentUserId(cached.id);
+          setUser(cached);
+          setStatus('authenticated');
+        } else {
           await handleUnauthenticated();
-          setIsInitialLoading(false);
         }
+        setIsInitialLoading(false);
         return;
       }
       // react-doctor-disable-next-line react-hooks-js/todo
@@ -144,23 +186,28 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
         ]);
         if (cancelled) return;
         console.log('[Auth] boot: apiMe resolved, user:', fetchedUser.id);
-        setCurrentUserId(fetchedUser.id);
-        setUser(fetchedUser);
-        if (!cached) {
-          console.log('[Auth] boot: no cache → setting authenticated');
-          setStatus('authenticated');
-          setIsInitialLoading(false);
+        try {
+          await hydratePatientData(fetchedUser);
+        } catch (hydrationError) {
+          console.warn('[Auth] boot: patient hydration deferred:', hydrationError);
         }
-        void backfillUserId(fetchedUser.id);
+        if (cancelled) return;
+        setUser(fetchedUser);
+        setStatus('authenticated');
         await saveUser(fetchedUser);
       } catch (err) {
         console.error('[Auth] boot: apiMe failed:', err);
-        if (!cancelled && !cached) {
-          await handleUnauthenticated();
-          setIsInitialLoading(false);
+        if (!cancelled) {
+          if (cached) {
+            setCurrentUserId(cached.id);
+            setUser(cached);
+            setStatus('authenticated');
+          } else {
+            await handleUnauthenticated();
+          }
         }
       } finally {
-        if (!cancelled && !cached) setIsInitialLoading(false);
+        if (!cancelled) setIsInitialLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -172,11 +219,14 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       const device_name = await getDeviceName();
       const { token, user: loggedInUser } = await apiLogin({ ...payload, device_name });
       await setToken(token);
-      setCurrentUserId(loggedInUser.id);
+      try {
+        await hydratePatientData(loggedInUser);
+      } catch (hydrationError) {
+        console.warn('[Auth] login: patient hydration deferred:', hydrationError);
+      }
       setUser(loggedInUser);
       setStatus('authenticated');
       setIsInitialLoading(false);
-      void backfillUserId(loggedInUser.id);
       await saveUser(loggedInUser);
     } catch (error) {
       setStatus('unauthenticated');
@@ -192,6 +242,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       const response = await apiRegister({ ...payload, device_name });
 
       if (response.pending) {
+        if (medicalInfo) await savePendingRegistration(payload.email, medicalInfo);
         setStatus('unauthenticated');
         return { pending: true };
       }
@@ -202,14 +253,9 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
 
       const persistMedicalInfo = async () => {
         if (!medicalInfo) return;
-        const interimId = registeredUser.medical_information?.id;
         try {
-          if (interimId == null) {
-            await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
-          } else {
-            const record = await updateMedicalInformation(interimId, medicalInfo);
-            await medicalInformationRepo.saveFromServer(record);
-          }
+          const record = await updateMedicalInformation(1, medicalInfo);
+          await medicalInformationRepo.saveFromServer(record);
         } catch {
           await medicalInformationRepo.saveLocalEdit(medicalInfo, 'pending', registeredUser.id);
         }
@@ -224,6 +270,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
       void backfillUserId(registeredUser.id);
       return { pending: false };
     } catch (err) {
+      setStatus('unauthenticated');
       throw err;
     }
   }, []);

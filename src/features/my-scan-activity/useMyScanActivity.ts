@@ -13,6 +13,5 @@ export function useMyScanActivity() {
     queryFn: () => myScanActivityRepo.getAll(),
     enabled: !!user,
     refetchOnMount: 'always',
-    placeholderData: (previousData) => previousData,
   });
 }

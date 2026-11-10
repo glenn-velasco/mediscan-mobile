@@ -12,6 +12,5 @@ export function useAllergies() {
     queryKey: [...allergiesQueryKey, user?.id],
     queryFn: () => allergiesRepo.getAll(),
     enabled: !!user,
-    placeholderData: (previousData) => previousData,
   });
 }

@@ -27,6 +27,7 @@ import { medicalInformationSchema } from '@/lib/validation/medical-information-s
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { normalizeLegacyPhilippineAddress } from '@/api/endpoints/ph-locations';
 import type { MedicalInformationAddress, MedicalInformationPayload } from '@/api/types';
+import { nationalPhoneNumber } from '@/lib/format-phone';
 import { zodResolver } from '@/lib/zod-resolver';
 
 type FormState = {
@@ -86,12 +87,12 @@ export default function EditProfileScreen() {
       gender: existing.gender ?? undefined,
       blood_type: existing.blood_type ?? undefined,
       religion: existing.religion ?? undefined,
-      phone_country_code: existing.phone_country_code ?? 'PH',
-      phone: existing.phone ?? '',
+      phone_country_code: existing.phone_country_code || user?.phone_country_code || 'PH',
+      phone: existing.phone || nationalPhoneNumber(user?.phone_country_code, user?.phone_number),
       address: normalizeLegacyPhilippineAddress(parseStoredAddress(existing.address ?? null) ?? EMPTY_ADDRESS),
       no_blood_transfusion: !!existing.no_blood_transfusion,
     });
-  }, [existing, form.reset]);
+  }, [existing, form.reset, user?.phone_country_code, user?.phone_number]);
 
   const onSubmit = async (data: FormState) => {
     clearErrors();

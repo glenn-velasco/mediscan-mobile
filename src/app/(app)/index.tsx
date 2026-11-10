@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useQueryClient } from '@tanstack/react-query';
 import { Href, Link, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -33,11 +32,8 @@ import { BloodTypeLabel } from '@/constants/blood-type';
 import { GenderLabel } from '@/constants/gender';
 import { ReligionLabel } from '@/constants/religion';
 import type { Suffix } from '@/constants/suffix';
-import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
-import { useDiagnoses } from '@/features/diagnoses/useDiagnoses';
-import { medicalInformationQueryKey, useMedicalInformation } from '@/features/medical-information/useMedicalInformation';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
@@ -54,7 +50,7 @@ import { showLocalNotification } from '@/lib/notifications';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 import { useOnboardingData } from '@/onboarding/useOnboardingData';
-import { pushPatientChanges } from '@/services/patient-sync.service';
+import { syncPatientChanges } from '@/services/patient-sync.service';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () => void; topInset: number }) {
@@ -141,7 +137,7 @@ function PersonalInfoSection({ profile, age }: { profile: Record<string, any>; a
             iconColor={theme.primary}
             iconBgKey="primary"
             label="Phone"
-            value={profile.phone ? profile.phone : '—'}
+            value={formatPhoneWithCountryCode(profile.phone_country_code, profile.phone) || '—'}
           />
         </View>
         <View className="flex-row gap-2">
@@ -604,10 +600,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
   const avatarSheetRef = useRef<AvatarPreviewSheetHandle>(null);
-  const [isReconciling, setIsReconciling] = useState(true);
-  const reconcilingRef = useRef(false);
   const emergencyContactsSheetRef = useRef<EmergencyContactsBottomSheetHandle>(null);
   const allergiesSheetRef = useRef<AllergiesBottomSheetHandle>(null);
   const conditionsSheetRef = useRef<ConditionsBottomSheetHandle>(null);
@@ -616,9 +609,17 @@ export default function HomeScreen() {
   const onboardingChecklistSheetRef = useRef<OnboardingChecklistSheetHandle>(null);
   const { user, isInitialLoading, refreshUser, logout } = useAuth();
   const isVerifiedProfessional = user?.permissions?.includes('verified professional') ?? false;
-  const { data: medicalInformation, isLoading } = useMedicalInformation();
-  const { allergies, conditions, medications, emergencyContacts, isDataReady, checklist } = useOnboardingData();
-  const { data: diagnoses = [] } = useDiagnoses();
+  const {
+    allergies,
+    conditions,
+    diagnoses,
+    medications,
+    emergencyContacts,
+    medicalInformation,
+    isMedicalInformationLoading,
+    isDataReady,
+    checklist,
+  } = useOnboardingData();
   const { data: attestations = [] } = useAttestations();
   const { data: professionalEncounters = [], isLoading: encountersLoading, isError: encountersError } = useProfessionalEncounters();
   const { mutateAsync: sendEmailVerification, isPending: isSendingVerification } = useSendEmailVerification();
@@ -711,7 +712,15 @@ export default function HomeScreen() {
     }, [checklist.refreshSkipped])
   );
 
-  const profile = medicalInformation ?? user?.medical_information ?? null;
+  const profile = useMemo(() => {
+    const hydrated = medicalInformation ?? user?.medical_information ?? null;
+    if (!hydrated) return null;
+    return {
+      ...hydrated,
+      phone_country_code: hydrated.phone_country_code || user?.phone_country_code || null,
+      phone: hydrated.phone || user?.phone_number || null,
+    };
+  }, [medicalInformation, user?.medical_information, user?.phone_country_code, user?.phone_number]);
   const age = ageFromDateOfBirth(profile?.date_of_birth);
 
   const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_condition_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
@@ -758,52 +767,18 @@ export default function HomeScreen() {
     [countVerifiedByLatestAction],
   );
 
-  useEffect(() => {
-    if (reconcilingRef.current) return;
-    if (!medicalInformation && user?.medical_information && user) {
-      reconcilingRef.current = true;
-      const mi = user.medical_information;
-      medicalInformationRepo.saveLocalEdit({
-        email: user.email,
-        first_name: user.first_name,
-        middle_name: user.middle_name ?? undefined,
-        last_name: user.last_name,
-        suffix: (user.suffix as Suffix) ?? undefined,
-        date_of_birth: mi.date_of_birth ?? undefined,
-        gender: mi.gender ?? undefined,
-        phone_country_code: user.phone_country_code,
-        phone: user.phone_number,
-        blood_type: mi.blood_type ?? undefined,
-        religion: mi.religion ?? undefined,
-        address: mi.address ?? undefined,
-        no_blood_transfusion: mi.no_blood_transfusion,
-      }, 'pending').then(() => {
-        queryClient.invalidateQueries({ queryKey: medicalInformationQueryKey });
-        void pushPatientChanges();
-      }).catch(() => {
-        // Even on error, stop reconciling to avoid stuck skeleton
-        reconcilingRef.current = false;
-        setIsReconciling(false);
-      });
-      // Don't set isReconciling false here — wait until medicalInformation
-      // appears from the query refetch to avoid flashing the empty state
-    } else if (medicalInformation || !user?.medical_information) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsReconciling(false);
-    }
-  }, [medicalInformation, user, queryClient]);
-
   const handleRefresh = useCallback(async () => {
     try {
       await refreshUser();
+      await syncPatientChanges();
+      await pullPendingSync();
     } catch {
       // ignore — user state stays as-is
     }
-    void pullPendingSync();
   }, [refreshUser]);
 
   // Show skeleton only on first load when no cached data exists
-  if (!profile && (isLoading || isReconciling || isInitialLoading)) {
+  if (!profile && (isMedicalInformationLoading || isInitialLoading)) {
     return (
       <View className="flex-1">
         <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>

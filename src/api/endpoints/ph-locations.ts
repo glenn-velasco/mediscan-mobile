@@ -34,6 +34,14 @@ export function getPhilippineBarangayOptions(city: string | null, province: stri
   return PHILIPPINE_BARANGAYS.byCity[`${province}|${city}`] ?? [];
 }
 
+function normalizeCityName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^city of\s+/, '')
+    .replace(/\s+city$/, '');
+}
+
 export function normalizeLegacyPhilippineAddress(address: MedicalInformationAddress): MedicalInformationAddress {
   if (address.city || address.province) return address;
   if (address.country && address.country.trim().toLowerCase() !== 'philippines') return address;
@@ -46,12 +54,16 @@ export function normalizeLegacyPhilippineAddress(address: MedicalInformationAddr
   if (!countryMatch && address.country?.trim().toLowerCase() !== 'philippines') return address;
 
   const cityIndex = parts.findIndex((part, index) =>
-    PHILIPPINE_LOCATIONS.cities.some((city) => city.name === part && city.province === parts[index + 1]),
+    PHILIPPINE_LOCATIONS.cities.some(
+      (city) => normalizeCityName(city.name) === normalizeCityName(part) && city.province === parts[index + 1],
+    ),
   );
   if (cityIndex < 0) return address;
 
   const city = PHILIPPINE_LOCATIONS.cities.find(
-    (candidate) => candidate.name === parts[cityIndex] && candidate.province === parts[cityIndex + 1],
+    (candidate) =>
+      normalizeCityName(candidate.name) === normalizeCityName(parts[cityIndex])
+      && candidate.province === parts[cityIndex + 1],
   );
   if (!city) return address;
 

@@ -12,6 +12,5 @@ export function useScannedPatients() {
     queryKey: [...professionalScansQueryKey, user?.id],
     queryFn: () => scannedPatientsRepo.getAll(),
     enabled: !!user,
-    placeholderData: (previousData) => previousData,
   });
 }

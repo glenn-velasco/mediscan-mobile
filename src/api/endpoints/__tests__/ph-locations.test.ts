@@ -49,6 +49,25 @@ describe('bundled Philippine locations', () => {
     });
   });
 
+  it('maps common city aliases to the canonical dropdown value', () => {
+    expect(normalizeLegacyPhilippineAddress({
+      street: '174 Crystal Cave, Baguio, Benguet, 2600 Philippines',
+      unit: null,
+      city: null,
+      province: null,
+      postal_code: null,
+      country: null,
+    })).toEqual({
+      street: 'Crystal Cave',
+      unit: '174',
+      barangay: null,
+      city: 'City of Baguio',
+      province: 'Benguet',
+      postal_code: '2600',
+      country: 'Philippines',
+    });
+  });
+
   it('preserves structured addresses and does not reinterpret other countries', () => {
     const structured = {
       street: 'Main Street',

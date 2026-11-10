@@ -1,4 +1,4 @@
-import type { LoginPayload, LoginResponseData, MedicalInformationAddress, RegisterPayload, RegisterResponseData, User } from '@/api/types';
+import type { LoginPayload, LoginResponseData, RegisterPayload, RegisterResponseData, User } from '@/api/types';
 import { supabase, throwSupabaseError } from '@/api/supabase';
 import { ageFromDateOfBirth } from '@/lib/age-from-date-of-birth';
 
@@ -8,25 +8,6 @@ type ProfileRow = Omit<User, 'email' | 'email_verified_at' | 'fullname' | 'age' 
 };
 
 class MissingProfileError extends Error {}
-
-function normalizeAddress(value: unknown): MedicalInformationAddress | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    return { street: value, unit: null, city: null, province: null, postal_code: null, country: null };
-  }
-  if (typeof value !== 'object') return null;
-  const address = value as Record<string, unknown>;
-  const text = (key: string) => typeof address[key] === 'string' ? address[key] as string : null;
-  return {
-    street: text('street') ?? text('formatted'),
-    unit: text('unit'),
-    barangay: text('barangay'),
-    city: text('city'),
-    province: text('province'),
-    postal_code: text('postal_code'),
-    country: text('country'),
-  };
-}
 
 async function currentUser(): Promise<User> {
   let { data: authData, error: authError } = await supabase.auth.getUser();
@@ -47,7 +28,6 @@ async function currentUser(): Promise<User> {
   const isAdmin = authData.user.app_metadata?.role === 'admin';
   const roles = [...(row.is_professional ? ['professional'] : ['patient']), ...(isAdmin ? ['admin'] : [])];
   const rawAddress = row.address as unknown;
-  const medicalAddress = normalizeAddress(rawAddress);
   const address = typeof rawAddress === 'string'
     ? rawAddress
     : rawAddress && typeof rawAddress === 'object' && 'formatted' in rawAddress
@@ -63,27 +43,10 @@ async function currentUser(): Promise<User> {
     address,
     roles,
     permissions: [...(row.professional_verified_at ? ['verified professional'] : []), ...(isAdmin ? ['admin'] : [])],
-    // This uses the profile row already fetched above, so an older account can
-    // initialize its encrypted local medical record without another request.
-    // Once SQLite has a record, the UI continues to read that local copy.
-    medical_information: {
-      id: 1,
-      email: authData.user.email ?? '',
-      full_name: [row.first_name, row.middle_name, row.last_name, row.suffix].filter(Boolean).join(' '),
-      date_of_birth: row.dob ?? null,
-      gender: row.gender ?? null,
-      phone: row.phone_number ?? '',
-      phone_country_code: row.phone_country_code ?? null,
-      address: medicalAddress,
-      blood_type: null,
-      religion: null,
-      no_blood_transfusion: false,
-      allergies: [],
-      conditions: [],
-      diagnoses: [],
-      medications: [],
-      emergency_contacts: [],
-    },
+    // The complete medical record is encrypted in its own table and is hydrated into SQLite by
+    // patient sync. Never synthesize it from profiles: doing so turns missing fields into nulls and
+    // can overwrite the real cloud record before the first pull on a new device.
+    medical_information: null,
   };
 }
 

@@ -10,6 +10,5 @@ export function useScannedPatientDetail(patientId: string | number | null) {
     queryKey: [...professionalScansQueryKey, 'detail', patientId, user?.id],
     queryFn: () => getScannedPatientDetail(patientId!),
     enabled: !!user && patientId !== null,
-    placeholderData: (previousData) => previousData,
   });
 }
