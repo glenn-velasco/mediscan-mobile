@@ -143,10 +143,18 @@ Before production use, validate RLS with at least two patient accounts and one v
 
 ## Project documentation
 
+- [System architecture (Web + Mobile + RBAC)](docs/SYSTEM_ARCHITECTURE.md)
 - [Supabase backend and security](docs/SUPABASE_BACKEND.md)
 - [Development and deployment workflow](docs/DEVELOPMENT_WORKFLOW.md)
 - [OTA updates](docs/OTA_UPDATES.md)
 - [Navigation and deep-link patterns](docs/NAVIGATION_PATTERNS.md)
+
+## Web portal and RBAC admin console (`mediscan.cloud`)
+
+The companion Next.js web application lives in `d:\mediscan-landing` and is deployed at [https://mediscan.cloud](https://mediscan.cloud):
+
+- **Public Landing & Installer Hub (`https://mediscan.cloud`):** Interactive emergency pass simulator and live Android `.apk` / iOS TestFlight download dock powered by `public.app_releases`.
+- **Admin & RBAC Console (`https://mediscan.cloud/admin`):** 3-tab administration portal for managing **Users & RBAC Roles** (`user`, `professional`, `admin`), reviewing **PRC Professional Verification Applications**, and publishing **Android APK / iOS Releases** with real-time synchronization to open mobile app sessions.
 
 ## Research framing
 
