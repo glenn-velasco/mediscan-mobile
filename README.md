@@ -111,7 +111,7 @@ npx supabase db push
 npx supabase functions deploy mediscan-privileged
 ```
 
-Add `mediscanmobile://auth/callback` to the allowed redirect URLs in Supabase Auth configuration.
+Add `mediscanmobile://auth/callback` and `https://app.mediscan.cloud/auth/callback` to the allowed redirect URLs in Supabase Auth configuration.
 
 ### Run locally
 
@@ -128,6 +128,13 @@ npx expo start --dev-client
 ```
 
 Use `npm run ios` on a supported macOS development environment. Native folders are generated artifacts in this project; read the [development workflow](docs/DEVELOPMENT_WORKFLOW.md) before changing native behavior.
+
+To run or export the **Web / iOS PWA** locally:
+
+```sh
+npm run web        # Start the Expo web dev server
+npm run build:web  # Export static SPA + SQLite WASM worker to dist/
+```
 
 ## Verification
 
@@ -149,12 +156,13 @@ Before production use, validate RLS with at least two patient accounts and one v
 - [OTA updates](docs/OTA_UPDATES.md)
 - [Navigation and deep-link patterns](docs/NAVIGATION_PATTERNS.md)
 
-## Web portal and RBAC admin console (`mediscan.cloud`)
+## Web portal, RBAC admin console, and Web/iOS PWA (`mediscan.cloud` & `app.mediscan.cloud`)
 
-The companion Next.js web application lives in `d:\mediscan-landing` and is deployed at [https://mediscan.cloud](https://mediscan.cloud):
+MediScan deploys two web surfaces on Vercel connected to the same Supabase backend:
 
-- **Public Landing & Installer Hub (`https://mediscan.cloud`):** Interactive emergency pass simulator and live Android `.apk` / iOS TestFlight download dock powered by `public.app_releases`.
-- **Admin & RBAC Console (`https://mediscan.cloud/admin`):** 3-tab administration portal for managing **Users & RBAC Roles** (`user`, `professional`, `admin`), reviewing **PRC Professional Verification Applications**, and publishing **Android APK / iOS Releases** with real-time synchronization to open mobile app sessions.
+- **Installable Web & iOS PWA (`https://app.mediscan.cloud`):** Full Expo Web Progressive Web App built from this repository (`npm run build:web`). Runs encrypted local SQLite in the browser via WebAssembly (`wa-sqlite.wasm`), supports iOS Safari **"Share → Add to Home Screen"** standalone installation, QR camera scanning, Web Bluetooth (`navigator.bluetooth`) on supported browsers, and automatic Supabase encrypted-envelope relay fallback on iOS/browsers without Web Bluetooth.
+- **Public Landing & Installer Hub (`https://mediscan.cloud`):** Companion Next.js application in `d:\mediscan-landing` featuring an interactive emergency pass simulator and live Android `.apk` / iOS download dock powered by `public.app_releases`.
+- **Admin & RBAC Console (`https://mediscan.cloud/admin`):** 3-tab administration portal for managing **Users & RBAC Roles** (`user`, `professional`, `admin`), reviewing **PRC Professional Verification Applications**, and publishing **Android APK / iOS Releases** with real-time synchronization to open mobile and web app sessions.
 
 ## Research framing
 

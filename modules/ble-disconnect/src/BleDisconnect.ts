@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo';
 
 type BleDisconnectModule = {
@@ -5,4 +6,12 @@ type BleDisconnectModule = {
   disconnectAll(): Promise<number>;
 };
 
-export default requireNativeModule<BleDisconnectModule>('BleDisconnect');
+const fallback: BleDisconnectModule = {
+  async disconnectAll() {
+    return 0;
+  },
+};
+
+export default Platform.OS === 'android'
+  ? requireNativeModule<BleDisconnectModule>('BleDisconnect')
+  : fallback;

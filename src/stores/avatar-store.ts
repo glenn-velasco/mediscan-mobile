@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getInfoAsync, makeDirectoryAsync, readDirectoryAsync, copyAsync, deleteAsync, downloadAsync, documentDirectory } from 'expo-file-system/legacy';
 
@@ -25,6 +26,7 @@ const pendingUploadPromise = AsyncStorage.getItem(AVATAR_PENDING_KEY)
   .catch(() => null);
 
 const localAvatarPromise = (async () => {
+  if (Platform.OS === 'web' || !documentDirectory) return null;
   try {
     const info = await getInfoAsync(AVATAR_DIR);
     if (!info.exists) return null;
@@ -50,6 +52,7 @@ async function ensureDir() {
 }
 
 async function copyToLocal(uri: string): Promise<string> {
+  if (Platform.OS === 'web' || !documentDirectory) return uri;
   await ensureDir();
   const dest = `${AVATAR_DIR}avatar-${Date.now()}.jpg`;
 
@@ -175,7 +178,7 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
 
   clear: () => {
     const { localUri } = get();
-    if (localUri) deleteAsync(localUri, { idempotent: true }).catch(() => {});
+    if (localUri && Platform.OS !== 'web' && documentDirectory) deleteAsync(localUri, { idempotent: true }).catch(() => {});
     set({ localUri: null, serverUrl: null, pendingUpload: null });
     AsyncStorage.removeItem(AVATAR_CACHE_KEY).catch(() => {});
     AsyncStorage.removeItem(AVATAR_PENDING_KEY).catch(() => {});

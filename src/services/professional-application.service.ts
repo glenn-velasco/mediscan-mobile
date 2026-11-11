@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { File } from 'expo-file-system';
 
 import { submitProfessionalApplication as submitProfessionalApplicationRequest } from '@/api/endpoints/professional-applications';
@@ -15,7 +16,13 @@ export type ProfessionalApplicationSubmission = {
   dateOfBirth: string;
 };
 
-function appendFile(formData: FormData, field: string, file: CapturedFile) {
+async function appendFile(formData: FormData, field: string, file: CapturedFile) {
+  if (Platform.OS === 'web') {
+    const response = await fetch(file.uri);
+    const blob = await response.blob();
+    formData.append(field, blob, file.name);
+    return;
+  }
   // SDK 57's fetch (expo/src/winter) replaces RN's classic {uri, name, type} FormData shorthand
   // with a spec-compliant one that only accepts a real Blob — passing the shorthand object fails
   // at request-build time with "Unsupported FormDataPart implementation". expo-file-system's
@@ -26,9 +33,13 @@ function appendFile(formData: FormData, field: string, file: CapturedFile) {
 export async function submitProfessionalApplication(submission: ProfessionalApplicationSubmission): Promise<ProfessionalApplication> {
   const formData = new FormData();
   formData.append('id_type', submission.idType);
-  appendFile(formData, 'id_photo', submission.idPhoto);
-  submission.selfieFrames.forEach((frame) => appendFile(formData, 'selfie_frames[]', frame));
-  submission.flashFrames.forEach((frame) => appendFile(formData, 'flash_frames[]', frame));
+  await appendFile(formData, 'id_photo', submission.idPhoto);
+  for (const frame of submission.selfieFrames) {
+    await appendFile(formData, 'selfie_frames[]', frame);
+  }
+  for (const frame of submission.flashFrames) {
+    await appendFile(formData, 'flash_frames[]', frame);
+  }
   submission.flashColors.forEach((color) => formData.append('flash_colors[]', color));
   formData.append('blink_detected', submission.blinkDetected ? '1' : '0');
   formData.append('date_of_birth', submission.dateOfBirth);

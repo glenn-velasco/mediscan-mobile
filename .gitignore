@@ -53,3 +53,5 @@ example
 
 # editor
 .vscode/
+.vercel
+.env*

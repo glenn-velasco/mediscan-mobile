@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { File } from 'expo-file-system';
 
 import { uploadMedicalInformationAvatar } from '@/api/endpoints/medical-information';
@@ -9,6 +10,8 @@ export async function submitMedicalInformationAvatar(
   medicalInformationId: number,
   photo: SelectedAvatarPhoto,
 ): Promise<MedicalInformationApiRecord> {
-  const bytes = await new File(photo.uri).arrayBuffer();
+  const bytes = Platform.OS === 'web'
+    ? await (await fetch(photo.uri)).arrayBuffer()
+    : await new File(photo.uri).arrayBuffer();
   return uploadMedicalInformationAvatar(medicalInformationId, bytes, photo.type);
 }

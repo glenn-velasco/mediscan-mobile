@@ -4,6 +4,10 @@ const { withNativewind } = require("nativewind/metro");
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
+if (!config.resolver.assetExts.includes("wasm")) {
+  config.resolver.assetExts.push("wasm");
+}
+
 // Every `npx expo run:android` / Gradle build regenerates tens of thousands of CMake
 // intermediate object files under android/.cxx (project + every native module in node_modules)
 // and android/app/build. Metro's file watcher crawls these by default on Windows (no Watchman),

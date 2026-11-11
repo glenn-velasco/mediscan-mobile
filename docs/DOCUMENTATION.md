@@ -125,3 +125,29 @@ npx expo export:embed --platform android --dev false --reset-cache `
   --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android `
   "D:\mediscan-mobile\mediscan-v1.0.0-release.apk"
 ```
+
+---
+
+## 5. Building & Deploying the Web / iOS PWA (`https://app.mediscan.cloud`) and Unsigned iOS `.ipa`
+
+### Exporting & Deploying the Web / iOS PWA (`https://app.mediscan.cloud`)
+1. Export the static web bundle (61 routes + `wa-sqlite.wasm` worker) from `d:\mediscan-mobile`:
+   ```powershell
+   npm run build:web
+   ```
+2. Deploy to Vercel (`maddators-projects/mediscan-mobile`):
+   ```powershell
+   npx vercel --prod --yes
+   ```
+3. **Required Headers (`vercel.json` & `public/_headers`):**
+   - `Cross-Origin-Opener-Policy: same-origin`
+   - `Cross-Origin-Embedder-Policy: credentialless`
+   - `Content-Type: application/wasm` for `/_expo/static/js/web/*.wasm`
+4. **Supabase Auth Redirect URLs:**
+   - Ensure both `mediscanmobile://auth/callback` and `https://app.mediscan.cloud/auth/callback` are added under **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs**.
+
+### Building an Unsigned Native iOS `.ipa` via GitHub Actions
+For users who want to sideload a native iOS `.ipa` via **Sideloadly** or **AltStore** without a MacBook or paid Apple Developer account:
+1. Open **GitHub → Actions → Build Unsigned iOS IPA** (`.github/workflows/ios-unsigned.yml`).
+2. Click **Run workflow** on branch `feat/web-pwa-support` or `main`.
+3. Download the generated `MediScan-unsigned-ipa` artifact and install it onto an iPhone using Sideloadly or AltStore with a free Apple ID.

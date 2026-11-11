@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo';
 
 type BleLocationModule = {
@@ -5,4 +6,12 @@ type BleLocationModule = {
   ensureEnabled(): Promise<boolean>;
 };
 
-export default requireNativeModule<BleLocationModule>('BleLocation');
+const fallback: BleLocationModule = {
+  async ensureEnabled() {
+    return true;
+  },
+};
+
+export default Platform.OS === 'android'
+  ? requireNativeModule<BleLocationModule>('BleLocation')
+  : fallback;

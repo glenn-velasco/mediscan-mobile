@@ -17,6 +17,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/auth/AuthContext';
 import { useAuth } from '@/auth/useAuth';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { IosInstallBanner } from '@/components/ios-install-banner';
 import { NetworkProvider } from '@/hooks/use-network-status';
 
 import { useBleAdvertisingResume } from '@/features/ble-sync/useBleAdvertisingResume';
@@ -205,6 +206,7 @@ export default function RootLayout() {
                   <BottomSheetModalProvider>
                     <SystemBars style="auto" hidden={{ navigationBar: true }} />
                     <RootNavigator />
+                    <IosInstallBanner />
                   </BottomSheetModalProvider>
                 </BroadcastProvider>
               </NetworkProvider>

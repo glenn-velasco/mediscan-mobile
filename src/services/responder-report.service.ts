@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { File } from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -28,6 +29,23 @@ export async function loadNotePhotos(scan: RecentEmergencyScan): Promise<ReportP
   const photos: ReportPhoto[] = [];
   for (const [index, image] of images.entries()) {
     try {
+      if (Platform.OS === 'web') {
+        if (image.uri.startsWith('data:')) {
+          photos.push({ dataUri: image.uri, addedAt: image.addedAt });
+          continue;
+        }
+        const response = await fetch(image.uri);
+        const blob = await response.blob();
+        const mimeType = blob.type || 'image/jpeg';
+        if (!/^image\/(?:jpeg|png|webp)$/.test(mimeType)) throw new Error(`Unsupported image type: ${mimeType}`);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let binary = '';
+        for (let offset = 0; offset < bytes.length; offset += 8192) {
+          binary += String.fromCharCode(...bytes.slice(offset, offset + 8192));
+        }
+        photos.push({ dataUri: `data:${mimeType};base64,${btoa(binary)}`, addedAt: image.addedAt });
+        continue;
+      }
       const file = new File(image.uri);
       if (!file.exists) throw new Error('Image file is missing');
       const mimeType = file.type || (/\.png(?:\?|$)/i.test(image.uri) ? 'image/png' : /\.webp(?:\?|$)/i.test(image.uri) ? 'image/webp' : 'image/jpeg');
@@ -80,6 +98,11 @@ export function buildResponderReportHtml(scan: RecentEmergencyScan, photos: Repo
 }
 
 export async function shareResponderReport(scan: RecentEmergencyScan): Promise<void> {
+  if (Platform.OS === 'web') {
+    const photos = await loadNotePhotos(scan);
+    await Print.printAsync({ html: buildResponderReportHtml(scan, photos) });
+    return;
+  }
   if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is unavailable on this device.');
   const uri = await generateResponderReport(scan);
   await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Share encounter report' });

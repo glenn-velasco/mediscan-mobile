@@ -6,9 +6,10 @@ This document describes the end-to-end architecture connecting the **MediScan We
 
 ## 1. High-Level Multi-Platform Architecture
 
-MediScan operates across two client surfaces sharing a single **Supabase** backend (`vlcxcmctphwptumwolfw`):
+MediScan operates across three client surfaces sharing a single **Supabase** backend (`vlcxcmctphwptumwolfw`):
 1. **`mediscan.cloud` (Next.js 15 on Vercel):** Public landing page, mobile installer distribution (`/api/download`), and the 3-tab Admin & RBAC Console (`/admin`).
-2. **MediScan Mobile App (Expo SDK 57 / React Native):** Offline-first patient emergency pass (`SQLite` + AES-GCM cloud sync) and verified clinician/responder scanner.
+2. **`app.mediscan.cloud` (Expo Web / iOS PWA on Vercel):** Zero-cost installable Progressive Web App (`manifest.json` + iOS standalone mode) running encrypted local `expo-sqlite` via WebAssembly (`wa-sqlite.wasm`), camera QR scanning, Web Bluetooth (`navigator.bluetooth`) where supported, and Supabase encrypted-envelope relay on iOS/browsers without Web Bluetooth.
+3. **MediScan Native Mobile App (Expo SDK 57 / React Native for Android `.apk` & iOS `.ipa`):** Full offline-first patient emergency pass (`SQLite` + AES-GCM cloud sync + native BLE GATT peripheral/central + Android Quick Settings tile & home-screen widget) and verified clinician/responder scanner.
 
 ```mermaid
 flowchart TB
@@ -20,9 +21,15 @@ flowchart TB
     API_INS["POST /api/inspect-url"]
   end
 
-  subgraph Mobile["MediScan Mobile App (Expo / React Native)"]
-    SQLITE[("Encrypted Local SQLite")]
-    PAT_UI["Patient Emergency QR & Wallet Card"]
+  subgraph PWA["app.mediscan.cloud (Vercel / Expo Web & iOS PWA)"]
+    WASM_SQLITE[("Encrypted WASM SQLite (wa-sqlite)")]
+    PWA_UI["Installable Patient & Professional Web App"]
+    WEB_BLE["Web Bluetooth Central / Supabase Relay"]
+  end
+
+  subgraph Mobile["MediScan Native App (Android APK / iOS IPA)"]
+    SQLITE[("Encrypted Native SQLite")]
+    PAT_UI["Patient Emergency QR, Wallet Card & BLE Peripheral"]
     PRO_UI["Verified Professional Scanner & Encounters"]
     RT_CLIENT["BroadcastProvider (Realtime WebSocket)"]
   end
@@ -48,6 +55,11 @@ flowchart TB
   AD --> S_APK
   AD --> S_PRC
   AD <--> RT
+
+  PWA_UI <--> WASM_SQLITE
+  WASM_SQLITE <--> EDGE
+  WEB_BLE <--> EDGE
+  PWA_UI <--> RT
 
   PAT_UI <--> SQLITE
   SQLITE <--> EDGE
@@ -125,3 +137,18 @@ Supabase Free Tier limits individual storage objects to **50 MB**, while the sig
 2. **Zero-Buffering Edge Stream Reassembly (`/api/download`):**
    - When a user clicks **Download for Android (.APK)** on `mediscan.cloud`, `GET /api/download` sends parallel `HEAD` requests to sum the exact `Content-Length` (`64,605,557` bytes).
    - It then streams `part0` followed immediately by `part1` through a Web Standard `ReadableStream` with `Content-Type: application/vnd.android.package-archive`, giving Android a single `.apk` file with an accurate download progress bar.
+
+---
+
+## 6. Web / iOS PWA & Platform Shim Architecture (`https://app.mediscan.cloud`)
+
+To support iOS and desktop/mobile browsers without requiring a paid Apple Developer Program account, `d:\mediscan-mobile` uses Metro's `.web.ts` / `.web.tsx` platform resolution to swap native-only dependencies while keeping a single shared TypeScript codebase:
+
+| Subsystem | Native (`Android` / `iOS`) | Web / iOS PWA (`.web.ts` / `.web.tsx`) |
+| :--- | :--- | :--- |
+| **Local Database (`src/db/client.ts`)** | Native `expo-sqlite` (`mediscan.db` with WAL) | `expo-sqlite` WebAssembly (`wa-sqlite.wasm`) backed by OPFS / IndexedDB with `COOP: same-origin` & `COEP: credentialless` headers |
+| **Key & Token Storage (`src/lib/secure-store*.ts`)** | `expo-secure-store` (Keystore / Keychain) | `window.localStorage` with in-memory fallback for SSR |
+| **QR Rendering (`src/components/qr-code-view*.tsx`)** | `@shopify/react-native-skia` (`Canvas` + `Path`) | `react-native-svg` (`Svg` + `Rect` + `Path`) + `qrcode.toDataURL` (`qr-image-generator.web.ts`) |
+| **Liveness Capture (`src/components/liveness-capture-view*.tsx`)** | `react-native-vision-camera` + ML Kit face detection | `expo-camera` `<CameraView facing="front">` with guided selfie + red/green/blue screen-flash sequence |
+| **BLE & Clinician Updates (`src/services/ble-*.web.ts`)** | `react-native-ble-plx` Central + custom Kotlin `BlePeripheral` GATT server | `isBleSupported()` checks `navigator.bluetooth`; uses Web Bluetooth on supported browsers (Chrome) and hides the offline Bluetooth button on iOS Safari so clinicians use **Send via Internet** (encrypted envelope + Supabase Realtime) |
+| **Android-Only Native Modules (`modules/*`)** | Guarded by `Platform.OS === 'android'` (`BleDisconnect`, `BleLocation`, `BleRadio`) so native iOS `.ipa` builds never crash | Safe no-op `.web.ts` shims (`BlePeripheral.web.ts`, `BleLocation.web.ts`, `BleDisconnect.web.ts`, `BleRadio.web.ts`, `QrWidget.web.ts`) |

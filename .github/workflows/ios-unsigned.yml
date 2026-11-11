@@ -1,0 +1,67 @@
+name: Build Unsigned iOS IPA (No Paid Apple Account Needed)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios-unsigned:
+    name: Build Unsigned iOS App on macOS
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Create .env file from repository secrets (or fallback)
+        run: |
+          if [ -n "${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" ]; then
+            echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
+            echo "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}" >> .env
+          elif [ -f .env.production ]; then
+            cp .env.production .env
+          fi
+
+      - name: Generate native iOS project (Expo Prebuild)
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build Unsigned Release .app via xcodebuild
+        working-directory: ios
+        run: |
+          WORKSPACE=$(ls -d *.xcworkspace | head -n 1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package .app into Unsigned .ipa
+        run: |
+          mkdir -p Payload
+          APP_PATH=$(find ios/build/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
+          cp -R "$APP_PATH" Payload/
+          zip -r -q Mediscan-unsigned.ipa Payload
+
+      - name: Upload Unsigned .ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mediscan-unsigned-ipa
+          path: Mediscan-unsigned.ipa
+          retention-days: 14

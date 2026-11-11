@@ -46,13 +46,35 @@ All variables must be prefixed with `EXPO_PUBLIC_` to be readable from app code.
 
 ### Required Variables
 
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 ```
-EXPO_PUBLIC_API_URL=https://app.mediscan.cloud
-EXPO_PUBLIC_REVERB_APP_KEY=your-key
-EXPO_PUBLIC_REVERB_HOST=app.mediscan.cloud
-EXPO_PUBLIC_REVERB_PORT=443
-EXPO_PUBLIC_REVERB_SCHEME=wss
+
+## Web / iOS PWA Build & Deployment (`https://app.mediscan.cloud`)
+
+MediScan can be exported as a static Single-Page Application (SPA) and installable Progressive Web App (PWA) for iOS Safari ("Add to Home Screen") and desktop/mobile browsers:
+
+```sh
+npm run build:web
 ```
+
+Output: `dist/` (static routes + `wa-sqlite.wasm` WebAssembly worker + `public/manifest.json` + `public/_headers`).
+
+### Required HTTP Headers for SQLite WASM
+
+`expo-sqlite` on Web requires cross-origin isolation headers so the browser allows `SharedArrayBuffer` / OPFS worker execution. These are configured automatically in `vercel.json`, `public/_headers`, and `app.json`:
+
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: credentialless`
+
+### Deploy to Vercel
+
+```sh
+npx vercel --prod --yes
+```
+
+Ensure `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are configured in the Vercel project environment variables (`maddators-projects/mediscan-mobile`), and add `https://app.mediscan.cloud/auth/callback` to Supabase Auth → URL Configuration → Redirect URLs.
 
 ## Versioning
 
@@ -84,30 +106,31 @@ Workflows are in `.github/workflows/`.
 - **Output:** APK artifact (14-day retention)
 - **Status:** Fully working
 
-### iOS Build
+### Unsigned iOS `.ipa` Build (`.github/workflows/ios-unsigned.yml`)
+
+- **Triggers:** manual dispatch (`workflow_dispatch`)
+- **Runner:** `macos-15` (GitHub Actions free macOS runner)
+- **Output:** `MediScan-unsigned.ipa` artifact (14-day retention)
+- **Status:** Working without a paid Apple Developer account (`CODE_SIGNING_ALLOWED=NO`). Can be sideloaded onto physical iPhones using **Sideloadly** or **AltStore** with a free Apple ID.
+
+### Signed iOS Build (`.github/workflows/ios-build.yml`)
 
 - **Triggers:** push to `main`, or manual dispatch
 - **Runner:** macOS
-- **Status:** Placeholder until Apple certificates are added
+- **Status:** Template for Apple Developer Program signed distribution when `.p12` and `.mobileprovision` certificates are added
 
-### GitHub Environments
+### GitHub Repository Secrets
 
-Create a `preview` environment in **Settings → Environments**:
-
-1. Click **New environment** → name it `preview`
-2. Add **secrets**:
+Configure these secrets in **Settings → Secrets and variables → Actions**:
 
 | Secret | Description |
 |---|---|
-| `API_URL` | Backend API URL |
-| `REVERB_APP_KEY` | Reverb/broadcasting key |
-| `REVERB_HOST` | Reverb host |
-| `REVERB_PORT` | Reverb port |
-| `REVERB_SCHEME` | `ws` or `wss` |
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL (`https://<project-ref>.supabase.co`) |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/publishable key |
 | `ANDROID_KEYSTORE` | Base64 encoded keystore *(optional)* |
-| `IOS_CERTIFICATE` | Base64 encoded `.p12` *(iOS only)* |
-| `IOS_CERTIFICATE_PASSWORD` | Certificate password *(iOS only)* |
-| `IOS_PROVISIONING_PROFILE` | Base64 encoded `.mobileprovision` *(iOS only)* |
+| `IOS_CERTIFICATE` | Base64 encoded `.p12` *(signed iOS build only)* |
+| `IOS_CERTIFICATE_PASSWORD` | Certificate password *(signed iOS build only)* |
+| `IOS_PROVISIONING_PROFILE` | Base64 encoded `.mobileprovision` *(signed iOS build only)* |
 
 ### iOS Certificate Setup (when ready)
 

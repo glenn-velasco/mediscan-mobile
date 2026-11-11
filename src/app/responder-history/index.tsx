@@ -1,4 +1,4 @@
-import * as LocalAuthentication from 'expo-local-authentication';
+import { authenticateLocalAsync } from '@/lib/use-biometric-auth';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from 'react-native';
@@ -20,7 +20,7 @@ export default function RecentScansScreen() {
 
   const unlock = useCallback(async () => {
     setStatus('loading');
-    const result = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock recent emergency scans', fallbackLabel: 'Use device passcode', disableDeviceFallback: false });
+    const result = await authenticateLocalAsync({ promptMessage: 'Unlock recent emergency scans', fallbackLabel: 'Use device passcode', disableDeviceFallback: false });
     if (!result.success) {
       const unavailable = result.error === 'not_available' || result.error === 'not_enrolled' || result.error === 'passcode_not_set';
       setStatus(unavailable ? 'unavailable' : 'locked');

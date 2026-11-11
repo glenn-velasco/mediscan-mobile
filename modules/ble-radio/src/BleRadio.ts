@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo';
 
 type BleRadioModule = {
@@ -5,4 +6,12 @@ type BleRadioModule = {
   ensureEnabled(): Promise<boolean>;
 };
 
-export default requireNativeModule<BleRadioModule>('BleRadio');
+const fallback: BleRadioModule = {
+  async ensureEnabled() {
+    return true;
+  },
+};
+
+export default Platform.OS === 'android'
+  ? requireNativeModule<BleRadioModule>('BleRadio')
+  : fallback;

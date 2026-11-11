@@ -1,4 +1,12 @@
+import { Platform } from 'react-native';
 import { supabase, throwSupabaseError } from '@/api/supabase';
+
+function getAuthCallbackUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return 'mediscanmobile://auth/callback';
+}
 
 export async function updateEmail(email: string) {
   const { error } = await supabase.auth.updateUser({ email });
@@ -29,7 +37,7 @@ export async function sendEmailVerificationNotification() {
 }
 
 export async function forgotPassword(email: string) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'mediscanmobile://auth/callback' });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: getAuthCallbackUrl() });
   if (error) throwSupabaseError(error);
   return null;
 }

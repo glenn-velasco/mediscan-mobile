@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure-store';
 import sodium, { ready } from 'react-native-libsodium';
 
 const KEY_PREFIX = 'mediscan_emergency_signing_key_';

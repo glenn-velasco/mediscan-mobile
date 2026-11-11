@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure-store';
 import sodium, { ready } from 'react-native-libsodium';
 
 const STORAGE_KEY = 'mediscan_recent_scan_secretbox_key_v1';

@@ -48,6 +48,7 @@ import type { BloodType } from '@/constants/blood-type';
 import type { Suffix } from '@/constants/suffix';
 import type { Religion } from '@/constants/religion';
 import { useTheme } from '@/hooks/use-theme';
+import { isBleSupported } from '@/services/ble-manager';
 import { formatIsoDate } from '@/lib/format-date';
 
 export type ManageInfoBottomSheetHandle = { present: (patientId: number, qrData: string) => void; dismiss: () => void };
@@ -701,7 +702,9 @@ function SyncActionButtons({ sendMode, sending, hasChanges, onSendBle, onSendInt
 }) {
   return (
     <View className="mt-2 gap-3">
-      <PrimaryButton label={sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'} loading={sendMode === 'ble'} disabled={sending || !hasChanges} leftIcon={<Ionicons name="bluetooth" size={18} color="#fff" />} onPress={onSendBle} />
+      {isBleSupported() ? (
+        <PrimaryButton label={sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'} loading={sendMode === 'ble'} disabled={sending || !hasChanges} leftIcon={<Ionicons name="bluetooth" size={18} color="#fff" />} onPress={onSendBle} />
+      ) : null}
       <PrimaryButton label={sendMode === 'internet' ? 'Sending via Internet…' : 'Send via Internet (online)'} loading={sendMode === 'internet'} disabled={sending || !hasChanges} leftIcon={<Ionicons name="globe-outline" size={18} color="#fff" />} onPress={onSendInternet} />
     </View>
   );

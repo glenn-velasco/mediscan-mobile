@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure-store';
 
 const TOKEN_KEY = 'mediscan_auth_token';
 

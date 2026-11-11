@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 
 import { useAuth } from '@/auth/useAuth';
 import { useBlePeripheralPermission } from '@/hooks/use-ble-permission';
@@ -17,6 +18,7 @@ export function useBleAdvertisingResume() {
   const startedRef = useRef(false);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (!user) {
       startedRef.current = false;
       return;

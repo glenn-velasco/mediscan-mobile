@@ -32,8 +32,12 @@ export function getDb(): Promise<SQLiteDatabase> {
       // repos/services (sync triggers, device-key registration, ...) all query this same singleton
       // connection concurrently during app boot. WAL lets reads proceed alongside a writer, and
       // busy_timeout makes SQLite retry internally for up to 5s before giving up.
-      await db.execAsync('PRAGMA journal_mode = WAL;');
-      await db.execAsync('PRAGMA busy_timeout = 5000;');
+      try {
+        await db.execAsync('PRAGMA journal_mode = WAL;');
+        await db.execAsync('PRAGMA busy_timeout = 5000;');
+      } catch (pragmaErr) {
+        console.warn('[DB] getDb(): PRAGMA setup skipped on this platform', pragmaErr);
+      }
       console.log('[DB] getDb(): PRAGMAs set, running migrations');
       await runMigrations(db);
       console.log('[DB] getDb(): migrations complete');
@@ -92,4 +96,5 @@ if (__DEV__) {
 
 // Kick off DB initialization at module load so it's ready by the time components mount.
 // Jest repository tests inject their own adapter, so native SQLite must stay dormant there.
-if (process.env.NODE_ENV !== 'test') void getDb();
+// Also skip during Node static SSR on web where browser Workers/WASM are not active.
+if (process.env.NODE_ENV !== 'test' && typeof window !== 'undefined') void getDb();

@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/lib/secure-store';
 
 const KEY_STORAGE_KEY = 'mediscan_aes_key';
 

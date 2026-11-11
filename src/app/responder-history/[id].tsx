@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import * as LocalAuthentication from 'expo-local-authentication';
+import { authenticateLocalAsync } from '@/lib/use-biometric-auth';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
@@ -27,7 +27,7 @@ export default function SavedScanScreen() {
 
   useEffect(() => {
     let active = true;
-    void (hasRecentScanAccess() ? Promise.resolve({ success: true }) : LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock saved emergency scan', fallbackLabel: 'Use device passcode', disableDeviceFallback: false })).then(async (auth) => {
+    void (hasRecentScanAccess() ? Promise.resolve({ success: true }) : authenticateLocalAsync({ promptMessage: 'Unlock saved emergency scan', fallbackLabel: 'Use device passcode', disableDeviceFallback: false })).then(async (auth) => {
       if (!active) return;
       if (!auth.success) { setError('Authentication is required to reopen this scan.'); return; }
       grantRecentScanAccess();

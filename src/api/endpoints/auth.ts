@@ -1,6 +1,14 @@
+import { Platform } from 'react-native';
 import type { LoginPayload, LoginResponseData, RegisterPayload, RegisterResponseData, User } from '@/api/types';
 import { supabase, throwSupabaseError } from '@/api/supabase';
 import { ageFromDateOfBirth } from '@/lib/age-from-date-of-birth';
+
+function getAuthCallbackUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/auth/callback`;
+  }
+  return 'mediscanmobile://auth/callback';
+}
 
 type ProfileRow = Omit<User, 'email' | 'email_verified_at' | 'fullname' | 'age' | 'roles' | 'permissions' | 'medical_information'> & {
   is_professional: boolean;
@@ -77,7 +85,7 @@ export function register(payload: RegisterPayload) {
     email: payload.email,
     password: payload.password,
     options: {
-      emailRedirectTo: 'mediscanmobile://auth/callback',
+      emailRedirectTo: getAuthCallbackUrl(),
       data: { first_name: payload.first_name, middle_name: payload.middle_name ?? null, last_name: payload.last_name, suffix: payload.suffix ?? null, dob: payload.dob, gender: payload.gender, address: payload.address, phone_number: payload.phone_number, phone_country_code: payload.phone_country_code },
     },
   }).then(async ({ data, error }) => {

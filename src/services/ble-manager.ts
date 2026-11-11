@@ -10,6 +10,10 @@ export function getManager(): BleManager {
   return manager;
 }
 
+export function isBleSupported(): boolean {
+  return true;
+}
+
 /**
  * Android-only: ensures the Bluetooth radio is on, prompting via the inline system dialog if not.
  * `react-native-ble-plx`'s own `BleManager.enable()` never actually shows this dialog on Android

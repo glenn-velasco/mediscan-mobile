@@ -52,6 +52,7 @@ import type { EncounterVital, ResponderNoteBlock } from '@/types/emergency';
 import * as historyRepo from '@/db/repositories/recent-emergency-scans.repo';
 import { consumePendingManageInfo, consumePendingManageInfoQrData } from '@/lib/manage-info-pending';
 import { clearQuickScanLockScreenFlags } from '@/lib/qr-scanner-tile-native';
+import { isBleSupported } from '@/services/ble-manager';
 import type { UseFormReturn } from 'react-hook-form';
 
 type ThemeColors = ReturnType<typeof useTheme>;
@@ -972,13 +973,15 @@ export default function ManageInfoScreen() {
               ) : null}
 
               <View className="mt-2 gap-3">
-                <PrimaryButton
-                  label={state.sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'}
-                  loading={state.sendMode === 'ble'}
-                  disabled={state.sending || (!state.hasFormChanges && !encounterDirty)}
-                  leftIcon={<Ionicons name="bluetooth" size={18} color={theme.primaryForeground} />}
-                  onPress={() => void sendWithEncounter('ble')}
-                />
+                {isBleSupported() ? (
+                  <PrimaryButton
+                    label={state.sendMode === 'ble' ? 'Sending via Bluetooth…' : 'Send via Bluetooth (offline)'}
+                    loading={state.sendMode === 'ble'}
+                    disabled={state.sending || (!state.hasFormChanges && !encounterDirty)}
+                    leftIcon={<Ionicons name="bluetooth" size={18} color={theme.primaryForeground} />}
+                    onPress={() => void sendWithEncounter('ble')}
+                  />
+                ) : null}
                 <PrimaryButton
                   label={state.sendMode === 'internet' ? 'Sending via Internet…' : 'Send via Internet (online)'}
                   loading={state.sendMode === 'internet'}
