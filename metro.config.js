@@ -1,3 +1,4 @@
+const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 const { withNativewind } = require("nativewind/metro");
 
@@ -7,6 +8,16 @@ const config = getDefaultConfig(__dirname);
 if (!config.resolver.assetExts.includes("wasm")) {
   config.resolver.assetExts.push("wasm");
 }
+
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === "web" && moduleName === "react-native-libsodium") {
+    return {
+      filePath: path.resolve(__dirname, "src/shims/libsodium.web.ts"),
+      type: "sourceFile",
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 // Every `npx expo run:android` / Gradle build regenerates tens of thousands of CMake
 // intermediate object files under android/.cxx (project + every native module in node_modules)

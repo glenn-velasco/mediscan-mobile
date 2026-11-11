@@ -1,0 +1,11 @@
+android
+ios
+.gradle
+.kotlin
+node_modules
+.git
+.expo
+dist
+build
+web-build
+*.log

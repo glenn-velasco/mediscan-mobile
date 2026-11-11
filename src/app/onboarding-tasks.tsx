@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -55,6 +55,7 @@ function TaskCard({
   onPress: () => void;
   onSkip: () => void;
 }) {
+  const isClickable = !task.done && !disabled && !(cooldown != null && cooldown > 0);
   const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
@@ -76,13 +77,19 @@ function TaskCard({
   return (
     <View>
       <Pressable
-        disabled={task.done || disabled || (cooldown != null && cooldown > 0)}
+        disabled={!isClickable}
         onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPressIn={Platform.OS !== 'web' ? handlePressIn : undefined}
+        onPressOut={Platform.OS !== 'web' ? handlePressOut : undefined}
+        style={({ pressed }) => [
+          Platform.OS === 'web' && ({ cursor: isClickable ? 'pointer' : 'auto' } as any),
+          Platform.OS === 'web' && pressed && isClickable && { opacity: 0.75, transform: [{ scale: 0.98 }] },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={task.title}
       >
-        <Animated.View entering={FadeInDown.delay(index * 80).springify().damping(15).stiffness(120)}>
-          <Animated.View style={animatedStyle}>
+        <Animated.View entering={Platform.OS !== 'web' ? FadeInDown.delay(index * 80).springify().damping(15).stiffness(120) : undefined}>
+          <Animated.View style={Platform.OS !== 'web' ? animatedStyle : undefined}>
           <Card className="flex-row items-center gap-3">
             <View
               className="h-10 w-10 items-center justify-center rounded-xl"
@@ -107,12 +114,20 @@ function TaskCard({
         </Animated.View>
       </Pressable>
       {!task.done && task.skippable ? (
-        <Pressable onPress={onSkip} className="self-end py-1 pr-1" hitSlop={8}>
-          {({ pressed }) => (
-            <ThemedText type="small" color="mutedForeground" style={pressed ? { opacity: 0.5 } : undefined}>
-              Skip
-            </ThemedText>
-          )}
+        <Pressable
+          onPress={onSkip}
+          className="self-end py-1 pr-1"
+          hitSlop={8}
+          style={({ pressed }) => [
+            Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+            pressed && { opacity: 0.5 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`Skip ${task.title}`}
+        >
+          <ThemedText type="small" color="mutedForeground">
+            Skip
+          </ThemedText>
         </Pressable>
       ) : null}
     </View>
@@ -179,11 +194,22 @@ export default function OnboardingTasksScreen() {
       return;
     }
     const route = TASK_ROUTE[id];
-    if (route) router.push(route as never);
+    if (route) {
+      router.push(route as never);
+    }
   };
 
-  const handleClose = () => {
-    router.replace('/');
+  const handleClose = async () => {
+    try {
+      await checklist.setAsNevermind();
+    } catch (e) {
+      console.warn('[OnboardingTasks] setAsNevermind failed:', e);
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(app)');
+    }
   };
 
   const progress = checklist.total > 0 ? checklist.doneCount / checklist.total : 0;
@@ -191,7 +217,16 @@ export default function OnboardingTasksScreen() {
   return (
     <View className="flex-1" style={{ backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
       <View className="items-end px-5 pt-2">
-        <Pressable onPress={handleClose} hitSlop={8}>
+        <Pressable
+          onPress={() => void handleClose()}
+          hitSlop={12}
+          style={({ pressed }) => [
+            Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+            pressed && { opacity: 0.6 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Skip for now"
+        >
           <ThemedText type="linkPrimary">Skip for now</ThemedText>
         </Pressable>
       </View>

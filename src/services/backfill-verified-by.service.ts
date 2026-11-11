@@ -1,5 +1,5 @@
 import { getDb, type SQLiteDatabase } from '@/db/client';
-import { getCurrentUserId } from '@/db/context';
+import { getCurrentUserId, hasCurrentUser } from '@/db/context';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import type { VerifiedByEntry } from '@/db/schema';
 
@@ -11,6 +11,11 @@ const TAG = '[BackfillVerifiedBy]';
  * @param injectedDb - Pass the already-opened db when called from runMigrations() to avoid deadlock.
  */
 export async function backfillVerifiedBy(injectedDb?: SQLiteDatabase): Promise<void> {
+  if (!hasCurrentUser()) {
+    console.debug(TAG, 'Skipping backfill: no user logged in yet');
+    return;
+  }
+
   const db = injectedDb ?? await getDb();
   const userId = getCurrentUserId();
   

@@ -13,6 +13,7 @@ import {
 import { clearToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
 import { setCurrentUserId } from '@/db/context';
+import { getDb } from "@/db/client";
 import * as medicalInformationRepo from '@/db/repositories/medical-information.repo';
 import { queryClient, queryPersister } from '@/lib/query-client';
 import { medicalInformationQueryKey } from '@/lib/query-keys';
@@ -50,7 +51,6 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function backfillUserId(userId: string | number): Promise<void> {
-  const { getDb } = await import('@/db/client');
   const db = await getDb();
   await db.runAsync('UPDATE medical_information SET user_id = ? WHERE user_id = 0', userId);
   await db.runAsync('UPDATE allergies SET user_id = ? WHERE user_id = 0', userId);

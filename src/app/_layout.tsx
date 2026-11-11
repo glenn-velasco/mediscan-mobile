@@ -28,6 +28,8 @@ import { useStackScreenOptions } from '@/hooks/use-stack-screen-options';
 import { setAppReady } from '@/lib/app-ready';
 import { addQuickScanRouteListener, getPendingQuickScanRoute } from '@/lib/qr-scanner-tile-native';
 import { queryClient, queryPersister } from '@/lib/query-client';
+import { purgeExpired } from '@/db/repositories/recent-emergency-scans.repo';
+import { ensureDeviceKeyRegistered } from '@/services/device-key.service';
 import { BootProvider } from '@/onboarding/BootProvider';
 import { useOnboarding } from '@/onboarding/useOnboarding';
 import { usePermissionsPrimer } from '@/onboarding/usePermissionsPrimer';
@@ -103,12 +105,7 @@ function RootNavigator() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      // Lazy-import to avoid triggering Metro module bundling during initial render,
-      // which causes a module graph re-evaluation and double-init of BroadcastProvider.
-      // react-doctor-disable-next-line react-hooks-js/todo
-      import('@/services/device-key.service').then(({ ensureDeviceKeyRegistered }) => {
-        void ensureDeviceKeyRegistered();
-      });
+      void ensureDeviceKeyRegistered();
     }
   }, [status]);
 
@@ -191,7 +188,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
-    void import('@/db/repositories/recent-emergency-scans.repo').then(({ purgeExpired }) => purgeExpired());
+    void purgeExpired();
     return () => AvoidSoftInput.setEnabled(false);
   }, []);
 

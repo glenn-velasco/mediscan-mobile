@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { backfillVerifiedBy } from '@/services/backfill-verified-by.service';
 import * as migration001 from '@/db/migrations/001_init';
 import * as migration002 from '@/db/migrations/002_encrypt_medical_data';
 import * as migration003 from '@/db/migrations/003_emergency_contacts';
@@ -63,7 +64,6 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
   // because dbPromise is still pending on this very migration chain.
   if (ranMigration016) {
     try {
-      const { backfillVerifiedBy } = await import('@/services/backfill-verified-by.service');
       await backfillVerifiedBy(db);
     } catch (err) {
       console.warn('[Migrations] Backfill verified_by failed (will retry on next sync)', err);
