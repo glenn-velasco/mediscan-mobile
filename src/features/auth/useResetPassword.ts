@@ -6,8 +6,7 @@ export function useResetPassword() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: { token: string; email: string; password: string; password_confirmation: string }) =>
-      resetPassword(payload),
+    mutationFn: (payload: { password: string }) => resetPassword(payload),
     onSuccess: () => {
       queryClient.invalidateQueries();
     },

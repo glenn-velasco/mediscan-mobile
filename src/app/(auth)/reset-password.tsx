@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { AuthLayout } from '@/components/layouts/auth-layout';
-import { TextField } from '@/components/form/text-field';
 import { PasswordField } from '@/components/form/password-field';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
@@ -13,19 +12,13 @@ import { passwordWithConfirmation } from '@/lib/validation/password-schema';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string; email?: string }>();
   const { mutateAsync: resetPassword, isPending } = useResetPassword();
   const { message, setError, clearErrors } = useApiError();
-  const [email, setEmail] = useState(params.email ?? '');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const onSubmit = async () => {
-    if (!params.token) {
-      setError(new Error('Missing reset token. Please use the link from your email.'));
-      return;
-    }
     clearErrors();
     setValidationErrors({});
     const result = passwordWithConfirmation.safeParse({ password, passwordConfirmation });
@@ -39,12 +32,7 @@ export default function ResetPasswordScreen() {
       return;
     }
     try {
-      await resetPassword({
-        token: params.token,
-        email,
-        password,
-        password_confirmation: passwordConfirmation,
-      });
+      await resetPassword({ password });
       router.replace('/');
     } catch (err) {
       setError(err);
@@ -55,7 +43,6 @@ export default function ResetPasswordScreen() {
     <AuthLayout>
       <ThemedText type="authTitle" className="mb-8 text-center">Choose a new password</ThemedText>
 
-      <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
       <PasswordField label="New password" value={password} onChangeText={setPassword} error={validationErrors.password} />
       <PasswordField label="Confirm new password" value={passwordConfirmation} onChangeText={setPasswordConfirmation} error={validationErrors.passwordConfirmation} />
 

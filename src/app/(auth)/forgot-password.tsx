@@ -7,13 +7,11 @@ import { TextField } from '@/components/form/text-field';
 import { FormError } from '@/components/form/form-error';
 import { PrimaryButton } from '@/components/primary-button';
 import { useForgotPassword } from '@/features/auth/useForgotPassword';
-import { useTheme } from '@/hooks/use-theme';
 import { useApiError } from '@/api/use-api-error';
 import { emailSchema } from '@/lib/validation/email-schema';
 
 export default function ForgotPasswordScreen() {
   const { mutateAsync: forgotPassword, isPending } = useForgotPassword();
-  const theme = useTheme();
   const { message, setError, clearErrors } = useApiError();
   const [email, setEmail] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
