@@ -165,9 +165,13 @@
     @apply bg-background text-foreground;
   }
   @media (prefers-reduced-motion: no-preference) {
-    :focus-visible {
+    :focus-visible:not(input):not(textarea) {
       @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
     }
+  }
+  input, textarea {
+    outline: none !important;
+    box-shadow: none !important;
   }
   @media (prefers-reduced-motion: reduce) {
     * {

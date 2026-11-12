@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Pressable, View } from 'react-native';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetModal,
@@ -119,6 +119,7 @@ export function SelectField<T extends string>({
             borderColor: error ? theme.destructive : theme.input,
             opacity: disabled ? 0.6 : 1,
           },
+          Platform.OS === 'web' && ({ cursor: disabled ? 'not-allowed' : 'pointer' } as any),
         ]}
       >
         <Animated.View
@@ -142,7 +143,7 @@ export function SelectField<T extends string>({
         <AnimatedText
           numberOfLines={1}
           ellipsizeMode="tail"
-          style={[{ flex: 1, fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}
+          style={[{ flex: 1, fontSize: field.fontSize, lineHeight: field.lineHeight, color: theme.foreground }, valueTextStyle]}
         >
           {value ? getLabel(value) : ''}
         </AnimatedText>

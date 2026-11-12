@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from 'react-native-reanimated';
 
@@ -29,6 +29,7 @@ const inputStyles = StyleSheet.create({
     borderRadius: field.radius,
     paddingVertical: field.paddingV,
     fontFamily: field.fontFamily,
+    minHeight: 48,
   },
 });
 
@@ -83,6 +84,7 @@ export function TextField({
               paddingLeft: leftIcon ? field.leftOffset : field.paddingH,
               paddingRight: rightIcon ? field.rightOffset : field.paddingH,
             },
+            Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
           ]}
           {...rest}
         />

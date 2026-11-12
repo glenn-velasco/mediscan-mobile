@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Platform, Pressable, Switch, View } from 'react-native';
 
 import { getFieldErrors } from '@/api/errors';
 import { isPhoneNumberAvailable } from '@/api/endpoints/auth';
@@ -281,7 +281,6 @@ function Step2Content({
       </View>
 
       <Pressable
-        className="mb-2 flex-row items-start gap-3"
         onPress={() => {
           setAcceptedTerms((v) => !v);
           if (fieldErrors.terms) setFieldErrors((prev) => ({ ...prev, terms: '' }));
@@ -289,31 +288,60 @@ function Step2Content({
         disabled={isPending}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: acceptedTerms }}
-        style={isPending ? { opacity: 0.6 } : undefined}
+        style={({ pressed }) => [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderRadius: 12,
+            borderWidth: 1.5,
+            borderColor: fieldErrors.terms
+              ? theme.destructive
+              : acceptedTerms
+                ? theme.primary
+                : theme.input,
+            backgroundColor: fieldErrors.terms
+              ? theme.destructive + '0d'
+              : acceptedTerms
+                ? theme.primary + '0a'
+                : theme.card,
+            marginBottom: fieldErrors.terms ? 6 : 14,
+          },
+          Platform.OS === 'web' && ({ cursor: 'pointer' } as any),
+          pressed && { opacity: 0.8 },
+          isPending && { opacity: 0.6 },
+        ]}
       >
         <Ionicons
-          name={acceptedTerms ? 'checkmark-circle' : 'checkmark-circle-outline'}
-          size={22}
-          color={acceptedTerms ? theme.primary : theme.mutedForeground}
-          style={{ marginTop: 1 }}
+          name={acceptedTerms ? 'checkbox' : 'square-outline'}
+          size={24}
+          color={
+            fieldErrors.terms
+              ? theme.destructive
+              : acceptedTerms
+                ? theme.primary
+                : theme.mutedForeground
+          }
         />
-        <ThemedText type="body" color="mutedForeground" className="flex-1">
+        <ThemedText type="body" className="flex-1 font-medium">
           I have read and agree to the{' '}
           <ThemedText
             type="linkPrimary"
+            className="font-semibold underline"
             onPress={(e) => {
               if (isPending) return;
               e.stopPropagation?.();
               router.push('/terms');
             }}
-            style={isPending ? { opacity: 0.6 } : undefined}
           >
             Terms of Service
           </ThemedText>
         </ThemedText>
       </Pressable>
       {fieldErrors.terms ? (
-        <ThemedText type="small" color="destructive" className="mb-2 pl-8">
+        <ThemedText type="small" color="destructive" className="mb-3 pl-2">
           {fieldErrors.terms}
         </ThemedText>
       ) : null}

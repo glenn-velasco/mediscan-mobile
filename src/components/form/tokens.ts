@@ -16,12 +16,15 @@ export const formTokens = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,
+    minHeight: 48,
+    justifyContent: 'center',
   },
 
   /** Floating label container (absolute positioned) */
   labelContainer: {
     position: 'absolute',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
+    zIndex: 10,
   },
 
   /** Left icon container (absolute positioned) */

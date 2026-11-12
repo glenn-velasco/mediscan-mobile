@@ -93,7 +93,8 @@ export function DateField({
             backgroundColor: theme.card,
             borderColor: error ? theme.destructive : theme.input,
             opacity: disabled ? 0.6 : 1,
-          },
+            cursor: disabled ? 'not-allowed' : 'pointer',
+          } as any,
         ]}
       >
         <Animated.View
@@ -114,7 +115,7 @@ export function DateField({
             {label}
           </AnimatedText>
         </Animated.View>
-        <AnimatedText style={[{ fontSize: field.fontSize, color: theme.foreground }, valueTextStyle]}>
+        <AnimatedText style={[{ fontSize: field.fontSize, lineHeight: field.lineHeight, color: theme.foreground }, valueTextStyle]}>
           {value ? formatDisplay(value) : ''}
         </AnimatedText>
         {createElement('input', {

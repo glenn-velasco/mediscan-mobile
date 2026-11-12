@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getCountries, getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import {
@@ -155,6 +155,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: field.radius,
     borderWidth: 1,
+    minHeight: 48,
+    overflow: 'hidden',
     backgroundColor: 'transparent', // overridden by theme at runtime
   },
   countryButton: {
@@ -168,7 +170,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 24,
-    marginVertical: 'auto',
+    alignSelf: 'center',
   },
   phoneInput: {
     flex: 1,
@@ -178,6 +180,7 @@ const styles = StyleSheet.create({
     paddingVertical: field.paddingV,
     paddingRight: field.paddingH,
     paddingLeft: 8,
+    minHeight: 48,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -286,7 +289,11 @@ export function PhoneInput({ value, onChange, error }: PhoneInputProps) {
           keyboardType="phone-pad"
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          style={[styles.phoneInput, { color: theme.foreground }]}
+          style={[
+            styles.phoneInput,
+            { color: theme.foreground },
+            Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
+          ]}
         />
       </View>
       {error ? (
