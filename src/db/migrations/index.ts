@@ -1,6 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { backfillVerifiedBy } from '@/services/backfill-verified-by.service';
 import * as migration001 from '@/db/migrations/001_init';
 import * as migration002 from '@/db/migrations/002_encrypt_medical_data';
 import * as migration003 from '@/db/migrations/003_emergency_contacts';
@@ -36,8 +35,6 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
     );
   `);
 
-  let ranMigration016 = false;
-
   for (const migration of migrations) {
     const existing = await db.getFirstAsync<{ version: number }>(
       'SELECT version FROM schema_migrations WHERE version = ?',
@@ -53,20 +50,5 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
         new Date().toISOString(),
       );
     });
-
-    if (migration.version === 16) {
-      ranMigration016 = true;
-    }
-  }
-
-  // Backfill verified_by from existing attestations after migration 016.
-  // Pass the already-opened db directly — calling getDb() here would deadlock
-  // because dbPromise is still pending on this very migration chain.
-  if (ranMigration016) {
-    try {
-      await backfillVerifiedBy(db);
-    } catch (err) {
-      console.warn('[Migrations] Backfill verified_by failed (will retry on next sync)', err);
-    }
   }
 }

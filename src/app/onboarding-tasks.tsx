@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Pressable, View } from 'react-native';
 import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -156,14 +156,14 @@ export default function OnboardingTasksScreen() {
     if (isDataReady && checklist.complete && !dismissedRef.current) {
       console.log('[OnboardingTasks] auto-dismissing (all tasks complete)');
       dismissedRef.current = true;
-      router.dismissAll();
+      if (Platform.OS === 'web') { if (router.canGoBack()) router.back(); else router.replace('/'); } else { router.dismissAll(); }
     }
   }, [isDataReady, checklist.complete]);
 
   useFocusEffect(
-    () => {
+    useCallback(() => {
       void checklist.refreshSkipped();
-    }
+    }, [checklist.refreshSkipped])
   );
 
   if (!isDataReady) {
@@ -208,7 +208,7 @@ export default function OnboardingTasksScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(app)');
+      router.replace('/');
     }
   };
 

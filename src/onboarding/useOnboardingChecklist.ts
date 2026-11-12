@@ -51,12 +51,18 @@ export function useOnboardingChecklist({ userId, emailVerified, hasEmergencyCont
     const raw = await AsyncStorage.getItem(skippedKey(userId));
     if (raw) {
       try {
-        const next = new Set<OnboardingTaskId>(JSON.parse(raw) as OnboardingTaskId[]);
-        setSkipped(next);
+        const parsed = JSON.parse(raw) as OnboardingTaskId[];
+        const next = new Set<OnboardingTaskId>(parsed);
+        setSkipped((prev) => {
+          if (prev.size === next.size && [...prev].every((id) => next.has(id))) {
+            return prev;
+          }
+          return next;
+        });
         skippedRef.current = next;
       } catch {}
     } else {
-      setSkipped(new Set());
+      setSkipped((prev) => (prev.size === 0 ? prev : new Set()));
       skippedRef.current = new Set();
     }
   }, [userId]);
