@@ -1,4 +1,4 @@
-import { updateMedicalInformation } from '@/api/endpoints/medical-information';
+import { getMedicalInformationStorageState, updateMedicalInformation } from '@/api/endpoints/medical-information';
 import { sealPatientPayload } from '@/api/patient-cloud-crypto';
 import { requireAuthUserId, supabase } from '@/api/supabase';
 
@@ -33,4 +33,19 @@ it('preserves phone fields in the encrypted medical-information payload', async 
     expect.objectContaining({ user_id: 'user-1', encrypted_payload: 'sealed-payload' }),
     { onConflict: 'user_id' },
   );
+});
+
+it.each([
+  [null, 'missing'],
+  [{ encrypted_payload: 'gcm1:current' }, 'current'],
+  [{ encrypted_payload: 'legacy-iv:ciphertext' }, 'legacy'],
+] as const)('classifies cloud medical-information storage without exposing it as a new profile', async (data, expected) => {
+  const maybeSingle = jest.fn().mockResolvedValue({ data, error: null });
+  const eq = jest.fn(() => ({ maybeSingle }));
+  const select = jest.fn(() => ({ eq }));
+  (supabase.from as jest.Mock).mockReturnValue({ select });
+
+  await expect(getMedicalInformationStorageState()).resolves.toBe(expected);
+  expect(select).toHaveBeenCalledWith('encrypted_payload');
+  expect(eq).toHaveBeenCalledWith('user_id', 'user-1');
 });

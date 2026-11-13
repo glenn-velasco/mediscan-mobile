@@ -1,10 +1,12 @@
-import { forgotPassword } from '@/api/endpoints/account';
+import { forgotPassword, resetPassword } from '@/api/endpoints/account';
 import { supabase, throwSupabaseError } from '@/api/supabase';
 
 jest.mock('@/api/supabase', () => ({
   supabase: {
     auth: {
       resetPasswordForEmail: jest.fn(),
+      updateUser: jest.fn(),
+      signOut: jest.fn(),
     },
   },
   throwSupabaseError: jest.fn((error) => {
@@ -13,6 +15,8 @@ jest.mock('@/api/supabase', () => ({
 }));
 
 const mockResetPasswordForEmail = supabase.auth.resetPasswordForEmail as jest.Mock;
+const mockUpdateUser = supabase.auth.updateUser as jest.Mock;
+const mockSignOut = supabase.auth.signOut as jest.Mock;
 const mockThrowSupabaseError = throwSupabaseError as unknown as jest.Mock;
 
 describe('forgotPassword', () => {
@@ -44,5 +48,43 @@ describe('forgotPassword', () => {
     await jest.advanceTimersByTimeAsync(15_000);
 
     await result;
+  });
+});
+
+describe('resetPassword', () => {
+  beforeEach(() => {
+    mockUpdateUser.mockReset();
+    mockSignOut.mockReset();
+    mockThrowSupabaseError.mockClear();
+  });
+
+  it('updates the password and ends only the recovery session', async () => {
+    mockUpdateUser.mockResolvedValue({ error: null });
+    mockSignOut.mockResolvedValue({ error: null });
+
+    await expect(resetPassword({ password: 'New-password-123!' })).resolves.toBeNull();
+
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: 'New-password-123!' });
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('does not sign out when the password update fails', async () => {
+    const error = new Error('expired recovery session');
+    mockUpdateUser.mockResolvedValue({ error });
+
+    await expect(resetPassword({ password: 'New-password-123!' })).rejects.toThrow(error);
+
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(mockThrowSupabaseError).toHaveBeenCalledWith(error);
+  });
+
+  it('reports success when the recovery session was cleared locally but server revoke failed', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockUpdateUser.mockResolvedValue({ error: null });
+    mockSignOut.mockResolvedValue({ error: new Error('network unavailable') });
+
+    await expect(resetPassword({ password: 'New-password-123!' })).resolves.toBeNull();
+    expect(warn).toHaveBeenCalledWith('[Auth] Recovery session ended locally; server revoke was deferred');
+    warn.mockRestore();
   });
 });

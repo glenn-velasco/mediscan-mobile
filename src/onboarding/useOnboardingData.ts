@@ -18,7 +18,13 @@ export function useOnboardingData() {
   const { data: diagnoses } = useDiagnoses();
   const { data: medications } = useMedications();
   const { data: emergencyContacts } = useEmergencyContacts();
-  const { data: medicalInformation, isLoading: isMedicalInformationLoading } = useMedicalInformation();
+  const {
+    data: medicalInformation,
+    isLoading: isMedicalInformationLoading,
+    storageState: medicalInformationStorageState,
+    isStorageStateLoading: isMedicalInformationStorageStateLoading,
+    isStorageStateError: isMedicalInformationStorageStateError,
+  } = useMedicalInformation();
 
   const isDataReady =
     medicalInformation !== undefined &&
@@ -45,6 +51,9 @@ export function useOnboardingData() {
     emergencyContacts: emergencyContacts ?? [],
     medicalInformation,
     isMedicalInformationLoading,
+    medicalInformationStorageState,
+    isMedicalInformationStorageStateLoading,
+    isMedicalInformationStorageStateError,
     isDataReady,
     checklist,
   };

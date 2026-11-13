@@ -76,6 +76,72 @@ function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () =
   );
 }
 
+function ProfileUnavailableState({
+  user,
+  logout,
+  onRetry,
+  legacy,
+  topInset,
+}: {
+  user: any;
+  logout: () => void;
+  onRetry: () => Promise<void>;
+  legacy: boolean;
+  topInset: number;
+}) {
+  return (
+    <View className="flex-1" style={{ paddingTop: topInset }}>
+      <ThemedView className="flex-1 items-center justify-center gap-4 px-6">
+        <ThemedText type="authTitle" className="text-center">
+          Welcome, {user ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) : ''}
+        </ThemedText>
+        <EmptyState
+          title="Medical profile unavailable"
+          body={legacy
+            ? 'This profile uses older encryption. Open MediScan once on the device where you created the profile, then try again here.'
+            : 'Your medical profile exists, but it could not be loaded. Check your connection and try again.'}
+          icon="cloud-offline-outline"
+        />
+        <Pressable onPress={() => void onRetry()}>
+          <ThemedText type="linkPrimary">Try again</ThemedText>
+        </Pressable>
+        <Pressable onPress={() => logout()} className="mt-6">
+          <ThemedText type="small" color="mutedForeground">Log out</ThemedText>
+        </Pressable>
+      </ThemedView>
+    </View>
+  );
+}
+
+function NoMedicalProfileState({
+  user,
+  logout,
+  onRetry,
+  storageState,
+  storageStateError,
+  topInset,
+}: {
+  user: any;
+  logout: () => void;
+  onRetry: () => Promise<void>;
+  storageState: 'missing' | 'current' | 'legacy' | undefined;
+  storageStateError: boolean;
+  topInset: number;
+}) {
+  if (storageState !== 'missing' || storageStateError) {
+    return (
+      <ProfileUnavailableState
+        user={user}
+        logout={logout}
+        onRetry={onRetry}
+        legacy={storageState === 'legacy'}
+        topInset={topInset}
+      />
+    );
+  }
+  return <WelcomeEmptyState user={user} logout={logout} topInset={topInset} />;
+}
+
 function PersonalInfoSection({ profile, age }: { profile: Record<string, any>; age: number | null }) {
   const theme = useTheme();
 
@@ -617,6 +683,9 @@ export default function HomeScreen() {
     emergencyContacts,
     medicalInformation,
     isMedicalInformationLoading,
+    medicalInformationStorageState,
+    isMedicalInformationStorageStateLoading,
+    isMedicalInformationStorageStateError,
     isDataReady,
     checklist,
   } = useOnboardingData();
@@ -778,7 +847,7 @@ export default function HomeScreen() {
   }, [refreshUser]);
 
   // Show skeleton only on first load when no cached data exists
-  if (!profile && (isMedicalInformationLoading || isInitialLoading)) {
+  if (!profile && (isMedicalInformationLoading || isMedicalInformationStorageStateLoading || isInitialLoading)) {
     return (
       <View className="flex-1">
         <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
@@ -812,7 +881,16 @@ export default function HomeScreen() {
   }
 
   if (!profile) {
-    return <WelcomeEmptyState user={user} logout={logout} topInset={insets.top} />;
+    return (
+      <NoMedicalProfileState
+        user={user}
+        logout={logout}
+        onRetry={handleRefresh}
+        storageState={medicalInformationStorageState}
+        storageStateError={isMedicalInformationStorageStateError}
+        topInset={insets.top}
+      />
+    );
   }
 
   const firstName = profile.full_name?.split(/\s+/)[0] || user?.first_name || 'there';

@@ -55,5 +55,14 @@ export async function forgotPassword(email: string) {
 export async function resetPassword(payload: { password: string }) {
   const { error } = await supabase.auth.updateUser({ password: payload.password });
   if (error) throwSupabaseError(error);
+
+  // A recovery link creates a temporary authenticated session. End that session after the
+  // password is changed so it cannot fall through into the app without the normal login and
+  // patient-data hydration flow. Local scope is intentional: resetting a password here should
+  // not unexpectedly sign the user out of their other trusted devices.
+  const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+  // Supabase clears local storage and emits SIGNED_OUT before its best-effort server revoke.
+  // A revoke error must not misreport the already-completed password change as a failure.
+  if (signOutError) console.warn('[Auth] Recovery session ended locally; server revoke was deferred');
   return null;
 }

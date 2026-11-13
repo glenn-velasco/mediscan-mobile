@@ -7,6 +7,7 @@ import type { MedicalInformationSyncRecord } from '@/api/endpoints/sync';
 // linked_user_count, contacts, transfusion_consents, created_at) differs from the /sync endpoint's
 // MedicalInformationSyncRecord, so this is deliberately its own narrower type, not an extension of it.
 export type MedicalInformationApiRecord = { id: number; avatar: string | null };
+export type MedicalInformationStorageState = 'missing' | 'current' | 'legacy';
 
 /** Bridges the one remaining shape mismatch between the mobile payload and the server's request body: `date_of_birth` (mobile) <-> `dob` (server). `address` is already structured on both sides. */
 function toServerPayload(payload: MedicalInformationPayload) {
@@ -55,6 +56,19 @@ export async function getMedicalInformation() {
   const { data: signed, error: signedError } = await supabase.storage.from('avatars').createSignedUrl(avatarPath, 3600);
   if (signedError) throwSupabaseError(signedError);
   return { id: 1, avatar: signed.signedUrl };
+}
+
+/** Distinguishes a genuinely missing profile from a cloud record this device could not hydrate. */
+export async function getMedicalInformationStorageState(): Promise<MedicalInformationStorageState> {
+  const userId = await requireAuthUserId();
+  const { data, error } = await supabase
+    .from('medical_information')
+    .select('encrypted_payload')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throwSupabaseError(error);
+  if (!data) return 'missing';
+  return data.encrypted_payload.startsWith('gcm1:') ? 'current' : 'legacy';
 }
 
 export async function uploadMedicalInformationAvatar(_id: number, bytes: ArrayBuffer, contentType: string) {

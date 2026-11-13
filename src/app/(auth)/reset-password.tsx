@@ -17,6 +17,7 @@ export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [isComplete, setIsComplete] = useState(false);
 
   const onSubmit = async () => {
     clearErrors();
@@ -33,11 +34,26 @@ export default function ResetPasswordScreen() {
     }
     try {
       await resetPassword({ password });
-      router.replace('/');
+      setPassword('');
+      setPasswordConfirmation('');
+      setIsComplete(true);
     } catch (err) {
       setError(err);
     }
   };
+
+  if (isComplete) {
+    return (
+      <AuthLayout>
+        <ThemedText type="authTitle" className="mb-4 text-center">Password updated</ThemedText>
+        <ThemedText className="mb-8 text-center" color="mutedForeground">
+          Your password has been changed. Log in with your new password to continue.
+        </ThemedText>
+
+        <PrimaryButton label="Continue to log in" onPress={() => router.replace('/')} />
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout>
