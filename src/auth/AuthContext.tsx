@@ -10,7 +10,7 @@ import {
   loadPendingRegistration,
   savePendingRegistration,
 } from '@/auth/pending-registration-storage';
-import { clearToken, setToken } from '@/auth/token-storage';
+import { clearToken, loadToken, setToken } from '@/auth/token-storage';
 import { clearUser, loadUser, saveUser } from '@/auth/user-storage';
 import { setCurrentUserId } from '@/db/context';
 import { getDb } from "@/db/client";
@@ -138,8 +138,9 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     let cancelled = false;
     (async () => {
       const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token ?? null;
-      if (token) await setToken(token);
+      const sessionToken = sessionData.session?.access_token ?? null;
+      if (sessionToken) await setToken(sessionToken);
+      const token = sessionToken ?? (await loadToken());
       if (cancelled) return;
       if (!token) {
         console.log('[Auth] boot: no token → unauthenticated');

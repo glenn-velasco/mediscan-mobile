@@ -1,8 +1,21 @@
 {
   "installCommand": "npm install",
-  "buildCommand": "npx expo export --platform web",
+  "buildCommand": "npx expo export --platform web && node scripts/inject-sw-precache.js",
   "outputDirectory": "dist",
   "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
@@ -19,7 +32,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!_expo|assets|manifest\\.json|favicon\\.png|icon-.*\\.png|apple-touch-icon\\.png).*)",
+      "source": "/((?!_expo|assets|sw\\.js|manifest\\.json|favicon\\.png|favicon\\.ico|icon-.*\\.png|apple-touch-icon\\.png).*)",
       "destination": "/index.html"
     }
   ]

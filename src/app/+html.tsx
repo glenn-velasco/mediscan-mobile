@@ -1,6 +1,22 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
+const swRegistrationScript = `
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    if (window.location.hostname === 'localhost' && window.location.port === '8081') {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        registrations.forEach(function (reg) { reg.unregister(); });
+      });
+      return;
+    }
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function (err) {
+      console.warn('[SW] Registration failed:', err);
+    });
+  });
+}
+`;
+
 export default function Root({ children }: PropsWithChildren) {
   return (
     <html lang="en">
@@ -20,6 +36,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" type="image/png" href="/favicon.png" />
         <ScrollViewStyleReset />
+        <script dangerouslySetInnerHTML={{ __html: swRegistrationScript }} />
       </head>
       <body style={{ backgroundColor: '#0b0e11', margin: 0, padding: 0 }}>
         {children}
