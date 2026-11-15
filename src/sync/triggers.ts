@@ -17,6 +17,7 @@ import {
   retryPendingDynamicEmergencyCard,
 } from "@/services/dynamic-emergency-card.service";
 import { getCurrentUserId, hasCurrentUser } from "@/db/context";
+import { shouldTriggerPatientSync } from "@/sync/should-trigger-patient-sync";
 
 /**
  * Foreground and NetInfo reconnect can fire in quick succession
@@ -82,6 +83,10 @@ export function useSyncTriggers(): void {
       registerDeviceKey?: boolean;
     }) => {
       if (!mountedRef.current) return;
+      // Auth routes (including forgot/reset password) share the root layout. Never start local
+      // patient sync there: on web it unnecessarily opens Expo SQLite and can lock the OPFS
+      // database against the recovery/login tab.
+      if (!shouldTriggerPatientSync(status)) return;
       if (getIsOffline()) return;
       const now = Date.now();
       if (now - lastTriggerAtRef.current < MIN_TRIGGER_INTERVAL_MS) return;

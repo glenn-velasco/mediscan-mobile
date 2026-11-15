@@ -38,13 +38,17 @@ const localAvatarPromise = (async () => {
   }
 })();
 
-// Read server_id from local SQLite (instant, no network)
-const localDbPromise = medicalInformationRepo.getLocal()
-  .then((row) => {
-    console.log(TAG, 'local DB:', { server_id: row?.server_id });
-    return row;
-  })
-  .catch(() => null);
+// Read SQLite only when the authenticated app initializes the avatar store. AuthContext imports
+// this module on forgot/reset-password pages too, so a module-level read would lock Expo SQLite's
+// web OPFS database even though those pages do not need patient data.
+function loadLocalMedicalInformation() {
+  return medicalInformationRepo.getLocal()
+    .then((row) => {
+      console.log(TAG, 'local DB:', { server_id: row?.server_id });
+      return row;
+    })
+    .catch(() => null);
+}
 
 async function ensureDir() {
   const info = await getInfoAsync(AVATAR_DIR);
@@ -113,7 +117,7 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
       cachedDataPromise,
       pendingUploadPromise,
       localAvatarPromise,
-      localDbPromise,
+      loadLocalMedicalInformation(),
     ]);
 
     // 2. Set medicalInformationId from local DB (primary) or cache (fallback)

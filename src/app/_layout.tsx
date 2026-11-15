@@ -106,6 +106,7 @@ function RootNavigator() {
   useEffect(() => {
     if (status === 'authenticated') {
       void ensureDeviceKeyRegistered();
+      void purgeExpired();
     }
   }, [status]);
 
@@ -142,7 +143,7 @@ function RootNavigator() {
 
   return (
     <>
-      {showDeferred && <DeferredWork />}
+      {showDeferred && authenticated && <DeferredWork />}
       <Stack screenOptions={{ ...screenOptions, headerShown: false }}>
         <Stack.Protected guard={ready && seen !== true}>
           <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
@@ -188,7 +189,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     AvoidSoftInput.setEnabled(true);
-    void purgeExpired();
     return () => AvoidSoftInput.setEnabled(false);
   }, []);
 

@@ -1,0 +1,134 @@
+diff --git a/node_modules/expo-sqlite/web/SQLiteModule.ts b/node_modules/expo-sqlite/web/SQLiteModule.ts
+index a25679d..ed4fa8b 100644
+--- a/node_modules/expo-sqlite/web/SQLiteModule.ts
++++ b/node_modules/expo-sqlite/web/SQLiteModule.ts
+@@ -33,6 +33,22 @@ function getWorker(): Worker {
+   return worker;
+ }
+ 
++async function releaseWorkerAsync(): Promise<void> {
++  if (!worker) return;
++  const workerToRelease = worker;
++  try {
++    await invokeWorkerAsync(workerToRelease, 'release', {});
++  } finally {
++    workerToRelease.terminate();
++    if (worker === workerToRelease) worker = null;
++  }
++}
++
++Object.defineProperty(globalThis, '__EXPO_SQLITE_RELEASE_WEB_WORKER__', {
++  configurable: true,
++  value: releaseWorkerAsync,
++});
++
+ // web worker works on Uint8Array, but session methods accept ArrayBuffer too
+ function convertChangesetInput(changeset: Changeset | NativeChangeset): Changeset {
+   return ArrayBuffer.isView(changeset) ? changeset : new Uint8Array(changeset);
+diff --git a/node_modules/expo-sqlite/web/web.types.ts b/node_modules/expo-sqlite/web/web.types.ts
+index b85e01b..8f8ec3c 100644
+--- a/node_modules/expo-sqlite/web/web.types.ts
++++ b/node_modules/expo-sqlite/web/web.types.ts
+@@ -38,6 +38,7 @@ export interface MessageTypeMap {
+   isInTransaction: IsInTransactionMessage;
+   open: OpenMessage;
+   prepare: PrepareMessage;
++  release: ReleaseMessage;
+   reset: ResetMessage;
+   run: RunMessage;
+   serialize: SerializeMessage;
+@@ -73,6 +74,11 @@ type CloseMessage = BaseWorkerMessage & {
+   };
+ };
+ 
++type ReleaseMessage = BaseWorkerMessage & {
++  type: 'release';
++  data: Record<string, never>;
++};
++
+ type DeleteDatabaseMessage = BaseWorkerMessage & {
+   type: 'deleteDatabase';
+   data: {
+@@ -267,6 +273,7 @@ export interface ResultTypeMap {
+   exec: void;
+   importAssetDatabase: void;
+   prepare: void;
++  release: void;
+   run: RunResult;
+   step: SQLiteColumnValues | null;
+   getAll: SQLiteColumnValues[];
+diff --git a/node_modules/expo-sqlite/web/worker.ts b/node_modules/expo-sqlite/web/worker.ts
+index deaf721..71e9df0 100644
+--- a/node_modules/expo-sqlite/web/worker.ts
++++ b/node_modules/expo-sqlite/web/worker.ts
+@@ -156,6 +156,10 @@ async function handleMessageImpl<T extends SQLiteWorkerMessageType>({
+       result = await prepare(data.nativeDatabaseId, data.nativeStatementId, data.source);
+       break;
+     }
++    case 'release': {
++      await releaseStorage();
++      break;
++    }
+ 
+     case 'reset': {
+       await reset(data.nativeDatabaseId, data.nativeStatementId);
+@@ -781,8 +785,8 @@ async function maybeInitAsync(): Promise<{
+     const module = await WaSQLiteFactory({
+       locateFile: () => wasmModule,
+     });
+-    _sqlite3 = SQLite.Factory(module) as SQLiteAPI;
+-    if (!_sqlite3) {
++    const sqlite3 = SQLite.Factory(module) as SQLiteAPI;
++    if (!sqlite3) {
+       throw new Error('Failed to initialize wa-sqlite');
+     }
+ 
+@@ -792,7 +796,7 @@ async function maybeInitAsync(): Promise<{
+         throw new Error('Failed to initialize AccessHandlePoolVFS');
+       }
+     }
+-    _sqlite3.vfs_register(_vfs, true);
++    sqlite3.vfs_register(_vfs, true);
+ 
+     if (_vfsMemory == null) {
+       _vfsMemory = await MemoryVFS.create(VFS_NAME_MEMORY, module);
+@@ -800,7 +804,13 @@ async function maybeInitAsync(): Promise<{
+         throw new Error('Failed to initialize MemoryVFS');
+       }
+     }
+-    _sqlite3.vfs_register(_vfsMemory, false);
++    sqlite3.vfs_register(_vfsMemory, false);
++
++    // Only publish the SQLite instance after both VFS implementations are ready. If the
++    // persistent OPFS access handle is temporarily owned by another tab, initialization throws;
++    // leaving `_sqlite3` unset allows the next open request to retry instead of permanently
++    // failing with "Invalid VFS state" inside this worker.
++    _sqlite3 = sqlite3;
+   }
+   if (_vfs == null || _vfsMemory == null) {
+     throw new Error('Invalid VFS state');
+@@ -808,4 +818,24 @@ async function maybeInitAsync(): Promise<{
+   return { sqlite3: _sqlite3, vfs: _vfs, vfsMemory: _vfsMemory };
+ }
+ 
++async function releaseStorage(): Promise<void> {
++  if (_sqlite3) {
++    for (const entity of databaseIdMap.values()) {
++      try {
++        await _sqlite3.close(entity.pointer);
++      } catch {
++        // Continue releasing the VFS even if a stale database pointer cannot be closed.
++      }
++    }
++  }
++  databaseIdMap.clear();
++  statementIdMap.clear();
++  sessionIdMap.clear();
++  await _vfs?.close();
++  _vfsMemory?.close();
++  _sqlite3 = null;
++  _vfs = null;
++  _vfsMemory = null;
++}
++
+ //#endregion Internal helpers
