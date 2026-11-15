@@ -78,31 +78,40 @@ export async function getRecent(limit = 5, userId: string | number = getCurrentU
   return (await Promise.all(rows.map(decode))).filter((row): row is EmergencyFieldChange => row !== null);
 }
 
-export async function getPending(limit = 50): Promise<EmergencyFieldChange[]> {
+export async function getPending(
+  limit = 50,
+  userId: string | number = getCurrentUserId(),
+): Promise<EmergencyFieldChange[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<StoredChange>(
     `SELECT * FROM emergency_field_history WHERE user_id = ? AND sync_status = 'pending'
      ORDER BY changed_at_local, id LIMIT ?`,
-    String(getCurrentUserId()), limit,
+    String(userId), limit,
   );
   return (await Promise.all(rows.map(decode))).filter((row): row is EmergencyFieldChange => row !== null);
 }
 
-export async function markSynced(recorded: { id: string; server_recorded_at: string }[]): Promise<void> {
+export async function markSynced(
+  recorded: { id: string; server_recorded_at: string }[],
+  userId: string | number = getCurrentUserId(),
+): Promise<void> {
   if (!recorded.length) return;
   const db = await getDb();
   for (const item of recorded) {
     await db.runAsync(
       `UPDATE emergency_field_history SET sync_status = 'synced', server_recorded_at = ?
        WHERE id = ? AND user_id = ?`,
-      item.server_recorded_at, item.id, String(getCurrentUserId()),
+      item.server_recorded_at, item.id, String(userId),
     );
   }
 }
 
-export async function cacheServerChanges(changes: EmergencyFieldChange[]): Promise<number> {
+export async function cacheServerChanges(
+  changes: EmergencyFieldChange[],
+  userId: string | number = getCurrentUserId(),
+): Promise<number> {
   const db = await getDb();
-  const userId = String(getCurrentUserId());
+  const resolvedUserId = String(userId);
   let inserted = 0;
   for (const change of changes) {
     if (!EMERGENCY_HISTORY_FIELDS.includes(change.field)) continue;
@@ -111,7 +120,7 @@ export async function cacheServerChanges(changes: EmergencyFieldChange[]): Promi
       `INSERT OR IGNORE INTO emergency_field_history
        (id, user_id, field_key, encrypted_value, changed_at_local, server_recorded_at, sync_status)
        VALUES (?, ?, ?, ?, ?, ?, 'synced')`,
-      change.id, userId, change.field, encrypted, change.changedAt, change.serverRecordedAt,
+      change.id, resolvedUserId, change.field, encrypted, change.changedAt, change.serverRecordedAt,
     );
     inserted += result.changes;
   }

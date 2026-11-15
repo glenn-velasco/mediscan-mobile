@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
-import { getCurrentUserId } from '@/db/context';
+import { getCurrentUserId, type LocalUserId } from '@/db/context';
 import { encryptField, decryptField } from '@/lib/crypto';
 import type { EmergencyContactRawRow, EmergencyContactRow } from '@/db/schema';
 import type { EmergencyContactPayload } from '@/api/types';
@@ -34,9 +34,10 @@ export async function getAll(): Promise<EmergencyContactRow[]> {
 }
 
 /** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
-export async function getAllForPush(): Promise<EmergencyContactRow[]> {
+export async function getAllForPush(
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<EmergencyContactRow[]> {
   const db = await getDb();
-  const userId = getCurrentUserId();
   const rows = await db.getAllAsync<EmergencyContactRawRow>(
     "SELECT * FROM emergency_contacts WHERE user_id = ? AND (server_id IS NULL OR sync_status = 'pending') ORDER BY updated_at_local DESC",
     userId,
@@ -90,20 +91,29 @@ export async function updateLocal(localUuid: string, payload: Partial<EmergencyC
   );
 }
 
-export async function markSyncedCreate(localUuid: string, serverId: number, expectedUpdatedAt?: string): Promise<void> {
+export async function markSyncedCreate(
+  localUuid: string,
+  serverId: number,
+  expectedUpdatedAt?: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE emergency_contacts SET server_id = ?,
        sync_status = CASE WHEN ? IS NULL OR updated_at_local = ? THEN 'synced' ELSE sync_status END
-     WHERE local_uuid = ?`,
-    serverId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null, localUuid,
+     WHERE local_uuid = ? AND user_id = ?`,
+    serverId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null, localUuid, userId,
   );
 }
-export async function markSynced(localUuid: string, expectedUpdatedAt?: string): Promise<void> {
+export async function markSynced(
+  localUuid: string,
+  expectedUpdatedAt?: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE emergency_contacts SET sync_status = 'synced' WHERE local_uuid = ? AND (? IS NULL OR updated_at_local = ?)`,
-    localUuid, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null,
+    `UPDATE emergency_contacts SET sync_status = 'synced' WHERE local_uuid = ? AND user_id = ? AND (? IS NULL OR updated_at_local = ?)`,
+    localUuid, userId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null,
   );
 }
 
@@ -129,9 +139,16 @@ export async function deleteLocal(localUuid: string): Promise<{ requiresNetworkD
   return { requiresNetworkDelete: true };
 }
 
-export async function hardDelete(localUuid: string): Promise<void> {
+export async function hardDelete(
+  localUuid: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM emergency_contacts WHERE local_uuid = ?', localUuid);
+  await db.runAsync(
+    'DELETE FROM emergency_contacts WHERE local_uuid = ? AND user_id = ?',
+    localUuid,
+    userId,
+  );
 }
 
 async function discardConflict(localUuid: string): Promise<void> {
@@ -161,9 +178,8 @@ export async function upsertFromServer(record: {
   // itself treats as optional/defaultable - a pulled record that omits it just isn't primary.
   is_primary?: boolean;
   updated_at: string;
-}): Promise<void> {
+}, userId: LocalUserId = getCurrentUserId()): Promise<void> {
   const db = await getDb();
-  const userId = getCurrentUserId();
 
   await db.runAsync(
     `INSERT INTO emergency_contacts (local_uuid, user_id, server_id, name, relationship, phone_country_code, phone, is_primary, sync_status, deleted_locally, updated_at_local)

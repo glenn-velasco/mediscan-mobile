@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import { getDb } from '@/db/client';
-import { getCurrentUserId } from '@/db/context';
+import { getCurrentUserId, type LocalUserId } from '@/db/context';
 import { encryptField, decryptField } from '@/lib/crypto';
 import * as professionalAttestationRepo from '@/db/repositories/professional-attestation.repo';
 import type { MedicationRawRow, MedicationRow, VerifiedByEntry } from '@/db/schema';
@@ -48,9 +48,10 @@ export async function getAll(): Promise<MedicationRow[]> {
 }
 
 /** Like `getAll()` but includes rows pending a delete-push - the cloud sync push loop needs to see those too, unlike normal UI listings. */
-export async function getAllForPush(): Promise<MedicationRow[]> {
+export async function getAllForPush(
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<MedicationRow[]> {
   const db = await getDb();
-  const userId = getCurrentUserId();
   const rows = await db.getAllAsync<MedicationRawRow>(
     "SELECT * FROM medications WHERE user_id = ? AND (server_id IS NULL OR sync_status = 'pending') ORDER BY updated_at_local DESC",
     userId,
@@ -114,21 +115,30 @@ export async function updateLocal(localUuid: string, payload: Partial<Medication
   );
 }
 
-export async function markSyncedCreate(localUuid: string, serverId: number, expectedUpdatedAt?: string): Promise<void> {
+export async function markSyncedCreate(
+  localUuid: string,
+  serverId: number,
+  expectedUpdatedAt?: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE medications SET server_id = ?,
        sync_status = CASE WHEN ? IS NULL OR updated_at_local = ? THEN 'synced' ELSE sync_status END
-     WHERE local_uuid = ?`,
-    serverId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null, localUuid,
+     WHERE local_uuid = ? AND user_id = ?`,
+    serverId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null, localUuid, userId,
   );
 }
 
-export async function markSynced(localUuid: string, expectedUpdatedAt?: string): Promise<void> {
+export async function markSynced(
+  localUuid: string,
+  expectedUpdatedAt?: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE medications SET sync_status = 'synced' WHERE local_uuid = ? AND (? IS NULL OR updated_at_local = ?)`,
-    localUuid, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null,
+    `UPDATE medications SET sync_status = 'synced' WHERE local_uuid = ? AND user_id = ? AND (? IS NULL OR updated_at_local = ?)`,
+    localUuid, userId, expectedUpdatedAt ?? null, expectedUpdatedAt ?? null,
   );
 }
 
@@ -155,9 +165,16 @@ export async function deleteLocal(localUuid: string): Promise<{ requiresNetworkD
   return { requiresNetworkDelete: true };
 }
 
-export async function hardDelete(localUuid: string): Promise<void> {
+export async function hardDelete(
+  localUuid: string,
+  userId: LocalUserId = getCurrentUserId(),
+): Promise<void> {
   const db = await getDb();
-  await db.runAsync('DELETE FROM medications WHERE local_uuid = ?', localUuid);
+  await db.runAsync(
+    'DELETE FROM medications WHERE local_uuid = ? AND user_id = ?',
+    localUuid,
+    userId,
+  );
 }
 
 /** Discards a conflicted local change: hard-deletes an unsynced optimistic create, or reverts a synced record back to 'synced' so the next server reconciliation overwrites it with authoritative data. */
@@ -186,9 +203,8 @@ export async function upsertFromServer(record: {
   notes?: string;
   verified_by?: string | null;
   updated_at: string;
-}): Promise<void> {
+}, userId: LocalUserId = getCurrentUserId()): Promise<void> {
   const db = await getDb();
-  const userId = getCurrentUserId();
 
   await db.runAsync(
     `INSERT INTO medications (local_uuid, user_id, server_id, name, dosage, frequency, notes, verified_by, sync_status, deleted_locally, updated_at_local)

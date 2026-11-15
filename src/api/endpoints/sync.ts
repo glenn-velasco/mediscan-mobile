@@ -30,6 +30,7 @@ export type SyncResponse = {
   server_time: string;
   medical_information: MedicalInformationSyncRecord | null;
   medical_information_state: 'missing' | 'current' | 'legacy-recovered' | 'legacy-unavailable';
+  unreadable_peer_records: number;
   allergies: AllergyApiRecord[];
   conditions: ConditionApiRecord[];
   diagnoses: DiagnosisApiRecord[];
@@ -37,13 +38,19 @@ export type SyncResponse = {
   emergency_contacts: EmergencyContactApiRecord[];
 };
 
-type LegacyMedicalInformationPayload = Omit<MedicalInformationSyncRecord, 'id' | 'updated_at' | 'national_id'>;
+type MedicalInformationPayload = Omit<MedicalInformationSyncRecord, 'id' | 'updated_at' | 'national_id'>;
+type EncryptedSyncRow = {
+  id: string;
+  encrypted_payload: string;
+  deleted_at: string | null;
+  updated_at: string;
+};
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
 }
 
-function isLegacyMedicalInformationPayload(value: unknown): value is LegacyMedicalInformationPayload {
+function isMedicalInformationPayload(value: unknown): value is MedicalInformationPayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return typeof record.first_name === 'string'
@@ -58,6 +65,54 @@ function isLegacyMedicalInformationPayload(value: unknown): value is LegacyMedic
     && isNullableString(record.religion)
     && (record.address === null || (typeof record.address === 'object' && !Array.isArray(record.address)))
     && typeof record.no_blood_transfusion === 'boolean';
+}
+
+/**
+ * Decrypts peer records without allowing one damaged ciphertext to reject the entire sync.
+ * Healthy batches stay fast; a failed batch is bisected until only the unreadable rows are skipped.
+ */
+type PeerPayloadOpenResult = {
+  valuesByCiphertext: Map<string, unknown>;
+  unreadableCount: number;
+};
+
+function isIsolatablePeerDecryptError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { message?: unknown; status?: unknown };
+  if (candidate.status !== 400 || typeof candidate.message !== 'string') return false;
+
+  // The shared Edge Function reports malformed or unauthentic ciphertext as HTTP 400. Keep this
+  // allowlist narrow: configuration errors and unexpected server failures must abort the pull.
+  return /unsupported patient record encryption version|invalid patient record(?:\s*\(http 400\))?$|operation-specific reason|decrypt|ciphertext|base64|\batob\b|invalid character|json|unexpected (?:token|end)|expected property name/i
+    .test(candidate.message);
+}
+
+async function openPeerPayloads(ciphertexts: string[]): Promise<PeerPayloadOpenResult> {
+  const valuesByCiphertext = new Map<string, unknown>();
+  let unreadableCount = 0;
+
+  const openRange = async (range: string[]): Promise<void> => {
+    if (!range.length) return;
+    try {
+      const values = await openPatientPayloads<unknown>(range);
+      range.forEach((ciphertext, index) => valuesByCiphertext.set(ciphertext, values[index]));
+    } catch (error) {
+      if (!isIsolatablePeerDecryptError(error)) throw error;
+      if (range.length === 1) {
+        unreadableCount += 1;
+        console.warn('[PatientSync] Skipped one unreadable encrypted peer record');
+        return;
+      }
+      const middle = Math.ceil(range.length / 2);
+      await openRange(range.slice(0, middle));
+      await openRange(range.slice(middle));
+    }
+  };
+
+  for (let index = 0; index < ciphertexts.length; index += 100) {
+    await openRange(ciphertexts.slice(index, index + 100));
+  }
+  return { valuesByCiphertext, unreadableCount };
 }
 
 /** GET /sync?since= — see the backend repo's docs/SYNC.md. Omit `since` to pull everything. */
@@ -81,15 +136,30 @@ async function pullSupabaseSync(since?: string): Promise<SyncResponse> {
     emergency_contacts: unknown[];
   };
   const medical = result.medical_information;
+  let currentMedicalInformation: MedicalInformationSyncRecord | null = null;
   let legacyMedicalInformation: MedicalInformationSyncRecord | null = null;
   let medicalInformationState: SyncResponse['medical_information_state'] = medical ? 'legacy-unavailable' : 'missing';
 
   if (medical?.encrypted_payload.startsWith('gcm1:')) {
+    // The medical profile is the recovery-critical record. Open it independently so a damaged
+    // allergy/condition/etc. can never prevent the profile itself from hydrating after login.
+    const [currentPayload] = await openPatientPayloads<unknown>([medical.encrypted_payload]);
+    if (!isMedicalInformationPayload(currentPayload)) {
+      throw new Error('Invalid medical profile payload');
+    }
+    currentMedicalInformation = {
+      ...currentPayload,
+      phone_country_code: currentPayload.phone_country_code ?? null,
+      phone: currentPayload.phone ?? null,
+      id: 1,
+      national_id: null,
+      updated_at: medical.updated_at,
+    };
     medicalInformationState = 'current';
   } else if (medical) {
     try {
       const legacyPayload = await decryptJson<unknown>(medical.encrypted_payload);
-      if (isLegacyMedicalInformationPayload(legacyPayload)) {
+      if (isMedicalInformationPayload(legacyPayload)) {
         const normalized = {
           ...legacyPayload,
           phone_country_code: legacyPayload.phone_country_code ?? null,
@@ -115,22 +185,18 @@ async function pullSupabaseSync(since?: string): Promise<SyncResponse> {
   }
   const sections = ['allergies', 'conditions', 'diagnoses', 'medications', 'emergency_contacts'] as const;
   const flattened = sections.flatMap((section) => result[section]);
-  const encryptedRows = flattened as { id: string; encrypted_payload: string; deleted_at: string | null; updated_at: string }[];
+  const encryptedRows = flattened as EncryptedSyncRow[];
   // Pre-change development rows were sealed with a device-only key. They cannot be
-  // recovered on another device; ignore them instead of blocking every newer row.
-  const ciphertexts = [medical?.encrypted_payload, ...encryptedRows.map((row) => row.encrypted_payload)]
-    .filter((value): value is string => typeof value === 'string' && value.startsWith('gcm1:'));
-  const decoded: unknown[] = [];
-  for (let index = 0; index < ciphertexts.length; index += 100) {
-    decoded.push(...await openPatientPayloads<unknown>(ciphertexts.slice(index, index + 100)));
-  }
-  const valuesByCiphertext = new Map(ciphertexts.map((ciphertext, index) => [ciphertext, decoded[index]]));
-  const payload = medical?.encrypted_payload.startsWith('gcm1:')
-    ? valuesByCiphertext.get(medical.encrypted_payload) as Omit<MedicalInformationSyncRecord, 'id' | 'updated_at'>
-    : null;
+  // recovered on another device; ignore them instead of blocking every newer row. Tombstones do
+  // not need plaintext and must never be allowed to poison hydration with stale ciphertext.
+  const ciphertexts = encryptedRows
+    .filter((row) => !row.deleted_at && row.encrypted_payload.startsWith('gcm1:'))
+    .map((row) => row.encrypted_payload);
+  const { valuesByCiphertext, unreadableCount } = await openPeerPayloads(ciphertexts);
   const take = <T extends object>(section: typeof sections[number]): T[] => {
-    const rows = result[section] as { id: string; encrypted_payload: string; deleted_at: string | null; updated_at: string }[];
-    return rows.filter((row) => row.deleted_at || row.encrypted_payload.startsWith('gcm1:'))
+    const rows = result[section] as EncryptedSyncRow[];
+    return rows.filter((row) => row.deleted_at
+      || (row.encrypted_payload.startsWith('gcm1:') && valuesByCiphertext.has(row.encrypted_payload)))
       .map((row) => ({
         ...(valuesByCiphertext.get(row.encrypted_payload) as T | undefined),
         id: row.id, deleted_at: row.deleted_at, updated_at: row.updated_at,
@@ -138,10 +204,9 @@ async function pullSupabaseSync(since?: string): Promise<SyncResponse> {
   };
   return {
     server_time: result.server_time,
-    medical_information: payload
-      ? { ...payload, id: 1, updated_at: medical!.updated_at }
-      : legacyMedicalInformation,
+    medical_information: currentMedicalInformation ?? legacyMedicalInformation,
     medical_information_state: medicalInformationState,
+    unreadable_peer_records: unreadableCount,
     allergies: take<AllergyApiRecord>('allergies'),
     conditions: take<ConditionApiRecord>('conditions'),
     diagnoses: take<DiagnosisApiRecord>('diagnoses'),

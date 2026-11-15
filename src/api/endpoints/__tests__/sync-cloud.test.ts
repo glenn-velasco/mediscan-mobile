@@ -18,6 +18,11 @@ const rpc = supabase.rpc as jest.Mock;
 const open = openPatientPayloads as jest.Mock;
 const migrateLegacy = migrateLegacyMedicalInformation as jest.Mock;
 const decryptLegacy = decryptJson as jest.Mock;
+const currentMedicalPayload = {
+  first_name: 'Alice', middle_name: null, last_name: 'Patient', suffix: null,
+  dob: '1990-01-01', gender: 'female', phone_country_code: 'PH', phone: '9123456789',
+  blood_type: 'o_positive', religion: 'catholic', address: null, no_blood_transfusion: false,
+};
 
 beforeEach(() => {
   rpc.mockReset();
@@ -26,24 +31,74 @@ beforeEach(() => {
   decryptLegacy.mockReset();
 });
 
-it('decrypts all current rows in one batch and ignores unreadable development rows', async () => {
+it('hydrates a valid medical profile even when a peer row is unreadable', async () => {
   rpc.mockResolvedValue({ error: null, data: {
     server_time: '2026-09-14T00:00:00Z',
     medical_information: { encrypted_payload: 'gcm1:medical', updated_at: '2026-09-14T00:00:00Z' },
     allergies: [
       { id: 'a', encrypted_payload: 'gcm1:allergy', deleted_at: null, updated_at: '2026-09-14T00:00:00Z' },
+      { id: 'broken', encrypted_payload: 'gcm1:broken', deleted_at: null, updated_at: '2026-09-14T00:00:00Z' },
       { id: 'legacy', encrypted_payload: 'iv:old', deleted_at: null, updated_at: '2026-09-14T00:00:00Z' },
+    ],
+    conditions: [
+      { id: 'deleted', encrypted_payload: 'gcm1:deleted', deleted_at: '2026-09-14T00:00:00Z', updated_at: '2026-09-14T00:00:00Z' },
+    ],
+    diagnoses: [], medications: [], emergency_contacts: [],
+  } });
+  open.mockImplementation(async (ciphertexts: string[]) => {
+    if (ciphertexts.length === 1 && ciphertexts[0] === 'gcm1:medical') return [currentMedicalPayload];
+    if (ciphertexts.length === 1 && ciphertexts[0] === 'gcm1:allergy') return [{ allergen: 'Peanut' }];
+    throw Object.assign(new Error('Invalid patient record (HTTP 400)'), { status: 400 });
+  });
+
+  const result = await pullSync();
+  expect(open).toHaveBeenNthCalledWith(1, ['gcm1:medical']);
+  expect(open).toHaveBeenCalledWith(['gcm1:allergy', 'gcm1:broken']);
+  expect(open).not.toHaveBeenCalledWith(expect.arrayContaining(['gcm1:deleted']));
+  expect(result.medical_information).toMatchObject({ first_name: 'Alice' });
+  expect(result.medical_information_state).toBe('current');
+  expect(result.unreadable_peer_records).toBe(1);
+  expect(result.allergies).toEqual([expect.objectContaining({ id: 'a', allergen: 'Peanut' })]);
+  expect(result.conditions).toEqual([expect.objectContaining({ id: 'deleted', deleted_at: '2026-09-14T00:00:00Z' })]);
+});
+
+it.each([
+  ['network failure', new Error('Network request failed')],
+  ['authentication failure', Object.assign(new Error('Invalid session (HTTP 401)'), { status: 401 })],
+  ['service failure', Object.assign(new Error('Service unavailable (HTTP 503)'), { status: 503 })],
+  ['global crypto failure', Object.assign(new Error('Emergency history encryption is not configured (HTTP 400)'), { status: 400 })],
+])('propagates a %s instead of classifying every peer as unreadable', async (_label, failure) => {
+  rpc.mockResolvedValue({ error: null, data: {
+    server_time: '2026-09-14T00:00:00Z',
+    medical_information: { encrypted_payload: 'gcm1:medical', updated_at: '2026-09-14T00:00:00Z' },
+    allergies: [
+      { id: 'a', encrypted_payload: 'gcm1:allergy', deleted_at: null, updated_at: '2026-09-14T00:00:00Z' },
     ],
     conditions: [], diagnoses: [], medications: [], emergency_contacts: [],
   } });
-  open.mockResolvedValue([{ first_name: 'Alice' }, { allergen: 'Peanut' }]);
+  open.mockImplementation(async (ciphertexts: string[]) => {
+    if (ciphertexts[0] === 'gcm1:medical') return [currentMedicalPayload];
+    throw failure;
+  });
 
-  const result = await pullSync();
+  await expect(pullSync()).rejects.toBe(failure);
+  expect(open).toHaveBeenCalledTimes(2);
+});
+
+it('rejects when the medical profile itself cannot be decrypted', async () => {
+  rpc.mockResolvedValue({ error: null, data: {
+    server_time: '2026-09-14T00:00:00Z',
+    medical_information: { encrypted_payload: 'gcm1:medical', updated_at: '2026-09-14T00:00:00Z' },
+    allergies: [
+      { id: 'a', encrypted_payload: 'gcm1:allergy', deleted_at: null, updated_at: '2026-09-14T00:00:00Z' },
+    ],
+    conditions: [], diagnoses: [], medications: [], emergency_contacts: [],
+  } });
+  open.mockRejectedValue(new Error('medical ciphertext is unreadable'));
+
+  await expect(pullSync()).rejects.toThrow('medical ciphertext is unreadable');
   expect(open).toHaveBeenCalledTimes(1);
-  expect(open).toHaveBeenCalledWith(['gcm1:medical', 'gcm1:allergy']);
-  expect(result.medical_information).toMatchObject({ first_name: 'Alice' });
-  expect(result.medical_information_state).toBe('current');
-  expect(result.allergies).toEqual([expect.objectContaining({ id: 'a', allergen: 'Peanut' })]);
+  expect(open).toHaveBeenCalledWith(['gcm1:medical']);
 });
 
 it('recovers and upgrades a legacy medical profile when this device has the original key', async () => {

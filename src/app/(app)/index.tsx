@@ -34,6 +34,7 @@ import { ReligionLabel } from '@/constants/religion';
 import type { Suffix } from '@/constants/suffix';
 import { parseStoredAddress } from '@/db/repositories/medical-information.repo';
 import { useSendEmailVerification } from '@/features/account/useSendEmailVerification';
+import { useMedicalProfileRecovery } from '@/features/medical-information/useMedicalProfileRecovery';
 import { addNotification } from '@/features/notifications/notifications.store';
 import { useAttestations } from '@/features/professional-attestations/useAttestations';
 import { useProfessionalEncounters } from '@/features/professional-encounters/useProfessionalEncounters';
@@ -50,7 +51,7 @@ import { showLocalNotification } from '@/lib/notifications';
 import { useGuardedPress } from '@/lib/use-guarded-press';
 import { type OnboardingTaskId } from '@/onboarding/useOnboardingChecklist';
 import { useOnboardingData } from '@/onboarding/useOnboardingData';
-import { syncPatientChanges } from '@/services/patient-sync.service';
+import { hydratePatientChanges } from '@/services/patient-sync.service';
 import { pullPendingSync } from '@/services/pending-sync.service';
 
 function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () => void; topInset: number }) {
@@ -76,17 +77,15 @@ function WelcomeEmptyState({ user, logout, topInset }: { user: any; logout: () =
   );
 }
 
-function ProfileUnavailableState({
+function LegacyProfileState({
   user,
   logout,
   onRetry,
-  legacy,
   topInset,
 }: {
   user: any;
   logout: () => void;
   onRetry: () => Promise<void>;
-  legacy: boolean;
   topInset: number;
 }) {
   return (
@@ -96,10 +95,8 @@ function ProfileUnavailableState({
           Welcome, {user ? buildFullName({ first_name: user.first_name, middle_name: user.middle_name ?? undefined, last_name: user.last_name, suffix: (user.suffix as Suffix) ?? undefined }) : ''}
         </ThemedText>
         <EmptyState
-          title="Medical profile unavailable"
-          body={legacy
-            ? 'This profile uses older encryption. Open MediScan once on the device where you created the profile, then try again here.'
-            : 'Your medical profile exists, but it could not be loaded. Check your connection and try again.'}
+          title="Profile update required"
+          body="This profile uses older encryption. Open MediScan once on the device where you created the profile, then try again here."
           icon="cloud-offline-outline"
         />
         <Pressable onPress={() => void onRetry()}>
@@ -111,35 +108,6 @@ function ProfileUnavailableState({
       </ThemedView>
     </View>
   );
-}
-
-function NoMedicalProfileState({
-  user,
-  logout,
-  onRetry,
-  storageState,
-  storageStateError,
-  topInset,
-}: {
-  user: any;
-  logout: () => void;
-  onRetry: () => Promise<void>;
-  storageState: 'missing' | 'current' | 'legacy' | undefined;
-  storageStateError: boolean;
-  topInset: number;
-}) {
-  if (storageState !== 'missing' || storageStateError) {
-    return (
-      <ProfileUnavailableState
-        user={user}
-        logout={logout}
-        onRetry={onRetry}
-        legacy={storageState === 'legacy'}
-        topInset={topInset}
-      />
-    );
-  }
-  return <WelcomeEmptyState user={user} logout={logout} topInset={topInset} />;
 }
 
 function PersonalInfoSection({ profile, age }: { profile: Record<string, any>; age: number | null }) {
@@ -683,6 +651,7 @@ export default function HomeScreen() {
     emergencyContacts,
     medicalInformation,
     isMedicalInformationLoading,
+    refetchMedicalInformation,
     medicalInformationStorageState,
     isMedicalInformationStorageStateLoading,
     isMedicalInformationStorageStateError,
@@ -791,6 +760,19 @@ export default function HomeScreen() {
     };
   }, [medicalInformation, user?.medical_information, user?.phone_country_code, user?.phone_number]);
   const age = ageFromDateOfBirth(profile?.date_of_birth);
+  const {
+    isRecoveringProfile,
+    shouldAutomaticallyRecoverProfile,
+    recoverMedicalProfile,
+  } = useMedicalProfileRecovery({
+    userId: user?.id,
+    hasProfile: Boolean(profile),
+    storageState: medicalInformationStorageState,
+    isLocalLoading: isMedicalInformationLoading,
+    isStorageStateLoading: isMedicalInformationStorageStateLoading,
+    isStorageStateError: isMedicalInformationStorageStateError,
+    refetchLocalProfile: refetchMedicalInformation,
+  });
 
   const countVerifiedByLatestAction = useCallback((envelopeType: string, matchedUuidKey: 'matched_allergy_local_uuid' | 'matched_condition_local_uuid' | 'matched_diagnosis_local_uuid' | 'matched_medication_local_uuid') => {
     const seen = new Set<string>();
@@ -839,15 +821,28 @@ export default function HomeScreen() {
   const handleRefresh = useCallback(async () => {
     try {
       await refreshUser();
-      await syncPatientChanges();
+      if (!profile && medicalInformationStorageState === 'current') {
+        await recoverMedicalProfile();
+      } else {
+        await hydratePatientChanges();
+      }
       await pullPendingSync();
     } catch {
       // ignore — user state stays as-is
     }
-  }, [refreshUser]);
+  }, [medicalInformationStorageState, profile, recoverMedicalProfile, refreshUser]);
 
   // Show skeleton only on first load when no cached data exists
-  if (!profile && (isMedicalInformationLoading || isMedicalInformationStorageStateLoading || isInitialLoading)) {
+  if (!profile && (
+    isMedicalInformationLoading
+      || isMedicalInformationStorageStateLoading
+      || isInitialLoading
+      || shouldAutomaticallyRecoverProfile
+      || isRecoveringProfile
+      || medicalInformationStorageState === 'current'
+      || isMedicalInformationStorageStateError
+      || medicalInformationStorageState === undefined
+  )) {
     return (
       <View className="flex-1">
         <View style={{ paddingHorizontal: 20, paddingTop: 16, backgroundColor: theme.background }}>
@@ -880,17 +875,19 @@ export default function HomeScreen() {
     );
   }
 
-  if (!profile) {
+  if (!profile && medicalInformationStorageState === 'legacy') {
     return (
-      <NoMedicalProfileState
+      <LegacyProfileState
         user={user}
         logout={logout}
         onRetry={handleRefresh}
-        storageState={medicalInformationStorageState}
-        storageStateError={isMedicalInformationStorageStateError}
         topInset={insets.top}
       />
     );
+  }
+
+  if (!profile) {
+    return <WelcomeEmptyState user={user} logout={logout} topInset={insets.top} />;
   }
 
   const firstName = profile.full_name?.split(/\s+/)[0] || user?.first_name || 'there';

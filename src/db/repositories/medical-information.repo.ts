@@ -4,7 +4,7 @@ import type { Gender } from '@/constants/gender';
 import type { Religion } from '@/constants/religion';
 import type { Suffix } from '@/constants/suffix';
 import { getDb } from '@/db/client';
-import { getCurrentUserId } from '@/db/context';
+import { getCurrentUserId, type LocalUserId } from '@/db/context';
 import * as emergencyHistoryRepo from '@/db/repositories/emergency-field-history.repo';
 import type {
   MedicalInformationEncryptedFields,
@@ -291,9 +291,8 @@ export async function saveFromServer(record: {
   address: MedicalInformationAddress | null;
   no_blood_transfusion: boolean;
   updated_at: string;
-}): Promise<void> {
+}, userId: LocalUserId = getCurrentUserId()): Promise<void> {
   const db = await getDb();
-  const userId = getCurrentUserId();
   const existing = await getByUserId(userId);
 
   const fields: MedicalInformationEncryptedFields = {

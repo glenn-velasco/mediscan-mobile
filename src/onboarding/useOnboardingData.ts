@@ -21,6 +21,7 @@ export function useOnboardingData() {
   const {
     data: medicalInformation,
     isLoading: isMedicalInformationLoading,
+    refetch: refetchMedicalInformation,
     storageState: medicalInformationStorageState,
     isStorageStateLoading: isMedicalInformationStorageStateLoading,
     isStorageStateError: isMedicalInformationStorageStateError,
@@ -51,6 +52,7 @@ export function useOnboardingData() {
     emergencyContacts: emergencyContacts ?? [],
     medicalInformation,
     isMedicalInformationLoading,
+    refetchMedicalInformation,
     medicalInformationStorageState,
     isMedicalInformationStorageStateLoading,
     isMedicalInformationStorageStateError,

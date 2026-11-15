@@ -21,8 +21,9 @@ import { clearPrivateKey } from '@/services/device-key-storage';
 import {
   clearLastSyncedAt,
   forcePushBeforeLogout,
+  hydratePatientChanges,
   resetPatientSyncBackoff,
-  syncPatientChanges,
+  waitForPatientSyncIdle,
 } from '@/services/patient-sync.service';
 import { resetPendingSyncBackoff } from '@/services/pending-sync.service';
 import { forceSyncBeforeLogout } from '@/services/verification-sync.service';
@@ -64,6 +65,7 @@ async function backfillUserId(userId: string | number): Promise<void> {
 const PATIENT_HYDRATION_TIMEOUT_MS = 15_000;
 
 async function hydratePatientData(user: User): Promise<void> {
+  await waitForPatientSyncIdle();
   setCurrentUserId(user.id);
   await backfillUserId(user.id);
 
@@ -82,7 +84,7 @@ async function hydratePatientData(user: User): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
-      syncPatientChanges(),
+      hydratePatientChanges(),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(
           () => reject(new Error('patient hydration timeout')),
@@ -110,6 +112,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const handleUnauthenticated = useCallback(async () => {
+    await waitForPatientSyncIdle();
     queryClient.clear();
     await queryPersister.removeClient();
     await clearPrivateKey();
@@ -217,6 +220,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     setStatus('authenticating');
     try {
       const device_name = await getDeviceName();
+      await waitForPatientSyncIdle();
       const { token, user: loggedInUser } = await apiLogin({ ...payload, device_name });
       await setToken(token);
       try {
@@ -239,6 +243,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     try {
       setStatus('authenticating');
       const device_name = await getDeviceName();
+      await waitForPatientSyncIdle();
       const response = await apiRegister({ ...payload, device_name });
 
       if (response.pending) {
@@ -292,6 +297,7 @@ export function AuthProvider({ children, skipNetworkRefresh }: AuthProviderProps
     } catch {
       // Best-effort: some data may not have synced if the server is unreachable.
     }
+    await waitForPatientSyncIdle();
 
     const LOGOUT_TIMEOUT_MS = 5_000;
     try {
