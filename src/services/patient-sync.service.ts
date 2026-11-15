@@ -412,7 +412,7 @@ async function pushMedicalInformation(userId: string): Promise<void> {
       await updateMedicalInformation(row.server_id, payload);
     }
     assertCurrentPatientUser(userId);
-    await medicalInformationRepo.markSynced(userId);
+    await medicalInformationRepo.markSynced(userId, row.updated_at_local);
   } catch (err) {
     if (err instanceof NetworkError || err instanceof UnauthenticatedError)
       throw err;
@@ -482,11 +482,15 @@ export async function pushPatientChanges(): Promise<void> {
   if (!getCachedToken() || !hasCurrentUser()) return;
   const userId = String(getCurrentUserId());
 
-  while (activePush) {
-    const running = activePush;
-    if (running.userId === userId) return settlePatientPush(running.task, false);
-    await settlePatientPush(running.task, false);
-    if (!getCachedToken() || !isCurrentPatientUser(userId)) return;
+  if (activePush) {
+    while (activePush) {
+      await settlePatientPush(activePush.task, false);
+      if (!getCachedToken() || !isCurrentPatientUser(userId)) return;
+    }
+    if (getIsOffline() || withinBackoffWindow()) return;
+    const pendingMedical = await medicalInformationRepo.getByUserId(userId);
+    if (pendingMedical?.sync_status !== "pending") return;
+    return settlePatientPush(startPatientPush(userId), false);
   }
   if (getIsOffline() || withinBackoffWindow()) return;
 

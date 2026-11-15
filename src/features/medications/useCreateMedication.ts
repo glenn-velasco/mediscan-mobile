@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import * as medicationsRepo from '@/db/repositories/medications.repo';
 import { medicationsQueryKey } from '@/features/medications/useMedications';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 import type { MedicationPayload } from '@/api/types';
 
 export function useCreateMedication() {
@@ -11,6 +12,7 @@ export function useCreateMedication() {
     mutationFn: (payload: MedicationPayload) => medicationsRepo.createLocal(payload),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: medicationsQueryKey });
+      void pushPatientChanges();
     },
   });
 }

@@ -1,5 +1,8 @@
+import { parsePhoneNumberFromString, type CountryCode } from 'libphonenumber-js';
+
 import { requireAuthUserId, supabase, throwSupabaseError } from '@/api/supabase';
 import { sealPatientPayload } from '@/api/patient-cloud-crypto';
+import { formatAddress } from '@/lib/format-address';
 import type { MedicalInformationPayload } from '@/api/types';
 import type { MedicalInformationSyncRecord } from '@/api/endpoints/sync';
 
@@ -27,6 +30,16 @@ function toServerPayload(payload: MedicalInformationPayload) {
   };
 }
 
+function toE164PhoneNumber(rawPhone: string | null | undefined, countryCode: string | null | undefined): string | null {
+  const trimmed = rawPhone?.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('+')) return trimmed;
+  const parsed = countryCode
+    ? parsePhoneNumberFromString(trimmed, countryCode as CountryCode)
+    : parsePhoneNumberFromString(trimmed);
+  return parsed?.number ?? trimmed;
+}
+
 export function createMedicalInformation(payload: MedicalInformationPayload) {
   return saveMedicalInformation(payload);
 }
@@ -42,6 +55,28 @@ async function saveMedicalInformation(payload: MedicalInformationPayload): Promi
   const updated_at = new Date().toISOString();
   const { error } = await supabase.from('medical_information').upsert({ user_id, encrypted_payload, updated_at }, { onConflict: 'user_id' });
   if (error) throwSupabaseError(error);
+
+  const profilesTable = supabase.from('profiles');
+  if (typeof profilesTable?.update === 'function') {
+    const formattedAddress = formatAddress(normalized.address);
+    const phoneNumber = toE164PhoneNumber(normalized.phone, normalized.phone_country_code);
+    const { error: profileError } = await profilesTable
+      .update({
+        first_name: normalized.first_name,
+        middle_name: normalized.middle_name,
+        last_name: normalized.last_name,
+        suffix: normalized.suffix,
+        dob: normalized.dob ?? null,
+        gender: normalized.gender ?? null,
+        address: formattedAddress ? { formatted: formattedAddress } : null,
+        ...(phoneNumber ? { phone_number: phoneNumber } : {}),
+        phone_country_code: normalized.phone_country_code,
+        updated_at,
+      })
+      .eq('id', user_id);
+    if (profileError) throwSupabaseError(profileError);
+  }
+
   return { id: 1, national_id: null, updated_at, ...normalized } as MedicalInformationSyncRecord;
 }
 

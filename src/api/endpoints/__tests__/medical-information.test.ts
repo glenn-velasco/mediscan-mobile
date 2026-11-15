@@ -12,20 +12,29 @@ jest.mock('@/api/supabase', () => ({
   throwSupabaseError: jest.fn((error) => { throw error; }),
 }));
 
-it('preserves phone fields in the encrypted medical-information payload', async () => {
+it('preserves phone fields in the encrypted medical-information payload and syncs public.profiles', async () => {
   const upsert = jest.fn().mockResolvedValue({ error: null });
-  (supabase.from as jest.Mock).mockReturnValue({ upsert });
+  const eq = jest.fn().mockResolvedValue({ error: null });
+  const update = jest.fn(() => ({ eq }));
+  (supabase.from as jest.Mock).mockImplementation((table: string) => {
+    if (table === 'profiles') return { update };
+    return { upsert };
+  });
 
   await updateMedicalInformation(1, {
     email: 'vea@example.com',
     first_name: 'Vea',
+    middle_name: 'Morete',
     last_name: 'Capistrano',
+    date_of_birth: '2004-03-29',
+    gender: 'female',
     phone_country_code: 'PH',
     phone: '9171234567',
   });
 
   expect(requireAuthUserId).toHaveBeenCalled();
   expect(sealPatientPayload).toHaveBeenCalledWith(expect.objectContaining({
+    dob: '2004-03-29',
     phone_country_code: 'PH',
     phone: '9171234567',
   }));
@@ -33,6 +42,18 @@ it('preserves phone fields in the encrypted medical-information payload', async 
     expect.objectContaining({ user_id: 'user-1', encrypted_payload: 'sealed-payload' }),
     { onConflict: 'user_id' },
   );
+  expect(update).toHaveBeenCalledWith(
+    expect.objectContaining({
+      first_name: 'Vea',
+      middle_name: 'Morete',
+      last_name: 'Capistrano',
+      dob: '2004-03-29',
+      gender: 'female',
+      phone_number: '+639171234567',
+      phone_country_code: 'PH',
+    }),
+  );
+  expect(eq).toHaveBeenCalledWith('id', 'user-1');
 });
 
 it.each([

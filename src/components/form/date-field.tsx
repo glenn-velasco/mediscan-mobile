@@ -31,17 +31,31 @@ type DateFieldProps = {
   disabled?: boolean;
 };
 
-function parseIsoDate(value: string): Date {
-  if (!value) return new Date();
+export function parseIsoDate(value: string): Date {
+  if (!value) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  }
   const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(year, month - 1, day);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  // Anchor at local noon so `.toISOString()` on Android falls on the same UTC calendar day across timezones.
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+  if (Number.isNaN(parsed.getTime())) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  }
+  return parsed;
 }
 
-function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+export function toIsoDate(date: Date): string {
+  const isUtcMidnight =
+    Platform.OS === 'android' &&
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0;
+  const year = isUtcMidnight ? date.getUTCFullYear() : date.getFullYear();
+  const month = String((isUtcMidnight ? date.getUTCMonth() : date.getMonth()) + 1).padStart(2, '0');
+  const day = String(isUtcMidnight ? date.getUTCDate() : date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 

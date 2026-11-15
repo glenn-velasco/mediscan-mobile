@@ -360,10 +360,15 @@ export async function saveFromServer(record: {
   );
 }
 
-export async function markSynced(userId?: string | number): Promise<void> {
+export async function markSynced(userId?: string | number, expectedUpdatedAt?: string): Promise<void> {
   const db = await getDb();
   const uid = userId ?? getCurrentUserId();
-  await db.runAsync("UPDATE medical_information SET sync_status = 'synced' WHERE user_id = ?", uid);
+  await db.runAsync(
+    "UPDATE medical_information SET server_id = COALESCE(server_id, 1), sync_status = 'synced' WHERE user_id = ? AND (? IS NULL OR updated_at_local = ?)",
+    uid,
+    expectedUpdatedAt ?? null,
+    expectedUpdatedAt ?? null,
+  );
 }
 
 export async function markConflict(userId?: string | number): Promise<void> {

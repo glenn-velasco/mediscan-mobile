@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import { allergiesQueryKey } from '@/features/allergies/useAllergies';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 
 export function useDeleteAllergy() {
   const queryClient = useQueryClient();
@@ -10,6 +11,7 @@ export function useDeleteAllergy() {
     mutationFn: (localUuid: string) => allergiesRepo.deleteLocal(localUuid),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
+      void pushPatientChanges();
     },
   });
 }

@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import * as emergencyContactsRepo from '@/db/repositories/emergency-contacts.repo';
 import { emergencyContactsQueryKey } from '@/features/emergency-contacts/use-emergency-contacts';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 import type { EmergencyContactPayload } from '@/api/types';
 
 export function useCreateEmergencyContact() {
@@ -11,6 +12,7 @@ export function useCreateEmergencyContact() {
     mutationFn: (payload: EmergencyContactPayload) => emergencyContactsRepo.createLocal(payload),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: emergencyContactsQueryKey });
+      void pushPatientChanges();
     },
   });
 }

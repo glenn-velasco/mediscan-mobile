@@ -1,0 +1,115 @@
+diff --git a/node_modules/@expo/ui/android/src/main/java/expo/modules/ui/DatePickerView.kt b/node_modules/@expo/ui/android/src/main/java/expo/modules/ui/DatePickerView.kt
+index b32298c..df9b652 100644
+--- a/node_modules/@expo/ui/android/src/main/java/expo/modules/ui/DatePickerView.kt
++++ b/node_modules/@expo/ui/android/src/main/java/expo/modules/ui/DatePickerView.kt
+@@ -189,6 +189,39 @@ private fun toUtcDayMillis(localMillis: Long): Long {
+   return utcCal.timeInMillis
+ }
+ 
++@OptIn(ExperimentalMaterial3Api::class)
++private fun syncSelectedDateToDisplayedMonth(
++  selectedDateMillis: Long?,
++  displayedMonthMillis: Long,
++  selectableDates: SelectableDates
++): Long? {
++  val currentSelected = selectedDateMillis ?: return null
++  val utcZone = java.util.TimeZone.getTimeZone("UTC")
++  val selectedCal = Calendar.getInstance(utcZone).apply { timeInMillis = currentSelected }
++  val displayedCal = Calendar.getInstance(utcZone).apply { timeInMillis = displayedMonthMillis }
++  val displayedYear = displayedCal.get(Calendar.YEAR)
++  val displayedMonth = displayedCal.get(Calendar.MONTH)
++  if (
++    selectedCal.get(Calendar.YEAR) == displayedYear &&
++    selectedCal.get(Calendar.MONTH) == displayedMonth
++  ) {
++    return currentSelected
++  }
++  val day = selectedCal.get(Calendar.DAY_OF_MONTH)
++  displayedCal.set(Calendar.DAY_OF_MONTH, 1)
++  val maxDay = displayedCal.getActualMaximum(Calendar.DAY_OF_MONTH)
++  displayedCal.set(Calendar.DAY_OF_MONTH, minOf(day, maxDay))
++  displayedCal.set(Calendar.HOUR_OF_DAY, 0)
++  displayedCal.set(Calendar.MINUTE, 0)
++  displayedCal.set(Calendar.SECOND, 0)
++  displayedCal.set(Calendar.MILLISECOND, 0)
++  val candidate = displayedCal.timeInMillis
++  return if (selectableDates.isSelectableDate(candidate) && selectableDates.isSelectableYear(displayedYear)) {
++    candidate
++  } else {
++    currentSelected
++  }
++}
+ 
+ @OptIn(ExperimentalMaterial3Api::class)
+ @Composable
+@@ -321,19 +354,31 @@ fun ExpoDatePickerDialogContent(props: DatePickerDialogProps, onDateSelected: (D
+   val selectableDates = rememberSelectableDates(props.selectableDates)
+   val fallbackDate = remember { Date().time }
+   val initialDate = props.initialDate ?: fallbackDate
++  val initialUtcDate = remember(initialDate) { toUtcDayMillis(initialDate) }
+   val yearRange = rememberDatePickerYearRange(props.selectableDates, initialDate)
+ 
+-  val state = remember(variant, initialDate, selectableDates, yearRange) {
++  val state = remember(variant, initialUtcDate, selectableDates, yearRange) {
+     DatePickerState(
+       initialDisplayMode = variant,
+       locale = locale,
+-      initialSelectedDateMillis = initialDate,
+-      initialDisplayedMonthMillis = initialDate,
++      initialSelectedDateMillis = initialUtcDate,
++      initialDisplayedMonthMillis = initialUtcDate,
+       yearRange = yearRange,
+       selectableDates = selectableDates
+     )
+   }
+ 
++  LaunchedEffect(state.displayedMonthMillis) {
++    val updated = syncSelectedDateToDisplayedMonth(
++      state.selectedDateMillis,
++      state.displayedMonthMillis,
++      selectableDates
++    )
++    if (updated != null && updated != state.selectedDateMillis) {
++      state.selectedDateMillis = updated
++    }
++  }
++
+   val colors = buildDatePickerColors(props.elementColors, props.color.composeOrNull, DatePickerDefaults.colors())
+   val buttonColors = props.color.composeOrNull
+     ?.let { ButtonDefaults.textButtonColors(contentColor = it) } ?: ButtonDefaults.textButtonColors()
+@@ -437,20 +482,32 @@ fun ExpoDatePicker(modifier: Modifier = Modifier, props: DateTimePickerProps, on
+   val variant = props.variant.toDisplayMode()
+   val fallbackDate = remember { Date().time }
+   val initialDate = props.initialDate ?: fallbackDate
++  val initialUtcDate = remember(initialDate) { toUtcDayMillis(initialDate) }
+   val selectableDates = rememberSelectableDates(props.selectableDates)
+   val yearRange = rememberDatePickerYearRange(props.selectableDates, initialDate)
+ 
+-  val state = remember(variant, initialDate, selectableDates, yearRange) {
++  val state = remember(variant, initialUtcDate, selectableDates, yearRange) {
+     DatePickerState(
+       initialDisplayMode = variant,
+       locale = locale,
+-      initialSelectedDateMillis = initialDate,
+-      initialDisplayedMonthMillis = initialDate,
++      initialSelectedDateMillis = initialUtcDate,
++      initialDisplayedMonthMillis = initialUtcDate,
+       yearRange = yearRange,
+       selectableDates = selectableDates
+     )
+   }
+ 
++  LaunchedEffect(state.displayedMonthMillis) {
++    val updated = syncSelectedDateToDisplayedMonth(
++      state.selectedDateMillis,
++      state.displayedMonthMillis,
++      selectableDates
++    )
++    if (updated != null && updated != state.selectedDateMillis) {
++      state.selectedDateMillis = updated
++    }
++  }
++
+   LaunchedEffect(state.selectedDateMillis) {
+     onDateSelected(DatePickerResult(date = state.selectedDateMillis))
+   }

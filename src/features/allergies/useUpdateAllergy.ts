@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as allergiesRepo from '@/db/repositories/allergies.repo';
 import { allergiesQueryKey } from '@/features/allergies/useAllergies';
 import { attestationsQueryKey } from '@/features/professional-attestations/useAttestations';
+import { pushPatientChanges } from '@/services/patient-sync.service';
 import type { AllergyPayload } from '@/api/types';
 
 export function useUpdateAllergy() {
@@ -14,6 +15,7 @@ export function useUpdateAllergy() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: allergiesQueryKey });
       queryClient.invalidateQueries({ queryKey: attestationsQueryKey });
+      void pushPatientChanges();
     },
   });
 }
